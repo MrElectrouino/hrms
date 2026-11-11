@@ -300,7 +300,9 @@ export async function request<T>(
       }
       return request<T>(path, options, true);
     }
-    throw new Error(json?.message?.text || response.statusText);
+    const error = new Error(json?.message?.text || response.statusText) as Error & { errors?: FieldErrorItem[] };
+    error.errors = json?.errors;
+    throw error;
   }
 
   return json as ApiEnvelope<T>;
@@ -538,4 +540,203 @@ export async function resetPassword(token: string, newPassword: string) {
     method: 'POST',
     body: JSON.stringify({ token, newPassword }),
   });
+}
+
+/* ---------------- Employee profile (D-023) ---------------- */
+
+export interface ProfileFieldDef {
+  key: string;
+  label: string;
+  type: 'text' | 'textarea' | 'number' | 'date' | 'email' | 'tel' | 'select' | 'multiselect' | 'yn';
+  options?: string[];
+  required?: boolean;
+  sensitive?: boolean;
+  mono?: boolean;
+  wide?: boolean;
+  hint?: string;
+  maxLength?: number;
+  display?: "checkbox";
+  /** Value/label pairs (e.g. employee id → name) when the stored value is not the label. */
+  optionItems?: { value: string; label: string }[];
+}
+
+export interface ProfileRowsDef {
+  key: string;
+  label: string;
+  addLabel: string;
+  max: number;
+  fields: ProfileFieldDef[];
+}
+
+export interface ProfileGroupDef {
+  title: string;
+  fields?: ProfileFieldDef[];
+  rows?: ProfileRowsDef;
+  addressLevels?: 'present' | 'permanent';
+  showWhen?: { key: string; equals: string };
+  columns?: 2 | 3 | 4;
+  sameAsKey?: string;
+  salaryComponents?: boolean;
+}
+
+export interface ProfileSectionDef {
+  key: string;
+  title: string;
+  group: string;
+  description: string;
+  hrOnly: boolean;
+  groups: ProfileGroupDef[];
+}
+
+export interface CustomFieldInfo {
+  code: string;
+  label: string;
+  tabKey: string;
+  sectionName: string;
+  fieldType: string;
+  options: string[];
+  isRequired: boolean;
+  isSensitive: boolean;
+  helpText: string | null;
+}
+
+export interface CustomFieldAdmin extends CustomFieldInfo {
+  countryCode: string;
+  isActive: boolean;
+}
+
+export interface EmployeeProfileResponse {
+  employee: {
+    id: number;
+    employeeCode: string;
+    name: string;
+    isActive: boolean;
+    hasPhoto: boolean;
+    country: string;
+    currency: string;
+    addressLevels: string[];
+    legalEntities: string[];
+  };
+  canEdit: boolean;
+  sections: ProfileSectionDef[];
+  values: Record<string, Record<string, any>>;
+  customFields: CustomFieldInfo[];
+  custom: Record<string, any>;
+  salaryTemplates: SalaryTemplate[];
+}
+
+export interface FieldErrorItem {
+  field: string;
+  message: string;
+}
+
+export async function getEmployeeProfile(id: number) {
+  return request<EmployeeProfileResponse>(`/employees/${id}/profile`);
+}
+
+export async function saveEmployeeProfileSection(
+  id: number,
+  section: string,
+  data: Record<string, any>,
+  custom: Record<string, any>,
+) {
+  return request<{ section: string; values: Record<string, any> }>(`/employees/${id}/profile/${section}`, {
+    method: 'PUT',
+    body: JSON.stringify({ data, custom }),
+  });
+}
+
+export async function getCustomFieldDefinitions() {
+  return request<CustomFieldAdmin[]>('/custom-fields');
+}
+
+export interface CreateCustomFieldPayload {
+  label: string;
+  tabKey: string;
+  sectionName: string;
+  fieldType: string;
+  options?: string[];
+  countryCode?: string;
+  isRequired?: boolean;
+  isSensitive?: boolean;
+  helpText?: string;
+}
+
+export async function createCustomField(payload: CreateCustomFieldPayload) {
+  return request<CustomFieldAdmin>('/custom-fields', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateCustomField(code: string, payload: { isActive?: boolean; label?: string; isRequired?: boolean }) {
+  return request<CustomFieldAdmin>(`/custom-fields/${code}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+/* ---------------- Employee photo (BR-MD-09: JPEG/PNG, max 10 MB) ---------------- */
+
+export const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+
+export async function uploadEmployeePhoto(id: number, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return request<{ fileId: string; originalName: string; mimeType: string }>(`/employees/${id}/photo`, { method: "POST", body: form });
+}
+
+/** Fetches the photo with the access token and returns an object URL, or null when there is none. */
+export async function getEmployeePhotoUrl(id: number): Promise<string | null> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE_URL}/employees/${id}/photo`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(res.statusText);
+  return URL.createObjectURL(await res.blob());
+}
+
+/* ---------------- Salary templates (D-024) and Add Employee ---------------- */
+
+export interface SalaryTemplate {
+  id: number;
+  name: string;
+  countryCode: string;
+  isActive: boolean;
+  components: { code: string; label: string }[];
+}
+
+export interface BlankProfileResponse {
+  country: string;
+  currency: string;
+  addressLevels: string[];
+  sections: ProfileSectionDef[];
+  salaryTemplates: SalaryTemplate[];
+  customFields: CustomFieldInfo[];
+}
+
+export async function getBlankProfile(country: string) {
+  return request<BlankProfileResponse>(`/employee-profile/blank?country=${encodeURIComponent(country)}`);
+}
+
+export async function validateNewProfile(country: string, sections: Record<string, { data: Record<string, any>; custom: Record<string, any> }>) {
+  return request<{ country: string; valid: boolean; errors: Record<string, FieldErrorItem[]> }>('/employee-profile/validate', {
+    method: 'POST',
+    body: JSON.stringify({ country, sections }),
+  });
+}
+
+export async function getSalaryTemplates() {
+  return request<SalaryTemplate[]>('/salary-templates');
+}
+
+export interface SalaryTemplatePayload {
+  name?: string;
+  countryCode?: string;
+  isActive?: boolean;
+  components?: { label: string; code?: string }[];
+}
+
+export async function createSalaryTemplate(payload: SalaryTemplatePayload) {
+  return request<SalaryTemplate>('/salary-templates', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateSalaryTemplate(id: number, payload: SalaryTemplatePayload) {
+  return request<SalaryTemplate>(`/salary-templates/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }

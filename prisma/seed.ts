@@ -358,7 +358,66 @@ async function seedMenuItems() {
   }
 }
 
+
+/**
+ * Reference masters for local development (owner approved, 2026-11-11).
+ * Sites: the four legacy master.Site names recorded in planning/DATABASE_DISCOVERY.md §3.
+ * Languages and shifts: starter values only — the legacy rows (20 languages, shifts) were
+ * not extracted; replace them with the migrated legacy data (DATA_MIGRATION_PLAN WS-3).
+ * Idempotent: upserts by unique name, never deletes.
+ */
+async function seedReferenceMasters() {
+  const sites = ["Dubai Head Office", "Abudhabi", "Nepal", "India"];
+  for (const name of sites) {
+    await prisma.site.upsert({ where: { name }, create: { name }, update: {} });
+  }
+
+  const languages = [
+    "English", "Arabic", "Hindi", "Urdu", "Malayalam", "Tamil", "Telugu", "Kannada", "Marathi", "Bengali",
+    "Punjabi", "Gujarati", "Tagalog", "Nepali", "Sinhala", "French", "Persian", "Pashto", "Russian", "Spanish",
+  ];
+  for (const name of languages) {
+    await prisma.language.upsert({ where: { name }, create: { name }, update: {} });
+  }
+
+  const t = (hhmm: string) => new Date(`1970-01-01T${hhmm}:00.000Z`);
+  const shifts = [
+    { name: "General", start: "09:00", end: "18:00", late: 15, halfDay: 240 },
+    { name: "Morning", start: "06:00", end: "15:00", late: 15, halfDay: 240 },
+    { name: "Evening", start: "14:00", end: "23:00", late: 15, halfDay: 240 },
+    { name: "Night", start: "22:00", end: "07:00", late: 15, halfDay: 240 },
+  ];
+  for (const sh of shifts) {
+    await prisma.shift.upsert({
+      where: { name: sh.name },
+      create: { name: sh.name, startTime: t(sh.start), endTime: t(sh.end), lateMinutes: sh.late, halfDayMinutes: sh.halfDay },
+      update: {},
+    });
+  }
+
+  // Nationality catalog (parameter type 19). Legacy seeded 5 values (ids 200–204, "Other" last);
+  // these extra starter values use ids 1900+ so they never collide with legacy ids.
+  const nationalities = [
+    "Afghan", "American", "Australian", "Bahraini", "Bangladeshi", "British", "Canadian", "Chinese", "Egyptian",
+    "Ethiopian", "French", "German", "Iranian", "Iraqi", "Italian", "Jordanian", "Kenyan", "Kuwaiti", "Lebanese",
+    "Moroccan", "Nepali", "Nigerian", "Omani", "Qatari", "Russian", "Saudi", "South African", "Sri Lankan",
+    "Sudanese", "Syrian", "Tunisian", "Ugandan", "Yemeni",
+  ];
+  for (const [i, text] of nationalities.entries()) {
+    const id = 1900 + i;
+    await prisma.parameter.upsert({
+      where: { id },
+      create: { id, parameterTypeId: 19, text, parameterValue: 100 + i, displayOrder: 10 + i, isVisible: true },
+      update: {},
+    });
+  }
+  // Keep "Other" at the end of the list.
+  await prisma.parameter.updateMany({ where: { id: 204 }, data: { displayOrder: 999 } });
+  console.log(`Reference masters: ${sites.length} sites, ${languages.length} languages, ${shifts.length} shifts`);
+}
+
 main()
+  .then(() => seedReferenceMasters())
   .catch((e) => {
     console.error(e);
     process.exit(1);

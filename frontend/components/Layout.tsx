@@ -1,111 +1,110 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { getMyMenu, MenuNode } from '../lib/api';
 import { UserType } from '../lib/user-types';
 
-const HomeIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-    <polyline points="9 22 9 12 15 12 15 22" />
+/* ------------------------------------------------------------------ icons (outline, 24px grid) */
+
+type IconProps = { className?: string };
+const Svg = ({ className, children }: IconProps & { children: React.ReactNode }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    {children}
+  </svg>
+);
+const HomeIcon = (p: IconProps) => <Svg {...p}><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></Svg>;
+const UsersIcon = (p: IconProps) => <Svg {...p}><circle cx="9" cy="8" r="4" /><path d="M2 21v-1a7 7 0 0 1 14 0v1" /><path d="M16 4.1a4 4 0 0 1 0 7.8M18 14.2A7 7 0 0 1 22 21" /></Svg>;
+const ClockIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>;
+const CalendarIcon = (p: IconProps) => <Svg {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></Svg>;
+const WalletIcon = (p: IconProps) => <Svg {...p}><rect x="2.5" y="6" width="19" height="14" rx="2.5" /><path d="M2.5 10h19M16 15h2" /><path d="M5 6V5a2 2 0 0 1 2-2h9" /></Svg>;
+const BarsIcon = (p: IconProps) => <Svg {...p}><path d="M5 20V11M12 20V4M19 20v-6" /></Svg>;
+const GearIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+  </Svg>
+);
+const HelpIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1 1-1.1 1.7v.5M12 17h.01" /></Svg>;
+const LogoutIcon = (p: IconProps) => <Svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></Svg>;
+const ChevronRight = (p: IconProps) => <Svg {...p}><path d="M9 6l6 6-6 6" /></Svg>;
+const ChevronDown = (p: IconProps) => <Svg {...p}><path d="M6 9l6 6 6-6" /></Svg>;
+const ChevronLeft = (p: IconProps) => <Svg {...p}><path d="M15 6l-6 6 6 6" /></Svg>;
+const SearchIcon = (p: IconProps) => <Svg {...p}><circle cx="10.8" cy="10.8" r="7.3" /><path d="m16.2 16.2 5 5" /></Svg>;
+const BellIcon = (p: IconProps) => <Svg {...p}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></Svg>;
+const GlobeIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" /></Svg>;
+const MenuIcon = (p: IconProps) => <Svg {...p}><path d="M3 6h18M3 12h18M3 18h18" /></Svg>;
+
+const BrandLogo = ({ className }: IconProps) => (
+  <svg viewBox="0 0 50 46" className={className} aria-hidden="true">
+    <circle cx="10" cy="14" r="6" fill="#60a5fa" />
+    <circle cx="25" cy="10" r="7" fill="#2563eb" />
+    <circle cx="40" cy="14" r="6" fill="#60a5fa" />
+    <path d="M3 40c0-8 4-13 9-13s9 5 9 13z" fill="#60a5fa" />
+    <path d="M18 42c0-10 3-17 7-17s7 7 7 17z" fill="#2563eb" />
+    <path d="M33 40c0-8 4-13 9-13s9 5 9 13z" fill="#60a5fa" />
   </svg>
 );
 
-const DotIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <circle cx="12" cy="12" r="4" />
-  </svg>
-);
+/* ------------------------------------------------------------------ navigation model */
 
-const LogoutIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="16 17 21 12 16 7" />
-    <line x1="21" y1="12" x2="9" y2="12" />
-  </svg>
-);
-
-const MenuIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <line x1="3" y1="12" x2="21" y2="12" />
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <line x1="3" y1="18" x2="21" y2="18" />
-  </svg>
-);
-
-const ChevronLeftIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polyline points="15 18 9 12 15 6" />
-  </svg>
-);
-
-const ChevronRightIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polyline points="9 18 15 12 9 6" />
-  </svg>
-);
-
-interface NavLink {
+interface NavChild {
   href: string;
   label: string;
 }
 
-/** Links every signed-in user sees, plus admin screens that must stay reachable before rights are configured. */
-const fixedLinks: NavLink[] = [{ href: '/', label: 'Dashboard' }];
+interface NavEntry {
+  key: string;
+  label: string;
+  icon: (p: IconProps) => JSX.Element;
+  href?: string;
+  children?: NavChild[];
+  /** Module not built yet: shown (as in the mockup) but not clickable. */
+  soon?: boolean;
+  /** Show the expand chevron, as in the mockup. */
+  chevron?: boolean;
+}
 
-const adminLinks: Array<NavLink & { roles: UserType[] }> = [
+const ROLE_LABEL: Record<number, string> = {
+  [UserType.Executive]: 'Executive',
+  [UserType.Manager]: 'Manager',
+  [UserType.SystemAdmin]: 'System Admin',
+  [UserType.HRAdmin]: 'HR Admin',
+};
+
+const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
+  { href: '/masters', label: 'Masters', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
+  { href: '/users', label: 'Users', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/rights', label: 'Rights', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/menus', label: 'Menus', roles: [UserType.SystemAdmin] },
-  { href: '/users', label: 'Users', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
+  { href: '/custom-fields', label: 'Custom fields', roles: [UserType.SystemAdmin] },
+  { href: '/salary-templates', label: 'Salary templates', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
 ];
 
-/** Flattens the menu tree into links for the active-page label and the sidebar. */
-function flattenLinks(nodes: MenuNode[]): NavLink[] {
-  return nodes.flatMap((n) => [
-    ...(n.pageUrl ? [{ href: n.pageUrl, label: n.name }] : []),
-    ...flattenLinks(n.children),
-  ]);
+/** Menu items granted through RBAC (GET /rbac/my-menu), flattened to links. */
+function flattenMenu(nodes: MenuNode[]): NavChild[] {
+  return nodes.flatMap((n) => [...(n.pageUrl ? [{ href: n.pageUrl, label: n.name }] : []), ...flattenMenu(n.children)]);
 }
 
-function NavItem({ link, collapsed, active, onNavigate, icon: Icon = DotIcon, indent = false }: {
-  link: NavLink;
-  collapsed: boolean;
-  active: boolean;
-  onNavigate: () => void;
-  icon?: (p: { className?: string }) => JSX.Element;
-  indent?: boolean;
-}) {
-  return (
-    <Link href={link.href}>
-      <a
-        onClick={onNavigate}
-        className={`group relative flex items-center gap-3 text-sm font-medium rounded-lg transition-all duration-150 ${
-          active ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-        } ${collapsed ? 'justify-center px-3 py-2.5' : `py-2.5 ${indent ? 'pl-10 pr-3' : 'px-3'}`}`}
-        title={collapsed ? link.label : undefined}
-      >
-        {active && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-blue-500" />
-        )}
-        <Icon className={`w-5 h-5 shrink-0 ${active ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-        {!collapsed && <span className="truncate">{link.label}</span>}
-        {collapsed && (
-          <span className="pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg group-hover:opacity-100 transition-opacity z-50">
-            {link.label}
-          </span>
-        )}
-      </a>
-    </Link>
-  );
+function initialsOf(name?: string | null) {
+  if (!name) return '?';
+  const parts = name.replace(/[._-]+/g, ' ').trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || name[0].toUpperCase();
 }
+
+/* ------------------------------------------------------------------ layout */
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [menu, setMenu] = useState<MenuNode[]>([]);
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const mustChangePassword = !!user?.mustChangePassword;
 
@@ -122,132 +121,370 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, isAuthenticated, mustChangePassword, router]);
 
+  // Remember the collapsed rail per browser (convenience only).
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem('hrms.sidebarCollapsed') === '1');
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      try {
+        localStorage.setItem('hrms.sidebarCollapsed', v ? '0' : '1');
+      } catch {
+        /* storage unavailable */
+      }
+      return !v;
+    });
+  };
+
+  // ⌘K / Ctrl+K focuses the search box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Close menus on navigation.
+  useEffect(() => {
+    const close = () => {
+      setMobileOpen(false);
+      setProfileOpen(false);
+      setBellOpen(false);
+    };
+    router.events.on('routeChangeStart', close);
+    return () => router.events.off('routeChangeStart', close);
+  }, [router.events]);
+
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return <>{children}</>;
+  if (!isAuthenticated) return <>{children}</>;
+
+  const userType = user?.userTypeId as UserType | undefined;
+  const roleLabel = (userType && ROLE_LABEL[userType]) || 'User';
+  const displayName = user?.username ?? 'User';
+
+  // Administration = role-based admin screens + anything RBAC grants that is not listed elsewhere.
+  const adminChildren: NavChild[] = ADMIN_LINKS.filter((l) => userType && l.roles.includes(userType)).map(({ href, label }) => ({ href, label }));
+  const reserved = new Set(['/', '/employees', '/documents', '/account', ...adminChildren.map((c) => c.href)]);
+  for (const link of flattenMenu(menu)) {
+    if (!reserved.has(link.href)) {
+      adminChildren.push(link);
+      reserved.add(link.href);
+    }
   }
 
-  const isActive = (href: string) => router.pathname === href || router.pathname.startsWith(`${href}/`);
-  const navigate = () => setSidebarOpen(false);
-  const visibleAdminLinks = adminLinks.filter((l) => user && l.roles.includes(user.userTypeId));
-  const activeLabel =
-    [...fixedLinks, ...visibleAdminLinks, ...flattenLinks(menu)].find((l) => isActive(l.href))?.label || 'HRMS';
+  const entries: NavEntry[] = [
+    { key: 'dashboard', label: 'Dashboard', icon: HomeIcon, href: '/' },
+    {
+      key: 'employees',
+      label: 'Employees',
+      icon: UsersIcon,
+      children: [
+        { href: '/employees', label: 'Employee list' },
+        { href: '/documents', label: 'Documents' },
+      ],
+    },
+    { key: 'attendance', label: 'Time & Attendance', icon: ClockIcon, soon: true, chevron: true },
+    { key: 'leave', label: 'Leave Management', icon: CalendarIcon, soon: true, chevron: true },
+    { key: 'payroll', label: 'Payroll', icon: WalletIcon, soon: true },
+    { key: 'reports', label: 'Reports', icon: BarsIcon, soon: true, chevron: true },
+    ...(adminChildren.length ? [{ key: 'admin', label: 'Administration', icon: GearIcon, children: adminChildren } as NavEntry] : []),
+  ];
+
+  const pathMatches = (href: string) =>
+    href === '/' ? router.pathname === '/' : router.pathname === href || router.pathname.startsWith(`${href}/`) || router.asPath.startsWith(`${href}/`);
+  const isEmployeeProfile = router.pathname.startsWith('/employee-profile');
+  const entryActive = (e: NavEntry) =>
+    (e.href && pathMatches(e.href)) || (e.children ?? []).some((c) => pathMatches(c.href)) || (e.key === 'employees' && isEmployeeProfile);
+  const isOpen = (e: NavEntry) => open[e.key] ?? entryActive(e);
+
+  const doLogout = () => logout().then(() => router.push('/login'));
+
+  const onSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = search.trim();
+    router.push(q ? { pathname: '/employees', query: { search: q } } : '/employees');
+  };
+
+  /* ---------------- sidebar row (link or disabled "soon" item) ---------------- */
+  const rowBase = 'group relative flex h-10 items-center rounded-lg text-sm font-medium transition-colors';
+  const rowPad = collapsed ? 'lg:justify-center lg:px-0 px-3 gap-3 lg:gap-0' : 'px-3 gap-3';
+
+  const Tooltip = ({ label }: { label: string }) =>
+    collapsed ? (
+      <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 lg:block">
+        {label}
+      </span>
+    ) : null;
+
+  // Left accent bar; on the collapsed rail it becomes a short underline (mockup).
+  const ActiveBar = () => (
+    <span
+      className={
+        collapsed
+          ? 'absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-blue-500 lg:bottom-0 lg:left-3.5 lg:right-3.5 lg:top-auto lg:h-0.5 lg:w-auto lg:translate-y-0'
+          : 'absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-blue-500'
+      }
+    />
+  );
+
+  const renderEntry = (e: NavEntry) => {
+    const Icon = e.icon;
+    const active = !!entryActive(e);
+    const label = <span className={`${collapsed ? 'lg:hidden' : ''} flex-1 truncate`}>{e.label}</span>;
+    const iconEl = <Icon className={`h-5 w-5 shrink-0 ${active ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />;
+
+    if (e.soon) {
+      // Same look as the mockup, slightly dimmed; not clickable until the module exists.
+      return (
+        <div key={e.key} className={`${rowBase} ${rowPad} cursor-not-allowed text-slate-500`} title={`${e.label} — coming in a later phase`} aria-disabled="true">
+          <Icon className="h-5 w-5 shrink-0 text-slate-600" />
+          {label}
+          {e.chevron && <ChevronRight className={`${collapsed ? 'lg:hidden' : ''} h-4 w-4 shrink-0 text-slate-600`} />}
+          <Tooltip label={`${e.label} (coming soon)`} />
+        </div>
+      );
+    }
+
+    if (e.href) {
+      return (
+        <Link key={e.key} href={e.href}>
+          <a className={`${rowBase} ${rowPad} ${active ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'}`} aria-current={active ? 'page' : undefined}>
+            {active && <ActiveBar />}
+            {iconEl}
+            {label}
+            <Tooltip label={e.label} />
+          </a>
+        </Link>
+      );
+    }
+
+    const expanded = isOpen(e) && !collapsed;
+    return (
+      <div key={e.key}>
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              toggleCollapsed();
+              setOpen((o) => ({ ...o, [e.key]: true }));
+            } else {
+              setOpen((o) => ({ ...o, [e.key]: !isOpen(e) }));
+            }
+          }}
+          className={`${rowBase} ${rowPad} w-full text-left ${active ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'}`}
+          aria-expanded={expanded}
+        >
+          {active && <ActiveBar />}
+          {iconEl}
+          {label}
+          <ChevronRight className={`${collapsed ? 'lg:hidden' : ''} h-4 w-4 shrink-0 text-slate-500 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          <Tooltip label={e.label} />
+        </button>
+        {expanded && (
+          <div className="mt-1 space-y-0.5 pl-11">
+            {(e.children ?? []).map((c) => {
+              const childActive = pathMatches(c.href) || (c.href === '/employees' && isEmployeeProfile);
+              return (
+                <Link key={c.href} href={c.href}>
+                  <a className={`block rounded-md px-3 py-1.5 text-sm ${childActive ? 'bg-slate-800/70 font-medium text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}>
+                    {c.label}
+                  </a>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const BottomLink = ({ icon: Icon, label, href, soon, onClick }: { icon: (p: IconProps) => JSX.Element; label: string; href?: string; soon?: boolean; onClick?: () => void }) => {
+    const inner = (
+      <>
+        <Icon className={`h-5 w-5 shrink-0 ${soon ? 'text-slate-600' : 'text-slate-500 group-hover:text-slate-300'}`} />
+        <span className={`${collapsed ? 'lg:hidden' : ''} flex-1 truncate`}>{label}</span>
+        <Tooltip label={label} />
+      </>
+    );
+    const cls = `${rowBase} ${rowPad} w-full text-left ${soon ? 'cursor-not-allowed text-slate-500' : pathMatches(href ?? '#') ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'}`;
+    if (href && !soon) {
+      return (
+        <Link href={href}>
+          <a className={cls}>{inner}</a>
+        </Link>
+      );
+    }
+    return (
+      <button type="button" className={cls} onClick={onClick} disabled={soon} title={soon ? `${label} — available in a later phase` : undefined}>
+        {inner}
+      </button>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
+    <div className="flex min-h-screen bg-gray-50">
+      {mobileOpen && <div className="fixed inset-0 z-40 bg-gray-900/50 lg:hidden" onClick={() => setMobileOpen(false)} />}
 
+      {/* ============ SIDEBAR ============ */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 bg-slate-900 text-white flex flex-col transform transition-all duration-200 ease-in-out shadow-xl lg:shadow-none ${
-          sidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
-        } ${collapsed ? 'lg:w-[72px]' : 'lg:w-64'}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col overflow-visible bg-slate-900 px-3 pb-4 pt-5 text-white shadow-xl transition-all duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:shadow-none ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${collapsed ? 'lg:w-20 lg:px-2.5' : 'lg:w-64'}`}
+        aria-label="Main navigation"
       >
-        <button
-          onClick={() => setCollapsed((v) => !v)}
-          className="hidden lg:flex absolute -right-3 top-[26px] w-6 h-6 items-center justify-center rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-blue-600 hover:border-blue-600 shadow-md transition-colors z-10"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRightIcon className="w-3.5 h-3.5" /> : <ChevronLeftIcon className="w-3.5 h-3.5" />}
-        </button>
+        {/* Decorative waves behind the sidebar content */}
+        <svg className="pointer-events-none absolute bottom-0 left-0 h-[55%] w-full opacity-50" viewBox="0 0 282 520" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 120 C70 60 150 90 282 30 L282 520 L0 520 Z" fill="#1e293b" opacity=".85" />
+          <path d="M0 210 C90 150 170 190 282 140 L282 520 L0 520 Z" fill="#172036" opacity=".6" />
+          <circle cx="250" cy="420" r="120" fill="#c9d9ff" opacity=".06" />
+        </svg>
 
-        <div className={`h-16 flex items-center shrink-0 border-b border-slate-800/80 ${collapsed ? 'justify-center px-0' : 'px-5'}`}>
-          <div className="flex items-center min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shrink-0 shadow-sm">
-              <span className="font-bold text-sm">H</span>
-            </div>
-            {!collapsed && <span className="ml-3 text-xl font-bold tracking-tight truncate">HRMS</span>}
+        {/* Brand + collapse */}
+        <div className={`relative z-10 flex items-center gap-2.5 px-2 pb-6 ${collapsed ? 'lg:flex-col lg:gap-3 lg:px-0 lg:pb-5' : ''}`}>
+          <BrandLogo className={`h-[34px] w-[38px] shrink-0 ${collapsed ? 'lg:h-[30px] lg:w-[34px]' : ''}`} />
+          <div className={`${collapsed ? 'lg:hidden' : ''} min-w-0`}>
+            <p className="text-xl font-bold leading-none tracking-tight text-white">HRMS</p>
+            <p className="mt-1 whitespace-nowrap text-[11px] text-slate-400">Smart HR. Better Tomorrow.</p>
           </div>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className={`ml-auto hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-blue-600 hover:bg-blue-600 hover:text-white lg:flex ${collapsed ? 'lg:ml-0' : ''}`}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <ChevronLeft className={`h-3.5 w-3.5 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+          </button>
         </div>
 
-        <nav className="flex-1 py-5 px-3 space-y-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-          {fixedLinks.map((link) => (
-            <NavItem key={link.href} link={link} collapsed={collapsed} active={isActive(link.href)} onNavigate={navigate} icon={HomeIcon} />
-          ))}
+        {/* Main navigation */}
+        {/* Scrolls when expanded; on the collapsed rail it must not clip the hover labels. */}
+        <nav className={`relative z-10 flex-1 space-y-1 overflow-y-auto ${collapsed ? 'lg:overflow-visible' : ''}`}>{entries.map(renderEntry)}</nav>
 
-          {menu.map((group) => (
-            <div key={group.id} className="pt-4">
-              {!collapsed && group.children.length > 0 && (
-                <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{group.name}</p>
-              )}
-              {collapsed && group.children.length > 0 && <div className="mx-2 mb-2 border-t border-slate-800" />}
-              {group.pageUrl && (
-                <NavItem link={{ href: group.pageUrl, label: group.name }} collapsed={collapsed} active={isActive(group.pageUrl)} onNavigate={navigate} />
-              )}
-              {group.children.map((child) =>
-                child.pageUrl ? (
-                  <NavItem key={child.id} link={{ href: child.pageUrl, label: child.name }} collapsed={collapsed} active={isActive(child.pageUrl)} onNavigate={navigate} indent={!collapsed} />
-                ) : null,
-              )}
-            </div>
-          ))}
-
-          {visibleAdminLinks.length > 0 && (
-            <div className="pt-4">
-              {!collapsed && <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Administration</p>}
-              {collapsed && <div className="mx-2 mb-2 border-t border-slate-800" />}
-              {visibleAdminLinks.map((link) => (
-                <NavItem key={link.href} link={link} collapsed={collapsed} active={isActive(link.href)} onNavigate={navigate} />
-              ))}
-            </div>
-          )}
-        </nav>
-
-        <div className={`border-t border-slate-800/80 p-3 ${collapsed ? 'px-2' : ''}`}>
+        {/* Bottom: help, settings, user, logout */}
+        <div className="relative z-10 mt-auto space-y-1">
+          <div className="mx-1 my-3 h-px bg-slate-800" />
+          <BottomLink icon={HelpIcon} label="Help & Support" soon />
+          <BottomLink icon={GearIcon} label="Settings" href="/account" />
           <Link href="/account">
-            <a
-              onClick={navigate}
-              className={`flex items-center gap-3 mb-2 rounded-lg transition-colors hover:bg-slate-800 ${collapsed ? 'justify-center py-2' : 'px-2 py-2'}`}
-              title={collapsed ? 'My account' : undefined}
-            >
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-sm font-semibold shrink-0 ring-1 ring-slate-600">
-                {user?.username?.charAt(0).toUpperCase() || '?'}
-              </div>
-              {!collapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{user?.username}</p>
-                  <p className="text-xs text-slate-400 truncate">My account</p>
-                </div>
-              )}
+            <a className={`group relative mt-2.5 flex items-center gap-2.5 border-t border-slate-800 px-1 pt-3.5 ${collapsed ? 'lg:justify-center lg:border-0 lg:px-0 lg:pt-2' : ''}`}>
+              <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-[13px] font-bold text-white ring-1 ring-slate-600">
+                {initialsOf(displayName)}
+              </span>
+              <span className={`${collapsed ? 'lg:hidden' : ''} min-w-0 flex-1`}>
+                <span className="block truncate text-[13px] font-semibold text-white">{displayName}</span>
+                <span className="block truncate text-xs text-slate-400">{roleLabel}</span>
+              </span>
+              <ChevronDown className={`${collapsed ? 'lg:hidden' : ''} h-4 w-4 text-slate-400`} />
+              <Tooltip label="My account" />
             </a>
           </Link>
-          <button
-            onClick={() => logout().then(() => router.push('/login'))}
-            className={`w-full flex items-center justify-center text-sm font-medium text-slate-300 bg-slate-800/80 rounded-lg hover:bg-red-600 hover:text-white transition-colors ${
-              collapsed ? 'px-3 py-2.5' : 'px-4 py-2.5 gap-2'
-            }`}
-            title={collapsed ? 'Logout' : undefined}
-          >
-            <LogoutIcon className="w-4 h-4 shrink-0" />
-            {!collapsed && 'Logout'}
-          </button>
+          <div className="pt-1.5">
+            <BottomLink icon={LogoutIcon} label="Logout" onClick={doLogout} />
+          </div>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-8">
-          <div className="flex items-center gap-3">
+      {/* ============ MAIN ============ */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <main className="flex-1 px-4 pb-10 pt-5 sm:px-6 lg:px-7 lg:pt-6">
+          {/* Top bar */}
+          <header className="mb-5 flex h-14 items-center gap-3 lg:gap-4">
             <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="rounded-lg border border-gray-300 bg-white p-2 text-gray-600 shadow-sm hover:bg-gray-50 lg:hidden"
               aria-label="Open menu"
             >
-              <MenuIcon className="w-6 h-6" />
+              <MenuIcon className="h-5 w-5" />
             </button>
-            <h1 className="text-lg font-semibold text-gray-800">{activeLabel}</h1>
-          </div>
-          <div className="text-sm text-gray-500 hidden sm:block">Modernized HRMS</div>
-        </header>
-        <main className="flex-1 p-4 lg:p-8 overflow-auto">{children}</main>
+
+            <form onSubmit={onSearch} className="flex h-10 min-w-0 max-w-[560px] flex-1 items-center gap-2.5 rounded-lg border border-gray-300 bg-white px-3 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30">
+              <SearchIcon className="h-[18px] w-[18px] shrink-0 text-gray-400" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search employee, department, or module..."
+                className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
+                aria-label="Search"
+              />
+              <kbd className="hidden rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 font-sans text-[11px] text-gray-500 sm:inline">⌘ K</kbd>
+            </form>
+
+            <div className="ml-auto flex items-center gap-3 text-sm font-medium text-gray-700 lg:gap-[18px]">
+              {/* Notifications */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setBellOpen((v) => !v); setProfileOpen(false); }}
+                  className="relative flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
+                  aria-label="Notifications"
+                  aria-expanded={bellOpen}
+                >
+                  <BellIcon className="h-[18px] w-[18px]" />
+                </button>
+                {bellOpen && (
+                  <div className="absolute right-0 z-40 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-4 text-sm shadow-lg">
+                    <p className="font-semibold text-gray-900">Notifications</p>
+                    <p className="mt-1 text-gray-500">You are all caught up. Document expiry and approval alerts will appear here.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Language */}
+              <div className="hidden items-center gap-1.5 sm:flex" title="Language">
+                <GlobeIcon className="h-[18px] w-[18px] text-gray-500" />
+                EN
+                <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
+              </div>
+
+              {/* Profile */}
+              <div className="relative border-l border-gray-200 pl-3 lg:pl-[18px]">
+                <button
+                  type="button"
+                  onClick={() => { setProfileOpen((v) => !v); setBellOpen(false); }}
+                  className="flex items-center gap-2.5 rounded-lg text-left"
+                  aria-expanded={profileOpen}
+                  aria-label="Account menu"
+                >
+                  <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-[13px] font-bold text-white">
+                    {initialsOf(displayName)}
+                  </span>
+                  <span className="hidden md:block">
+                    <span className="block text-sm font-semibold text-gray-900">{displayName}</span>
+                    <span className="block text-xs font-normal text-gray-500">{roleLabel}</span>
+                  </span>
+                  <ChevronDown className="hidden h-3.5 w-3.5 text-gray-500 md:block" />
+                </button>
+                {profileOpen && (
+                  <div className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                    <Link href="/account"><a className="block px-4 py-2 text-gray-700 hover:bg-gray-50">My account</a></Link>
+                    <Link href="/change-password"><a className="block px-4 py-2 text-gray-700 hover:bg-gray-50">Change password</a></Link>
+                    <button type="button" onClick={doLogout} className="block w-full px-4 py-2 text-left text-red-600 hover:bg-red-50">Logout</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
+
+          {children}
+        </main>
       </div>
     </div>
   );

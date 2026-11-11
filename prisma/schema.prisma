@@ -715,6 +715,9 @@ model Employee {
   isAllowedAdvanceLeave  Boolean?
 
   profile     Profile    @relation(fields: [profileId], references: [id])
+  /// NEW (D-023): profile sections 01–09 (Personal … System Access).
+  profileSections    EmployeeProfileSection[]
+  customFieldValues  CustomFieldValue[]
   reportingTo Employee?  @relation("ReportingTree", fields: [reportingToId], references: [id])
   reports     Employee[] @relation("ReportingTree")
   site        Site?      @relation(fields: [siteId], references: [id])
@@ -950,4 +953,81 @@ model ExpiryAlertLog {
 
   @@unique([documentId, alertWindow, runId])
   @@map("expiry_alert_logs")
+}
+
+// ============================================================================
+// EMPLOYEE PROFILE (D-023) — nine profile sections and admin-defined custom fields
+// ============================================================================
+
+/// NEW (D-023): one document per employee per profile section. Field shape and
+/// validation come from src/employee-profile/profile-schema.ts. Fields marked
+/// sensitive there are stored encrypted (PiiService, D-015) inside `data`.
+model EmployeeProfileSection {
+  id                 Int      @id @default(autoincrement())
+  employeeId         Int
+  /// personal | employment | organization | attendance | compensation | bank | documents | education | access
+  sectionKey         String
+  data               Json
+  updatedByProfileId Int?
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, sectionKey])
+  @@map("employee_profile_sections")
+}
+
+/// NEW (D-023): admin-defined field (System Admin only). `code` is immutable once
+/// created; labels can change; fields are deactivated, never deleted (values kept).
+model CustomFieldDefinition {
+  id                 Int      @id @default(autoincrement())
+  code               String   @unique
+  label              String
+  tabKey             String
+  sectionName        String
+  fieldType          String
+  options            Json     @default("[]")
+  countryCode        String   @default("ALL")
+  isRequired         Boolean  @default(false)
+  isSensitive        Boolean  @default(false)
+  helpText           String?
+  isActive           Boolean  @default(true)
+  displayOrder       Int      @default(0)
+  createdByProfileId Int?
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+
+  values CustomFieldValue[]
+
+  @@index([tabKey])
+  @@map("custom_field_definitions")
+}
+
+model CustomFieldValue {
+  id           Int      @id @default(autoincrement())
+  employeeId   Int
+  definitionId Int
+  value        Json
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  employee   Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  definition CustomFieldDefinition @relation(fields: [definitionId], references: [id])
+
+  @@unique([employeeId, definitionId])
+  @@map("custom_field_values")
+}
+
+/// NEW (D-024): admin-defined salary template. Employees pick one in the
+/// Compensation tab and enter a monthly amount per component.
+/// components = [{ code, label }] in display order; codes stay stable after creation.
+model SalaryTemplate {
+  id                 Int      @id @default(autoincrement())
+  name               String   @unique
+  countryCode        String   @default("ALL")
+  components         Json
+  isActive           Boolean  @default(true)
+  createdByProfileId Int?
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("salary_templates")
 }

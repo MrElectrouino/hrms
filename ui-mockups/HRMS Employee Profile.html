@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HRMS Employee Profile</title>
+<style>
+/* Project UI rules: planning/UI_UX_GLOSSARY.md section 9 (Tailwind palette) */
+:root{
+  --bg:#f9fafb; --card:#ffffff; --b:#e5e7eb; --b2:#d1d5db;
+  --t:#111827; --t2:#374151; --t3:#6b7280; --t4:#9ca3af;
+  --p:#2563eb; --p7:#1d4ed8; --pl:#eff6ff; --pl2:#dbeafe;
+  --ok:#15803d; --okb:#f0fdf4; --okbr:#bbf7d0;
+  --wr:#b45309; --wrb:#fffbeb; --wrbr:#fde68a;
+  --bd:#b91c1c; --bdb:#fef2f2; --bdbr:#fecaca;
+  --sh:0 1px 2px 0 rgba(0,0,0,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--t);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--b);height:64px;display:flex;align-items:center;gap:16px;padding:0 24px}
+.logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;display:grid;place-items:center;font-weight:700}
+.brand b{display:block;font-size:15px}
+.brand small{color:var(--t3);font-size:12px}
+.spacer{flex:1}
+.ctl{display:flex;align-items:center;gap:8px;color:var(--t3);font-size:12px}
+.sel,.inp{border:1px solid var(--b2);border-radius:8px;background:#fff;padding:7px 10px;color:var(--t);box-shadow:var(--sh)}
+.inp:focus,.sel:focus{outline:0;border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.35)}
+
+/* buttons */
+.btn{border:1px solid var(--b2);background:#fff;border-radius:8px;padding:8px 14px;font-weight:500;box-shadow:var(--sh)}
+.btn:hover{background:#f9fafb}
+.btn.p{background:var(--p);border-color:var(--p);color:#fff}
+.btn.p:hover{background:var(--p7);border-color:var(--p7)}
+.btn.x{color:var(--bd);border-color:var(--bdbr);background:#fff}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn:focus-visible,.navb:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}
+
+/* layout */
+.wrap{max-width:1280px;margin:0 auto;padding:24px}
+.card{background:var(--card);border:1px solid var(--b);border-radius:12px;box-shadow:var(--sh)}
+
+/* header card */
+.hcard{padding:20px 24px;display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.av{width:64px;height:64px;border-radius:999px;background:var(--pl2);color:#1d4ed8;display:grid;place-items:center;font-size:22px;font-weight:700;flex:none}
+.hname{flex:1;min-width:220px}
+.hname h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.hsub{color:var(--t3);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.facts{width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;border-top:1px solid var(--b);padding-top:16px;margin-top:4px}
+.facts span{display:block;font-size:12px;color:var(--t3)}
+.facts b{font-weight:500}
+
+/* pills */
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.pill.ok{background:var(--okb);color:var(--ok);border-color:var(--okbr)}
+.pill.wr{background:var(--wrb);color:var(--wr);border-color:var(--wrbr)}
+.pill.bd{background:var(--bdb);color:var(--bd);border-color:var(--bdbr)}
+.pill.gr{background:#f3f4f6;color:var(--t3);border-color:var(--b)}
+.pill.bl{background:var(--pl);color:#1d4ed8;border-color:var(--pl2)}
+
+/* two-column workspace */
+.ws{display:grid;grid-template-columns:240px minmax(0,1fr);gap:20px;margin-top:20px;align-items:start}
+.nav{position:sticky;top:88px;padding:8px}
+.grp{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--t4);font-weight:600;padding:12px 12px 4px}
+.grp:first-child{padding-top:6px}
+.navb{width:100%;display:flex;align-items:center;gap:10px;background:none;border:0;border-radius:8px;padding:9px 12px;text-align:left;color:var(--t2);font-weight:500}
+.navb:hover{background:#f3f4f6;color:var(--t)}
+.navb[aria-current="true"]{background:var(--pl);color:#1d4ed8}
+.navb .n{color:var(--t4);font-size:12px;width:18px}
+.navb[aria-current="true"] .n{color:#1d4ed8}
+.navb .d{margin-left:auto;width:8px;height:8px;border-radius:999px;background:#f59e0b}
+.navb .ck{margin-left:auto;color:var(--ok);font-size:12px}
+
+/* section */
+.sec{padding:24px}
+.sh{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:6px}
+.sh h2{margin:0;font-size:18px;font-weight:600}
+.sh p{margin:4px 0 0;color:var(--t3)}
+.sh .sp{flex:1}
+.gt{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);font-weight:600;margin:24px 0 12px;padding-top:20px;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:8px}
+.gt:first-of-type{border-top:0;padding-top:0;margin-top:16px}
+.gt .pill{text-transform:none;letter-spacing:0;font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px 16px}
+.fl{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fl.w{grid-column:1/-1}
+.fl label{font-size:12px;font-weight:500;color:var(--t2)}
+.fl label em{font-style:normal;color:var(--bd)}
+.fl .hint{font-size:12px;color:var(--t4)}
+.fl input,.fl select,.fl textarea{width:100%;border:1px solid var(--b2);border-radius:8px;background:#fff;padding:8px 10px;min-width:0;box-shadow:var(--sh)}
+.fl textarea{min-height:76px;resize:vertical}
+.fl input:hover,.fl select:hover,.fl textarea:hover{border-color:#9ca3af}
+.fl input:focus,.fl select:focus,.fl textarea:focus{outline:0;border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,.35)}
+.fl input[readonly],.fl .ro{background:#f3f4f6;color:var(--t3);border-color:var(--b)}
+.fl .ro{border:1px solid var(--b);border-radius:8px;padding:8px 10px;min-height:38px;display:flex;align-items:center}
+.rowc{border:1px solid var(--b);border-radius:10px;padding:14px;margin-bottom:10px;background:#fff}
+.rowc .grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+.rowh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:13px;color:var(--t2);font-weight:500}
+.empty{border:1px dashed var(--b2);border-radius:10px;padding:18px;color:var(--t3);text-align:center;margin-bottom:10px}
+.dtab{width:100%;border-collapse:collapse}
+.dtab th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);text-align:left;font-weight:600;padding:8px 10px;background:#f9fafb;border-bottom:1px solid var(--b)}
+.dtab td{padding:8px 10px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+.dtab tr:last-child td{border-bottom:0}
+.tw{border:1px solid var(--b);border-radius:10px;overflow:auto}
+.footer{margin-top:28px;padding-top:16px;border-top:1px solid var(--b);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.footer .msg{color:var(--t3);font-size:13px}
+.footer .sp{flex:1}
+.note{background:var(--pl);border-radius:8px;padding:10px 12px;color:var(--t2);font-size:13px;display:flex;gap:8px;align-items:flex-start;margin-bottom:18px}
+.note i{width:8px;height:8px;border-radius:999px;background:var(--p);margin-top:6px;flex:none}
+.note.warn{background:var(--wrb)}
+.note.warn i{background:#f59e0b}
+.ccard{padding:0}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#f9fafb;border-radius:8px;padding:10px 16px;font-size:13px;box-shadow:0 10px 15px -3px rgba(0,0,0,.2);display:none;z-index:50}
+.toast.on{display:block}
+[hidden]{display:none!important}
+
+@media (max-width:900px){
+  .ws{grid-template-columns:1fr}
+  .nav{position:static;display:flex;overflow-x:auto;gap:4px}
+  .grp{display:none}
+  .navb{width:auto;white-space:nowrap}
+  .top .ctl span.lbl{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="logo">H</div>
+  <div class="brand"><b>HRMS</b><small>Employee profile</small></div>
+  <div class="spacer"></div>
+  <label class="ctl"><span class="lbl">Demo role</span>
+    <select id="role" class="sel">
+      <option>System Admin</option>
+      <option selected>HR Admin</option>
+      <option>Employee</option>
+    </select>
+  </label>
+  <label class="ctl"><span class="lbl">Country</span>
+    <select id="country" class="sel">
+      <option value="IN" selected>India</option>
+      <option value="AE">United Arab Emirates</option>
+      <option value="GB">United Kingdom</option>
+      <option value="US">United States</option>
+    </select>
+  </label>
+</header>
+
+<main class="wrap">
+  <section class="card hcard" id="hdr"></section>
+  <div class="ws">
+    <nav class="card nav" id="nav" aria-label="Profile sections"></nav>
+    <section class="card" id="main" aria-live="polite"></section>
+  </div>
+</main>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+/* ---------------- Reference data ---------------- */
+const TODAY = "2026-11-11";
+const SECTIONS = [
+  {id:"personal",    n:"Personal",              g:"Profile",     d:"Identity, contact, emergency contact and addresses."},
+  {id:"employment",  n:"Employment",            g:"Employment",  d:"Employee code, status, joining, probation, contract and previous employers."},
+  {id:"organization",n:"Organization",          g:"Employment",  d:"Legal entity, branch, department, designation, grade and reporting lines."},
+  {id:"attendance",  n:"Attendance & Leave",    g:"Time & pay",  d:"Attendance policy, shift, roster, weekly off, OT and leave policy."},
+  {id:"compensation",n:"Compensation & Payroll",g:"Time & pay",  d:"Salary structure, components, payment mode and payroll configuration."},
+  {id:"bank",        n:"Bank & Statutory",      g:"Compliance",  d:"Bank account, tax identifiers, pension and social insurance."},
+  {id:"documents",   n:"Documents",             g:"Compliance",  d:"Passport, visa, licences and other documents with issue and expiry dates."},
+  {id:"education",   n:"Education & Experience",g:"Records",     d:"Qualifications, skills, certifications and professional experience."},
+  {id:"access",      n:"System Access",         g:"Admin",       d:"Login, username, role and two-factor authentication."}
+];
+const COUNTRY = {
+  IN:{name:"India", cur:"INR", entities:["Meridian Systems India Pvt Ltd"], branches:["Pune HQ","Bengaluru","Chennai"],
+      addr:["State","City","Area","Street","Building","PIN Code"], leave:"India Standard 2026", salary:"India Grade G5 Monthly", access:"India – Staff",
+      bank:[["bankName","Bank name"],["bankBranch","Branch"],["holder","Account holder"],["account","Account number","mono"],["ifsc","IFSC code","mono"]],
+      stat:[["pan","PAN","mono"],["uan","UAN","mono"],["pfApp","PF applicable","yn"],["pfNo","PF number","mono"],["esicApp","ESIC applicable","yn"],["esicIp","ESIC IP number"],["ptState","Professional tax state","sel",["Maharashtra","Karnataka","Tamil Nadu","Delhi"]],["taxRegime","Tax regime","sel",["Old Regime","New Regime"]],["lwf","Labour welfare fund","yn"],["gratuity","Gratuity applicable","yn"],["tds","TDS applicable","yn"]],
+      docs:["Passport","PAN Card","Aadhaar Card","UAN / PF Documents","Educational Certificates","Relieving Letter","Form 16 (last 3 years)","Work Permit","Driving Licence"]},
+  AE:{name:"United Arab Emirates", cur:"AED", entities:["Meridian Systems FZ-LLC"], branches:["Dubai Office","Abu Dhabi"],
+      addr:["Emirate","City","Area","Street","Building","PO Box"], leave:"UAE Standard 2026", salary:"UAE Grade G5 Monthly", access:"UAE – Staff",
+      bank:[["bankName","Bank name"],["bankBranch","Branch"],["holder","Account holder"],["iban","IBAN","mono"],["swift","SWIFT code","mono"]],
+      stat:[["emiratesId","Emirates ID number","mono"],["labourCard","Labour card number","mono"],["establishmentId","Establishment ID","mono"],["gratuity","Gratuity (EOSB) applicable","yn"],["wps","WPS applicable","yn"]],
+      docs:["Emirates ID","Visa","Work Permit","Labour Card","Passport","Driving Licence","Educational Certificates","Experience Certificate"]},
+  GB:{name:"United Kingdom", cur:"GBP", entities:["Meridian Systems UK Ltd"], branches:["London","Manchester"],
+      addr:["County","Town / City","Street","Building / Flat","Postcode"], leave:"UK Standard 2026", salary:"UK Grade G5 Monthly", access:"UK – Staff",
+      bank:[["bankName","Bank name"],["holder","Account holder"],["sortCode","Sort code","mono"],["account","Account number","mono"]],
+      stat:[["ni","National Insurance number","mono"],["taxCode","Tax code"],["studentLoan","Student loan plan","sel",["None","Plan 1","Plan 2","Plan 4"]],["pension","Auto-enrolment pension","sel",["Opted in","Opted out"]],["ssp","Statutory sick pay eligible","yn"]],
+      docs:["Passport","Right to Work (share code)","P45","Educational Certificates"]},
+  US:{name:"United States", cur:"USD", entities:["Meridian Systems Inc."], branches:["Austin HQ","New York"],
+      addr:["State","City","Street","Unit","ZIP code"], leave:"US Standard 2026", salary:"US Grade G5 Monthly", access:"US – Staff",
+      bank:[["bankName","Bank name"],["holder","Account holder"],["routing","Routing number","mono"],["account","Account number","mono"],["accType","Account type","sel",["Checking","Savings"]]],
+      stat:[["ssn","SSN","mono"],["w4","W-4 filing status","sel",["Single","Married","Head of Household"]],["stateWh","State withholding","sel",["None (TX)","CA","NY"]],["flsa","FLSA classification","sel",["Exempt","Non-exempt"]],["k401","401(k) contribution %"]],
+      docs:["I-9 Form","W-4 Form","Passport","Driver's License","Educational Certificates"]}
+};
+const OPT = {
+  gender:["Male","Female","Other"], marital:["Single","Married","Divorced","Widowed"], blood:["A+","A-","B+","B-","O+","O-","AB+","AB-"],
+  rel:["Parent","Spouse","Sibling","Friend","Other"], category:["Staff","Management","Worker"], etype:["Full Time","Part Time","Contract","Intern"],
+  status:["Active","On Notice","Inactive"], probation:["3 months","6 months","1 year"], notice:["1 month","2 months","3 months"],
+  dept:["Engineering","Finance","Product","Customer Success","HR","Operations"], grade:["G3","G4","G5","G6","G7"],
+  approver:["HR Approvers","Finance Approvers","Department Heads"], attProc:["Automatic","Manual"], attType:["Biometric","Web","Mobile"],
+  shift:["General 09:00–18:00","Day 08:00–17:00","Night 20:00–05:00"], roster:["Fixed","Rotational"], weekly:["Saturday, Sunday","Friday, Saturday","Sunday only"],
+  grace:["0 min","5 min","10 min","15 min"], ot:["None","1.25x","1.5x","2x"], accrual:["Monthly","Annual","Front-loaded"],
+  leaveCal:["Jan – Dec","Apr – Mar"], pay:["Bank Transfer","Cheque","Cash"], freq:["Monthly","Bi-weekly"], payGroup:["A – Monthly","B – Contract"],
+  prof:["Beginner","Intermediate","Advanced","Expert"], role:["Employee","Manager","HR Admin","Payroll Admin","System Admin"],
+  loginStatus:["Active","Locked","Disabled"], mfa:["Enabled","Disabled"], cfType:["Text","Textarea","Number","Date","Dropdown","Yes/No"]
+};
+
+/* ---------------- Data model ---------------- */
+// Each section's draft/saved object holds plain keys plus repeatable row arrays and a cf map for custom fields.
+const SEED = {
+  personal:{first:"Rohan",middle:"",last:"Deshmukh",preferred:"Rohan",dob:"1991-04-09",gender:"Male",marital:"Married",nationality:"Indian",languages:"English, Marathi, Hindi",religion:"",blood:"B+",
+    personalMobile:"+91 98220 41877",officialMobile:"+91 98220 41878",personalEmail:"rohan.deshmukh@mail.com",officialEmail:"rohan.deshmukh@meridian.example",
+    emName:"Sunita Deshmukh",emRel:"Spouse",emNumber:"+91 98220 11223",emEmail:"",sameAddr:"Yes",
+    addr_p:["Maharashtra","Pune","Baner","Pashan Road","Sunrise Heights, B-402","411045"], addr_q:["","","","","",""]},
+  employment:{empCode:"IN-00418",category:"Staff",empType:"Full Time",status:"Active",doj:"2022-06-13",confirmDate:"2022-12-13",probation:"6 months",contractStart:"2022-06-13",contractEnd:"",notice:"2 months",lastWorking:"",endDate:"",
+    prevEmp:[{employer:"Infoserve Technologies",title:"Software Engineer",start:"2019-07-01",end:"2022-05-31",reason:"Better opportunity"}]},
+  organization:{legalEntity:"Meridian Systems India Pvt Ltd",branch:"Pune HQ",location:"Pune",payrollSite:"Pune HQ",department:"Engineering",designation:"Senior Associate",grade:"G5",costCenter:"CC-ENG-01",
+    reportingManager:"Neha Kulkarni",functionalManager:"",hrManager:"Priya Nair",approver:"HR Approvers"},
+  attendance:{attApp:"Yes",attProc:"Automatic",attType:"Biometric",shift:"General 09:00–18:00",roster:"Fixed",weekly:"Saturday, Sunday",grace:"10 min",lateDed:"No",otElig:"No",ot:"None",deviceId:"DEV-IN-02",biometricId:"B00418",
+    leaveCal:"Jan – Dec",accrual:"Monthly",leaveFrom:"2026-01-01",leaveTo:"2026-12-31",annualElig:"Yes",sickElig:"Yes",encash:"Yes"},
+  compensation:{salFrom:"2026-04-01",salTo:"",basic:42000,housing:21000,transport:3000,food:0,other:18500,paymentMode:"Bank Transfer",freq:"Monthly",payGroup:"A – Monthly",payrollElig:"Yes"},
+  bank:{bankName:"HDFC Bank",bankBranch:"Baner, Pune",holder:"Rohan Deshmukh",account:"50100412839021",ifsc:"HDFC0000412",
+    pan:"AKLPD4821Q",uan:"101284739201",pfApp:"Yes",pfNo:"MHPUN0123456/000/0007821",esicApp:"No",esicIp:"—",ptState:"Maharashtra",taxRegime:"New Regime",lwf:"Yes",gratuity:"Yes",tds:"Yes"},
+  documents:{docs:[
+    {type:"PAN Card",number:"AKLPD4821Q",issue:"",expiry:"",file:"pan_card.pdf"},
+    {type:"Passport",number:"N7741920",issue:"2021-03-15",expiry:"2031-03-14",file:"passport.pdf"},
+    {type:"Relieving Letter",number:"Infoserve Tech",issue:"2022-05-31",expiry:"",file:""},
+    {type:"Form 16 (last 3 years)",number:"",issue:"",expiry:"",file:""}]},
+  education:{edu:[{qual:"B.E. Computer Engineering",institution:"Pune University",spec:"Computer Engineering",country:"India",year:"2018",grade:"First Class"}],
+    skills:[{skill:"JavaScript",prof:"Expert",cert:"",issuer:"",issue:"",expiry:""},{skill:"AWS",prof:"Intermediate",cert:"AWS Solutions Architect – Associate",issuer:"Amazon Web Services",issue:"2024-02-10",expiry:"2027-02-10"}],
+    totalExp:"6 years 4 months",skillsText:"System design, API development, team mentoring",remarks:""},
+  access:{loginEnabled:"Yes",username:"in-00418",accessRole:"Employee",loginStatus:"Active",mfa:"Enabled",createdBy:"HR Admin (Priya Nair)",createdOn:"2022-06-10",modifiedBy:"HR Admin (Priya Nair)",modifiedOn:"2026-03-02",rehire:"No"}
+};
+// Custom fields are defined by System Admin only (see planning/UI_UX_GLOSSARY.md and the layout workbook, "Admin Custom Fields").
+let CF = [
+  {code:"CUSTOM_SHIRT_SIZE",label:"Shirt Size",tab:"personal",section:"Additional personal details",type:"Dropdown",options:["XS","S","M","L","XL","XXL"],country:"All",required:false,active:true,help:"Example custom field."},
+  {code:"CUSTOM_SITE_CLEARANCE",label:"Site Clearance Required",tab:"employment",section:"Additional employment details",type:"Yes/No",options:[],country:"All",required:false,active:true,help:"Example, legal-entity specific."}
+];
+const clone = o => JSON.parse(JSON.stringify(o));
+let saved = clone(SEED), draft = clone(SEED);
+let cur = "personal", cc = "IN", role = "HR Admin", adminView = false, savedAt = {};
+
+/* ---------------- Helpers ---------------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const canEdit = () => role !== "Employee";
+const canAdmin = () => role === "System Admin";
+const visibleSections = () => SECTIONS.filter(s => s.id !== "access" || role !== "Employee");
+const dayDiff = d => Math.round((new Date(d) - new Date(TODAY)) / 864e5);
+const isDirty = sec => JSON.stringify(draft[sec]) !== JSON.stringify(saved[sec]);
+const dirtySet = () => SECTIONS.filter(s => isDirty(s.id)).map(s => s.id);
+const toast = msg => { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 1800); };
+const now = () => new Date().toLocaleTimeString("en-GB", {hour:"2-digit", minute:"2-digit"});
+
+/* Field builders */
+function ctl(sec, f, val, key, idx){
+  const attrs = `data-sec="${sec}" data-k="${esc(key)}"` + (idx !== undefined ? ` data-i="${idx}"` : "") + (f.rerender ? ' data-rr="1"' : "");
+  const dis = canEdit() ? "" : " disabled";
+  if (f.t === "ro") return `<div class="ro">${esc(val || "—")}</div>`;
+  if (f.t === "sel") return `<select ${attrs}${dis}>${(f.o||[]).map(o => `<option ${o===val?"selected":""}>${esc(o)}</option>`).join("")}${(f.o||[]).includes(val)||!val?"":`<option selected>${esc(val)}</option>`}</select>`;
+  if (f.t === "yn") return `<select ${attrs}${dis}><option ${val==="Yes"?"selected":""}>Yes</option><option ${val==="No"?"selected":""}>No</option></select>`;
+  if (f.t === "ta") return `<textarea ${attrs}${dis}>${esc(val)}</textarea>`;
+  const type = f.t === "date" ? "date" : f.t === "num" ? "number" : f.t === "email" ? "email" : f.t === "tel" ? "tel" : "text";
+  return `<input type="${type}" ${attrs}${dis} value="${esc(val)}" class="${f.mono?"mono":""}" placeholder="${f.t==="num"?"0":""}">`;
+}
+function fld(sec, f, val, key, idx){
+  const label = `<label>${esc(f.l)}${f.req?' <em>*</em>':""}</label>`;
+  return `<div class="fl ${f.w?"w":""}">${label}${ctl(sec, f, val, key, idx)}${f.hint?`<span class="hint">${esc(f.hint)}</span>`:""}</div>`;
+}
+function F(k, l, t="text", extra={}){ return Object.assign({k, l, t}, extra); }
+
+/* Section schemas */
+function schema(sec){
+  const c = COUNTRY[cc], d = draft[sec];
+  switch(sec){
+  case "personal": {
+    const addrP = c.addr.map((l,i)=>F("addr_p."+i, l));
+    const addrQ = c.addr.map((l,i)=>F("addr_q."+i, l));
+    return [
+      {t:"Personal details", f:[F("first","First name",'text',{req:1}),F("middle","Middle name"),F("last","Last name",'text',{req:1}),F("preferred","Preferred name"),F("dob","Date of birth","date",{req:1}),
+        F("gender","Gender","sel",{o:OPT.gender,req:1}),F("marital","Marital status","sel",{o:OPT.marital}),F("nationality","Nationality",'text',{req:1}),F("languages","Languages","text",{w:1,hint:"Comma separated"}),F("religion","Religion"),F("blood","Blood group","sel",{o:OPT.blood})]},
+      {t:"Contact", f:[F("personalMobile","Personal mobile","tel"),F("officialMobile","Official mobile","tel"),F("personalEmail","Personal email","email"),F("officialEmail","Official email","email")]},
+      {t:"Emergency contact", f:[F("emName","Name"),F("emRel","Relationship","sel",{o:OPT.rel}),F("emNumber","Number","tel"),F("emEmail","Email","email")]},
+      {t:"Present address", f:[F("country","Country","ro")].concat(addrP), addrNote:true},
+      {t:"Permanent address", f:[F("sameAddr","Same as present address","yn",{rerender:1})]},
+      {t:"Permanent address details", cond:d.sameAddr!=="Yes", addrFields:addrQ}
+    ];
+  }
+  case "employment": return [
+    {t:"Employment", f:[F("empCode","Employee code","ro"),F("category","Employee category","sel",{o:OPT.category}),F("empType","Employment type","sel",{o:OPT.etype,req:1}),F("status","Employment status","sel",{o:OPT.status,req:1}),
+      F("doj","Date of joining","date",{req:1}),F("confirmDate","Confirmation date","date"),F("probation","Probation period","sel",{o:OPT.probation}),F("contractStart","Contract start date","date"),F("contractEnd","Contract end date","date"),
+      F("notice","Notice period","sel",{o:OPT.notice}),F("lastWorking","Last working date","date"),F("endDate","Employment end date","date")]},
+    {t:"Previous employment", rows:"prevEmp", rowF:[F("employer","Employer"),F("title","Job title"),F("start","Start date","date"),F("end","End date","date"),F("reason","Reason for leaving")], addLabel:"Add previous employer"}
+  ];
+  case "organization": return [
+    {t:"Assignment", f:[F("legalEntity","Legal entity","sel",{o:c.entities}),F("branch","Branch","sel",{o:c.branches}),F("location","Work location"),F("payrollSite","Payroll site"),
+      F("department","Department","sel",{o:OPT.dept,req:1}),F("designation","Designation",'text',{req:1}),F("grade","Grade","sel",{o:OPT.grade}),F("costCenter","Cost centre")]},
+    {t:"Reporting structure", f:[F("reportingManager","Reporting manager"),F("functionalManager","Functional manager (dotted line)"),F("hrManager","HR manager"),F("approver","Approver group","sel",{o:OPT.approver})]}
+  ];
+  case "attendance": return [
+    {t:"Attendance", f:[F("attApp","Attendance applicable","yn"),F("attProc","Attendance processing","sel",{o:OPT.attProc}),F("attType","Attendance type","sel",{o:OPT.attType}),F("shift","Shift","sel",{o:OPT.shift}),
+      F("roster","Roster","sel",{o:OPT.roster}),F("weekly","Weekly off","sel",{o:OPT.weekly}),F("grace","Grace period","sel",{o:OPT.grace}),F("lateDed","Late deduction applicable","yn"),
+      F("otElig","Overtime eligible","yn"),F("ot","OT configuration","sel",{o:OPT.ot}),F("deviceId","Attendance device ID","text",{mono:1}),F("biometricId","Biometric ID","text",{mono:1})]},
+    {t:"Leave", f:[F("leavePolicy","Leave policy","ro"),F("leaveCal","Leave calendar","sel",{o:OPT.leaveCal}),F("accrual","Accrual type","sel",{o:OPT.accrual}),F("leaveFrom","Effective from","date"),F("leaveTo","Effective to","date"),
+      F("annualElig","Annual leave eligible","yn"),F("sickElig","Sick leave eligible","yn"),F("encash","Leave encashment eligible","yn")]}
+  ];
+  case "compensation": return [
+    {t:"Salary structure", f:[F("salStruct","Salary structure","ro"),F("salCur","Currency","ro"),F("salFrom","Effective from","date"),F("salTo","Effective to","date"),F("paymentMode","Payment mode","sel",{o:OPT.pay}),
+      F("freq","Pay frequency","sel",{o:OPT.freq}),F("payGroup","Payroll group","sel",{o:OPT.payGroup}),F("payrollElig","Payroll eligible","yn"), ...(cc==="AE"?[F("wps","WPS applicable","yn")]:[])]},
+    {t:"Salary components", f:[F("basic","Basic salary","num"),F("housing","Housing allowance","num"),F("transport","Transport allowance","num"),F("food","Food allowance","num"),F("other","Other allowance","num")], comp:true}
+  ];
+  case "bank": return [
+    {t:"Bank account", f:c.bank.map(([k,l,m])=>F(k,l,"text",{mono:m==="mono"}))},
+    {t:"Statutory & tax — "+c.name, f:c.stat.map(([k,l,t,o])=>F(k,l,t==="mono"?"text":(t||"text"),{mono:t==="mono"||false,o:o||null}))}
+  ];
+  case "documents": return [
+    {t:"Documents", rows:"docs", rowF:[F("type","Document type","sel",{o:c.docs}),F("number","Number / detail"),F("issue","Issue date","date"),F("expiry","Expiry date","date"),F("file","File","ro")], addLabel:"Add document", isDocs:true}
+  ];
+  case "education": return [
+    {t:"Qualifications", rows:"edu", rowF:[F("qual","Qualification"),F("institution","Institution"),F("spec","Specialization"),F("country","Country"),F("year","Completion year","num"),F("grade","Grade / result")], addLabel:"Add qualification"},
+    {t:"Skills & certifications", rows:"skills", rowF:[F("skill","Skill"),F("prof","Proficiency","sel",{o:OPT.prof}),F("cert","Certification"),F("issuer","Issuing body"),F("issue","Issue date","date"),F("expiry","Expiry date","date")], addLabel:"Add skill or certification"},
+    {t:"Experience & summary", f:[F("totalExp","Total experience"),F("skillsText","Professional skills","ta",{w:1}),F("remarks","Remarks","ta",{w:1})]}
+  ];
+  case "access": return [
+    {t:"Login & access", f:[F("loginEnabled","Login enabled","yn"),F("username","Username",'text',{mono:1}),F("accessRole","Role","sel",{o:OPT.role}),F("accessGroup","Access group","ro"),F("loginStatus","Login status","sel",{o:OPT.loginStatus}),F("mfa","Two-factor authentication","sel",{o:OPT.mfa})]},
+    {t:"Lifecycle (system managed)", f:[F("createdBy","Created by","ro"),F("createdOn","Created on","ro"),F("modifiedBy","Modified by","ro"),F("modifiedOn","Modified on","ro"),F("rehire","Rehire","ro")], sys:true}
+  ];
+  }
+}
+
+/* Render one section */
+const RO = {salStruct:()=>COUNTRY[cc].salary, salCur:()=>COUNTRY[cc].cur, leavePolicy:()=>COUNTRY[cc].leave, accessGroup:()=>COUNTRY[cc].access};
+function getVal(sec, k){
+  const d = draft[sec];
+  if (RO[k]) return RO[k]();
+  if (k.startsWith("cf:")) return (d.cf||{})[k.slice(3)] ?? "";
+  const p = k.split(".");
+  return p.length===2 ? ((d[p[0]]||[])[+p[1]] ?? "") : (d[k] ?? "");
+}
+function renderSection(sec){
+  const meta = SECTIONS.find(s=>s.id===sec), d = draft[sec];
+  const groups = schema(sec);
+  const c = COUNTRY[cc];
+  let html = `<div class="sec"><div class="sh"><div><h2>${meta.n}</h2><p>${meta.d}</p></div><div class="sp"></div>${isDirty(sec)?'<span class="pill wr">Unsaved changes</span>':(savedAt[sec]?`<span class="pill ok">Saved ${savedAt[sec]}</span>`:'')}</div>`;
+  if (!canEdit()) html += `<div class="note"><i></i><span>Read-only for your role. Contact HR to change this information.</span></div>`;
+  for (const g of groups){
+    if (g.cond === false) continue;
+    html += `<div class="gt">${esc(g.t)}${g.addrNote?`<span class="pill bl">${esc(c.name)} address levels</span>`:""}</div>`;
+    if (g.rows){
+      const list = d[g.rows] || [];
+      if (!list.length) html += `<div class="empty">No records yet.</div>`;
+      list.forEach((row, i) => {
+        html += `<div class="rowc"><div class="rowh"><span>${esc(g.t.replace(/s$/,""))} ${i+1}${g.isDocs&&row.type?` · ${esc(row.type)}`:""}${g.isDocs?` ${docPill(row)}`:""}</span>${canEdit()?`<button class="btn sm x" data-del="${sec}|${g.rows}|${i}">Remove</button>`:""}</div>`;
+        html += `<div class="grid">` + g.rowF.map(f => {
+          if (f.k==="file") return `<div class="fl"><label>File</label><div class="ro">${esc(row.file||"No file attached")}</div>${canEdit()?`<button class="btn sm" data-upload="${sec}|${g.rows}|${i}">${row.file?"Replace file":"Upload file"}</button>`:""}</div>`;
+          return fld(sec, f, row[f.k], g.rows+"."+f.k.replace(/\./g,""), i).replace(`data-k="${g.rows}.${f.k.replace(/\./g,"")}"`, `data-k="${g.rows}.${f.k}"`);
+        }).join("") + `</div></div>`;
+      });
+      if (canEdit()) html += `<button class="btn" data-add="${sec}|${g.rows}">+ ${esc(g.addLabel)}</button>`;
+      continue;
+    }
+    if (g.sys) html += `<div class="note"><i></i><span>Managed by the system. Shown for reference; changes come from HR workflows.</span></div>`;
+    if (g.addrFields || g.f){
+      let fields = g.f ? g.f.slice() : [];
+      html += `<div class="grid">`;
+      if (g.addrFields){
+        html += fields.map(f=>fld(sec,f,getVal(sec,f.k),f.k,undefined)).join("");
+        html += g.addrFields.map(f=>fld(sec,f,getVal(sec,f.k),f.k,undefined)).join("");
+      } else {
+        html += fields.map(f=>{
+          if (f.k==="country") return `<div class="fl"><label>Country</label><div class="ro">${esc(c.name)}</div></div>`;
+          return fld(sec,f,getVal(sec,f.k),f.k,undefined);
+        }).join("");
+      }
+      html += `</div>`;
+      if (g.comp){
+        const gross = ["basic","housing","transport","food","other"].reduce((s,k)=>s+(+d[k]||0),0);
+        html += `<div class="grid" style="margin-top:14px">`+
+          `<div class="fl"><label>Gross salary (monthly)</label><div class="ro" data-derived="gross">${c.cur} ${gross.toLocaleString("en-US")}</div></div>`+
+          `<div class="fl"><label>Hourly rate (derived)</label><div class="ro mono" data-derived="hourly">${c.cur} ${(gross*12/2080).toFixed(2)}</div></div>`+
+          `<div class="fl"><label>Daily rate (derived)</label><div class="ro mono" data-derived="daily">${c.cur} ${(gross*12/260).toFixed(2)}</div></div></div>`;
+      }
+    }
+    if (g.t==="Lifecycle (system managed)" || g.t.startsWith("Statutory")){}
+  }
+  // Custom fields for this section (admin-defined)
+  const cfs = CF.filter(x => x.tab===sec && x.active && (x.country==="All" || x.country===cc));
+  if (cfs.length){
+    html += `<div class="gt">Additional details <span class="pill bl">Custom</span></div><div class="grid">` + cfs.map(x => {
+      const f = {k:"cf:"+x.code, l:x.label, t: x.type==="Dropdown"?"sel":x.type==="Yes/No"?"yn":x.type==="Number"?"num":x.type==="Date"?"date":x.type==="Textarea"?"ta":"text", o:x.options, req:x.required};
+      return fld(sec, f, getVal(sec, f.k), f.k, undefined) ;
+    }).join("") + `</div>`;
+  }
+  if (canEdit()){
+    html += `<div class="footer"><span class="msg">${isDirty(sec)?"You have changes in this section. Save to keep them.":"No unsaved changes."}</span><span class="sp"></span>`+
+      `<button class="btn" data-cancel="${sec}" ${isDirty(sec)?"":"disabled"}>Cancel</button>`+
+      `<button class="btn p" data-save="${sec}" ${isDirty(sec)?"":"disabled"}>Save ${esc(meta.n.toLowerCase())}</button></div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+function docPill(row){
+  if (!row.type) return "";
+  if (row.expiry){ const n = dayDiff(row.expiry); if (n<0) return '<span class="pill bd">Expired</span>'; if (n<=60) return `<span class="pill wr">Expires in ${n} days</span>`; return '<span class="pill ok">Valid</span>'; }
+  if (row.number || row.file) return '<span class="pill ok">Verified</span>';
+  return '<span class="pill wr">Pending</span>';
+}
+
+/* Admin: custom fields (System Admin only) */
+function renderAdmin(){
+  const rows = CF.map((x,i)=>`<tr><td class="mono">${esc(x.code)}</td><td>${esc(x.label)}</td><td>${esc(SECTIONS.find(s=>s.id===x.tab)?.n||x.tab)}</td><td>${esc(x.section)}</td><td>${esc(x.type)}</td><td>${esc(x.options.join(", ")||"—")}</td><td>${esc(x.country)}</td><td>${x.required?"Yes":"No"}</td>`+
+    `<td>${x.active?'<span class="pill ok">Active</span>':'<span class="pill gr">Inactive</span>'}</td><td><button class="btn sm" data-toggle="${i}">${x.active?"Deactivate":"Activate"}</button></td></tr>`).join("");
+  return `<div class="sec"><div class="sh"><div><h2>Custom fields</h2><p>Only System Admin can create, change or deactivate custom fields. Codes are fixed once created; labels can change. Deactivated fields keep their saved values.</p></div></div>`+
+  `<div class="tw"><table class="dtab"><thead><tr><th>Code</th><th>Label</th><th>Tab</th><th>Section</th><th>Type</th><th>Options</th><th>Country</th><th>Required</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`+
+  `<div class="gt" style="margin-top:28px">Add custom field</div>`+
+  `<div class="grid">`+
+  `<div class="fl"><label>Label</label><input id="cfLabel" placeholder="e.g. Blood donor"></div>`+
+  `<div class="fl"><label>Profile tab</label><select id="cfTab">${SECTIONS.map(s=>`<option value="${s.id}">${esc(s.n)}</option>`).join("")}</select></div>`+
+  `<div class="fl"><label>Section name</label><input id="cfSec" placeholder="e.g. Additional personal details"></div>`+
+  `<div class="fl"><label>Field type</label><select id="cfType">${OPT.cfType.map(t=>`<option>${t}</option>`).join("")}</select></div>`+
+  `<div class="fl"><label>Options (for dropdown)</label><input id="cfOpts" placeholder="Comma separated"></div>`+
+  `<div class="fl"><label>Applies to</label><select id="cfCountry"><option>All</option><option value="IN">India</option><option value="AE">UAE</option><option value="GB">UK</option><option value="US">USA</option></select></div>`+
+  `<div class="fl"><label>Required</label><select id="cfReq"><option>No</option><option>Yes</option></select></div>`+
+  `<div class="fl"><label>Help text</label><input id="cfHelp" placeholder="Shown under the field"></div>`+
+  `</div>`+
+  `<div class="footer"><span class="msg">Code is generated from the label and cannot be changed later.</span><span class="sp"></span><button class="btn p" data-cfadd="1">Add custom field</button></div></div>`;
+}
+
+/* Header, nav, main */
+function renderHeader(){
+  const p = saved.personal, e = saved.employment, o = saved.organization, c = COUNTRY[cc];
+  const initials = ((p.first||"?")[0] + (p.last||"?")[0]).toUpperCase();
+  const dirty = dirtySet().length;
+  $("hdr").innerHTML = `<div class="av">${initials}</div>
+    <div class="hname"><h1>${esc([p.first,p.middle,p.last].filter(Boolean).join(" "))}</h1>
+      <div class="hsub"><span class="mono">${esc(e.empCode)}</span><span>·</span><span>${esc(o.designation)}, ${esc(o.department)}</span>
+        <span class="pill ${e.status==="Active"?"ok":"wr"}">${esc(e.status)}</span>${dirty?`<span class="pill wr">${dirty} unsaved section${dirty>1?"s":""}</span>`:""}</div></div>
+    <div class="facts" style="grid-column:1/-1">
+      <div><span>Branch</span><b>${esc(o.branch)}</b></div>
+      <div><span>Employment type</span><b>${esc(e.empType)}</b></div>
+      <div><span>Joining date</span><b>${esc(e.doj)}</b></div>
+      <div><span>Reporting manager</span><b>${esc(o.reportingManager)||"—"}</b></div>
+      <div><span>Country pack</span><b>${esc(c.name)} · ${c.cur}</b></div>
+    </div>`;
+}
+function renderNav(){
+  let html = "", lastG = "";
+  visibleSections().forEach((s,i) => {
+    if (s.g !== lastG){ html += `<div class="grp">${esc(s.g)}</div>`; lastG = s.g; }
+    const dirty = isDirty(s.id);
+    html += `<button class="navb" data-nav="${s.id}" aria-current="${cur===s.id}"><span class="n">${String(SECTIONS.indexOf(s)+1).padStart(2,"0")}</span>${esc(s.n)}${dirty?'<span class="d" title="Unsaved changes"></span>':(savedAt[s.id]?'<span class="ck" title="Saved">✓</span>':"")}</button>`;
+  });
+  if (canAdmin()){
+    html += `<div class="grp">Admin</div><button class="navb" data-nav="admin" aria-current="${cur==="admin"}"><span class="n">+</span>Custom fields</button>`;
+  }
+  $("nav").innerHTML = html;
+}
+function renderMain(){
+  $("main").innerHTML = cur === "admin" && canAdmin() ? renderAdmin() : renderSection(visibleSections().some(s=>s.id===cur) ? cur : "personal");
+}
+function renderAll(){ renderHeader(); renderNav(); renderMain(); }
+
+/* Actions */
+function saveSection(sec){
+  saved[sec] = clone(draft[sec]); savedAt[sec] = now();
+  renderAll(); toast(SECTIONS.find(s=>s.id===sec).n + " saved");
+}
+function cancelSection(sec){ draft[sec] = clone(saved[sec]); renderAll(); }
+function setDraft(sec, k, raw, idx){
+  let v = raw;
+  const f = findField(sec, k);
+  if (f && f.t==="num") v = raw === "" ? 0 : +raw;
+  if (k.startsWith("cf:")){ draft[sec].cf = draft[sec].cf || {}; draft[sec].cf[k.slice(3)] = v; return; }
+  const parts = k.split(".");
+  if (parts.length===2){ draft[sec][parts[0]][+parts[1]] = v; return; }
+  if (idx !== undefined && draft[sec][k]) { draft[sec][k][idx] = v; return; }
+  draft[sec][k] = v;
+}
+function findField(sec, k){
+  const all = schema(sec).flatMap(g => [...(g.f||[]), ...(g.rowF||[]), ...(g.addrFields||[])]);
+  return all.find(f => f.k === k) || null;
+}
+
+/* Events */
+document.addEventListener("input", ev => {
+  const t = ev.target;
+  if (!t.dataset || !t.dataset.sec || t.dataset.rr) return;
+  const sec = t.dataset.sec, k = t.dataset.k, i = t.dataset.i;
+  const parent = k.includes(".") ? k.split(".")[0] : k;
+  if (i !== undefined) { const row = draft[sec][parent][+i]; const f = k.split(".")[1]; row[f] = t.value; }
+  else setDraft(sec, k, t.value);
+  renderHeader(); renderNav();
+  updateStatus(sec);
+});
+// Update status pill, footer and derived values without re-rendering (keeps keyboard focus)
+function updateStatus(sec){
+  const dirty = isDirty(sec);
+  if (sec !== cur) return;
+  const sh = document.querySelector("#main .sh");
+  if (sh){ sh.querySelectorAll(".pill").forEach(p=>p.remove());
+    sh.insertAdjacentHTML("beforeend", dirty ? '<span class="pill wr">Unsaved changes</span>' : (savedAt[sec] ? `<span class="pill ok">Saved ${savedAt[sec]}</span>` : "")); }
+  const ft = document.querySelector("#main .footer");
+  if (ft){ ft.querySelector(".msg").textContent = dirty ? "You have changes in this section. Save to keep them." : "No unsaved changes.";
+    ft.querySelectorAll("button").forEach(b => b.disabled = !dirty); }
+  const d = draft[sec];
+  const gross = ["basic","housing","transport","food","other"].reduce((s,k)=>s+(+d[k]||0),0), c = COUNTRY[cc];
+  const g = document.querySelector('[data-derived="gross"]'), h = document.querySelector('[data-derived="hourly"]'), dr = document.querySelector('[data-derived="daily"]');
+  if (g) g.textContent = c.cur + " " + gross.toLocaleString("en-US");
+  if (h) h.textContent = c.cur + " " + (gross*12/2080).toFixed(2);
+  if (dr) dr.textContent = c.cur + " " + (gross*12/260).toFixed(2);
+}
+document.addEventListener("change", ev => {
+  const t = ev.target;
+  if (t.id === "role"){ role = t.value; if (!canAdmin() && cur==="admin") cur = "personal"; if (role==="Employee" && cur==="access") cur="personal"; renderAll(); return; }
+  if (t.id === "country"){ cc = t.value; renderAll(); return; }
+  if (t.dataset && t.dataset.rr){ setDraft(t.dataset.sec, t.dataset.k, t.value); renderAll(); }
+  else if (t.dataset && t.dataset.sec && t.tagName==="SELECT"){ const k=t.dataset.k; const parent=k.includes(".")?k.split(".")[0]:k; if(t.dataset.i!==undefined){draft[t.dataset.sec][parent][+t.dataset.i][k.split(".")[1]]=t.value;} else setDraft(t.dataset.sec,k,t.value); renderAll(); }
+});
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (!b || b.disabled) return;
+  const d = b.dataset;
+  if (d.nav){ cur = d.nav; renderAll(); window.scrollTo({top:0,behavior:"smooth"}); }
+  else if (d.save){ saveSection(d.save); }
+  else if (d.cancel){ cancelSection(d.cancel); }
+  else if (d.add){ const [sec,key] = d.add.split("|"); const seed = {prevEmp:{employer:"",title:"",start:"",end:"",reason:""},edu:{qual:"",institution:"",spec:"",country:"",year:"",grade:""},skills:{skill:"",prof:"Beginner",cert:"",issuer:"",issue:"",expiry:""},docs:{type:COUNTRY[cc].docs[0],number:"",issue:"",expiry:"",file:""}}[key]; draft[sec][key].push(clone(seed)); renderAll(); }
+  else if (d.del){ const [sec,key,i] = d.del.split("|"); draft[sec][key].splice(+i,1); renderAll(); }
+  else if (d.upload){ const [sec,key,i] = d.upload.split("|"); draft[sec][key][+i].file = "document_" + (+i+1) + ".pdf"; renderAll(); toast("File attached (prototype)"); }
+  else if (d.toggle !== undefined){ const i = +d.toggle; CF[i].active = !CF[i].active; renderAll(); toast("Custom field " + (CF[i].active?"activated":"deactivated")); }
+  else if (d.cfadd){
+    const label = ($("cfLabel").value||"").trim();
+    if (!label){ toast("Enter a label first"); return; }
+    if (!canAdmin()){ toast("Only System Admin can add custom fields"); return; }
+    const code = "CUSTOM_" + label.toUpperCase().replace(/[^A-Z0-9]+/g,"_").replace(/^_|_$/g,"");
+    if (CF.some(x=>x.code===code)){ toast("A field with this code already exists"); return; }
+    const type = $("cfType").value;
+    const opts = type==="Dropdown" ? ($("cfOpts").value||"").split(",").map(s=>s.trim()).filter(Boolean) : [];
+    if (type==="Dropdown" && !opts.length){ toast("Add at least one option"); return; }
+    CF.push({code,label,tab:$("cfTab").value,section:($("cfSec").value||"Additional details").trim(),type,options:opts,country:$("cfCountry").value,required:$("cfReq").value==="Yes",active:true,help:$("cfHelp").value||""});
+    renderAll(); toast("Custom field " + code + " added");
+  }
+});
+
+renderAll();
+</script>
+</body>
+</html>

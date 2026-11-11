@@ -12,7 +12,15 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  Res,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
+import { Response } from 'express';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserType } from '../common/constants/user-types';
+import { PHOTO_MAX_BYTES } from './employees.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
@@ -79,9 +87,12 @@ export class EmployeesController {
     return this.okEnvelope(updated, 'Employee deactivated');
   }
 
+  /** HR Admin and System Admin only. JPEG/PNG up to 10 MB (BR-MD-09). */
   @Post(':id/photo')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.SystemAdmin, UserType.HRAdmin)
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: PHOTO_MAX_BYTES, files: 1 } }))
   async uploadPhoto(
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file: UploadedFileLike,
@@ -89,10 +100,32 @@ export class EmployeesController {
     @Ip() ip: string,
   ) {
     if (!file) {
-      return this.okEnvelope(null, 'No file uploaded');
+      throw new BadRequestException('Choose a photo to upload');
     }
     const result = await this.employeesService.uploadPhoto(id, file, user.profileId, ip);
-    return this.okEnvelope(result, 'Photo uploaded');
+    return this.okEnvelope(
+      { fileId: result.fileId.toString(), originalName: result.originalName, mimeType: result.mimeType },
+      'Photo uploaded',
+    );
+  }
+
+  /** The employee themself, HR Admin or System Admin. Never cached by shared caches. */
+  @Get(':id/photo')
+  async getPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: CurrentUserPayload,
+    @Res() res: Response,
+  ) {
+    const isHr = [UserType.SystemAdmin, UserType.HRAdmin].includes(user.userTypeId);
+    if (!isHr && (await this.employeesService.profileIdOf(id)) !== user.profileId) {
+      throw new ForbiddenException('You can only view your own photo');
+    }
+    const { stream, mimeType, sizeBytes } = await this.employeesService.getPhotoStream(id);
+    res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (sizeBytes !== null && sizeBytes !== undefined) res.setHeader('Content-Length', sizeBytes.toString());
+    stream.pipe(res);
   }
 
   @Get(':id/dependants')

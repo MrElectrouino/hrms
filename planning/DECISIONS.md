@@ -121,3 +121,26 @@ Append-only. Each entry: ID, date, decision, rationale, status (proposed/approve
 - Password lifecycle: admin-set or reset passwords set `mustChangePassword`; a legacy DES login also sets it (D-014). While set, only change-password, `/auth/me` and session routes are allowed.
 - Lockout: refusals for inactive, no-site-access and locked accounts return the legacy InvalidLogin text (BR-UM-01..03); an expired lock starts a fresh count.
 - Confirmed by owner: HR Administrators may create users and reset passwords; login requires `isSiteAccess` (as legacy GetLogin does).
+
+## D-023 — Employee profile: nine sections, per-section documents, admin custom fields
+- Date: 2026-11-11 · Status: **Approved (owner via chat, "Keep 9 tabs", "start the actual development")**
+- Source: `HRMS(1).xlsx` (field list) and `HRMS_Recommended_Employee_Profile_Layout.xlsx` (Profile Layout, Admin Custom Fields, Field Types & Rules, Country Configuration, Design & Admin Rules).
+- Decision:
+  1. Profile = nine tabs: Personal, Employment, Organization, Attendance & Leave, Compensation & Payroll, Bank & Statutory, Documents, Education & Experience, System Access. Each tab saves on its own (`PUT /employees/:id/profile/:section`).
+  2. Field definitions live in code (`src/employee-profile/profile-schema.ts`) and are country-aware (IN, AE, GB, US). The employee's country comes from the Organization tab (`legalEntityCountry`). Address levels, bank and statutory fields, document types and currency follow the country.
+  3. Storage: one JSON document per employee per section (`employee_profile_sections`), validated on write against the schema. Repeatable records (previous employers, qualifications, skills, documents) are arrays inside the section document. This is a **deliberate deviation** from the typed-column rule in AGENTS §5: the field set is wide and country-specific, and the Design sheet allows typed storage for dynamic data. Revisit if reporting needs typed columns.
+  4. Sensitive fields (account numbers, IBAN, PAN, UAN, Emirates ID, SSN, NI number, routing and sort codes) are encrypted with PiiService (D-015) and returned masked (last 4). Saving a masked value keeps the stored ciphertext.
+  5. Custom fields (`custom_field_definitions`, `custom_field_values`): created, relabelled and deactivated by **System Admin only** (userTypeId 3). The code is generated from the label and is immutable. Fields are deactivated, never deleted, so saved values survive.
+  6. Access: HR Admin and System Admin can read and change any profile. An employee can read only their own profile, except the System Access tab, which is HR and System Admin only. Only System Admin can manage custom fields.
+  7. Audit: section saves log the section key and field names only, never values.
+- Not in this release: document file upload (the file name is text), Previous-employment and qualification attachments, lifecycle fields (created/modified by), the PMS and e-movers integrations, and the layout's "Admin Can Add Fields" per-section permission beyond System Admin.
+- Dev setup: `PII_ENC_KEY` and `PII_HASH_PEPPER` were empty in the local `.env`; they were generated for local development only and must be set through the deployment secret store.
+
+## D-024 — Salary templates, profile dropdowns, and Add Employee with all sections
+- Date: 2026-11-11 · Status: **Approved (owner via chat: "Salary components (monthly) - admin can create template for it. we have to choose it and fill amount", "Add new employee should also show all sections")**
+- Decision:
+  1. **Salary templates** (`salary_templates`): HR Admin and System Admin create named templates with an ordered list of components (`[{code,label}]`, 1–30) and a country (`ALL`, IN, AE, GB, US). The component code is generated from the label and kept on rename, so saved amounts stay linked. Templates are deactivated, never deleted.
+  2. The Compensation tab replaces the fixed amount fields (basic salary, HRA and so on) with `salaryTemplateId` and `componentAmounts {CODE: amount}`. Amounts must be numbers ≥ 0 with at most 2 decimals and only codes from the chosen template. The template must be active (or already saved on the employee) and match the employee's country or `ALL`. Gross is the sum of the amounts.
+  3. **Nationality** is a dropdown from the Nationality parameter catalog (parameter type 19). The local seed adds 33 common nationalities and puts "Other" last. **Reporting manager** is a dropdown of active employees (stored as the employee id, shown as "Name (code)"). An employee can't be their own manager.
+  4. **Add Employee** uses the full nine-section profile form (`/employee-profile/new`). `POST /employee-profile/validate` checks every section first, and nothing is saved until the whole form is valid. Then the employee is created, and every filled section and the photo are saved. If a later section save fails, the employee still exists and the profile page names the sections to save again.
+- Not in this release: salary revisions or history per template, effective-dated templates, formula components (for example HRA as a % of basic), and deductions.

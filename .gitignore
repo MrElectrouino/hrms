@@ -29,3 +29,6 @@ Thumbs.db
 # Neon / agent tooling
 .neon
 .agents/
+
+# uploaded employee files (local dev storage) — never commit
+private-storage/

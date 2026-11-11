@@ -130,3 +130,62 @@ When someone says "let's improve the UX," they usually mean one of four things:
 4. **Consistency** — Do similar things look and behave the same? (Design system, patterns.)
 
 If you can point at a screen and say "this is a master–detail view with a tree list, status badges, and a sticky edit panel," you already have the vocabulary to brief a designer or developer precisely.
+
+## 9. Current Project UI Rules and Palette
+
+Register: **(current)** = what the Next.js frontend uses today. **(proposed)** = design choices for new screens that are not yet in the code.
+
+Sources: `frontend/tailwind.config.js` (default Tailwind theme, no custom colors), `frontend/styles/globals.css` (`bg-gray-50`, `text-gray-900` on `body`), `frontend/components/Layout.tsx` (sidebar and header), `frontend/pages/index.tsx` (dashboard cards and hero).
+
+### 9.1 Color tokens (Tailwind classes used in the code)
+
+| Role | Tailwind class | Hex | Used for |
+| --- | --- | --- | --- |
+| Page background | `bg-gray-50` | `#f9fafb` | Body and page background (current). |
+| Primary text | `text-gray-900` | `#111827` | Headings and main text (current). |
+| Body / secondary text | `text-gray-700`, `text-gray-600` | `#374151`, `#4b5563` | Table cells, labels (current). |
+| Muted text | `text-gray-500`, `text-gray-400` | `#6b7280`, `#9ca3af` | Captions, placeholders, timestamps (current). |
+| Borders | `border-gray-200`, `border-gray-300` | `#e5e7eb`, `#d1d5db` | Cards, inputs, dividers (current). |
+| Primary action | `bg-blue-600`, hover `bg-blue-700` | `#2563eb`, `#1d4ed8` | Primary buttons, spinner, links (current). |
+| Focus ring | `focus:ring-blue-500` | `#3b82f6` | Keyboard focus on inputs and buttons (current). |
+| Accent text | `text-blue-600` | `#2563eb` | Links, "View All", active icons (current). |
+| Sidebar background | `bg-slate-900` | `#0f172a` | Left navigation (current). |
+| Sidebar active item | `bg-slate-800`, text `text-white`, icon `text-blue-400`, bar `bg-blue-500` | `#1e293b`, `#60a5fa`, `#3b82f6` | Current nav item (current). |
+| Sidebar inactive | text `text-slate-400`, icon `text-slate-500`, hover `text-slate-300` | `#94a3b8`, `#64748b`, `#cbd5e1` | Other nav items (current). |
+| Sidebar divider / user card | `border-slate-800` | `#1e293b` | Dividers and footer (current). |
+| Sidebar tooltip | `bg-slate-800`, `text-white`, `shadow-lg` | `#1e293b` | Collapsed-rail labels (current). |
+| Logo | `bg-gradient-to-br from-blue-500 to-blue-700` | `#3b82f6` to `#1d4ed8` | Square "H" mark (current). |
+| Hero banner | `bg-gradient-to-r from-blue-600 to-indigo-600` | `#2563eb` to `#4f46e5` | Dashboard welcome banner, `rounded-2xl`, `shadow-lg` (current). |
+| Success | `text-green-700`, `bg-green-50`, `border-green-200` | `#15803d`, `#f0fdf4`, `#bbf7d0` | Healthy and approved states (current). |
+| Danger | `text-red-700`, `bg-red-50`, `border-red-200`, hover `bg-red-600` | `#b91c1c`, `#fef2f2`, `#fecaca`, `#dc2626` | Error banners, Logout hover (current). |
+| Header | `bg-white`, `border-gray-200`, height `h-16` | `#ffffff` | Top bar (current). |
+
+### 9.2 Component rules
+
+| Component | Rule | Source |
+| --- | --- | --- |
+| Card / panel | `bg-white rounded-xl shadow-sm border border-gray-200 p-6`; hover `shadow-md border-blue-300` for clickable cards (current). | `pages/index.tsx` |
+| Hero banner | `rounded-2xl p-6 lg:p-8 text-white shadow-lg`, gradient blue-600 to indigo-600 (current). | `pages/index.tsx` |
+| Icon tile | `p-3 rounded-lg` or `rounded-xl` with a tinted background and matching icon color (current). | `pages/index.tsx` |
+| Badge / pill | `text-xs px-2.5 py-1 rounded-full font-medium` with a semantic color pair (current). | `pages/index.tsx` |
+| Error banner | `p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm` (current). | `pages/index.tsx` |
+| Spinner | `animate-spin rounded-full border-b-2 border-blue-600` (current). | `components/Layout.tsx` |
+| Corner radius | Cards `rounded-xl` (12px), controls `rounded-lg` (8px), pills `rounded-full`, hero `rounded-2xl` (16px) (current). | Classes above |
+| Shadow | Resting `shadow-sm`, hover `shadow-md`, hero `shadow-lg` (current). | Classes above |
+| Sidebar width | Expanded about 256px, collapsed about 80px (proposed, matches the dashboard mockup). | `ui-mockups/hrms-dashboard-v2.html` |
+| Sidebar collapse | Round toggle at the top of the sidebar; when collapsed, icons stay visible and a dark label appears on hover (current, `Layout.tsx`). | `components/Layout.tsx` |
+| Header height | `h-16` (64px) (current). | `Layout.tsx` |
+| Responsive | Sidebar is fixed and overlays on small screens (`lg:` breakpoint); the layout uses `lg:static` above that (current). | `Layout.tsx` |
+
+### 9.3 Typography and spacing
+
+- Font: the Tailwind default sans stack (current). The mockup uses `Inter` with a system fallback (proposed).
+- Section label in the sidebar: `text-[11px] font-semibold uppercase tracking-wider text-slate-500` (current).
+- Header padding: `px-4 lg:px-8` (current, `Layout.tsx`). Page content padding is not fixed in the shared layout; the dashboard mockup uses 24px (proposed).
+- Dashboard grid gap: 20px (proposed).
+
+### 9.4 Open items for UI work
+
+- The dashboard mockup (`ui-mockups/hrms-dashboard-v2.html`) was first built in a different palette (light blue with rounded 36px cards). It was restyled to the rules above. Keep new screens on these rules unless the owner approves a change (proposed).
+- Dark mode: the frontend has none (current). The mockup's dark rules are not a project rule (open).
+- The sidebar avatar, logo and brand text are placeholders until real assets are supplied (open).

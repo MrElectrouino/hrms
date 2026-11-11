@@ -375,3 +375,22 @@ Notes:
 - `AuditLog` writes are fire-and-forget via a service call inside request handlers.
 - File endpoints stream from private storage; no public static URLs (D-008/D-017).
 - Password flows use bcrypt/argon2; legacy DES verification lives only in the temporary login fallback path (D-014).
+
+## 7. Employee profile (D-023)
+
+| Method | Path | Who | Description |
+|---|---|---|---|
+| GET | `/employees/:id/profile` | HR, System Admin, or the employee for their own profile | Schema for the employee's country, values (sensitive fields masked), custom field definitions and values |
+| PUT | `/employees/:id/profile/:section` | HR Admin, System Admin | Save one section. Body: `{ "data": {...}, "custom": {...} }`. Full section replacement. 400 with `errors[]` on validation failure |
+| GET | `/custom-fields` | HR Admin, System Admin | List custom field definitions |
+| POST | `/custom-fields` | System Admin | Create a field. Code generated from label |
+| PATCH | `/custom-fields/:code` | System Admin | Change label, required flag, help text, or active status. Code is immutable |
+| GET | `/employee-profile/blank?country=IN` | HR Admin, System Admin | Blank nine-section form for Add Employee: schema, address levels, currency, salary templates, custom fields (D-024) |
+| POST | `/employee-profile/validate` | HR Admin, System Admin | Body `{ "country", "sections": { "<key>": { "data", "custom" } } }`. Checks every section; nothing is saved. Returns `{ valid, errors: { "<section>": [{field,message}] } }` |
+| GET | `/salary-templates` | HR Admin, System Admin | List salary templates |
+| POST | `/salary-templates` | HR Admin, System Admin | Create. Body `{ "name", "countryCode": "ALL"\|"IN"\|..., "components": [{ "label" }] }`. Codes generated from labels |
+| PATCH | `/salary-templates/:id` | HR Admin, System Admin | Rename, change country or components (send `code` back to keep a component), or `isActive` |
+
+Compensation section values: `salaryTemplateId` (number) and `componentAmounts` (`{ "BASIC_SALARY": 30000, ... }`, only codes from the template). Organization `reportingManager` holds an employee id; Personal `nationality` is a value from the Nationality parameter list.
+
+Sections: `personal`, `employment`, `organization`, `attendance`, `compensation`, `bank`, `documents`, `education`, `access` (`access` is HR-only). Address values are lists in `presentAddress` / `permanentAddress`. Repeatable records are arrays: `previousEmployment`, `documents`, `education`, `skills`.

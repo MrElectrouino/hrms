@@ -392,6 +392,9 @@ export class EmployeesService {
       throw new NotFoundException('Employee not found');
     }
 
+    // BR-MD-09: photos are .jpg/.jpeg/.png, max 10 MB (10,485,760 bytes).
+    assertValidPhoto(file);
+
     const stored = await this.storage.saveFile(file);
 
     const storedFile = await this.prisma.storedFile.create({
@@ -425,6 +428,31 @@ export class EmployeesService {
       originalName: storedFile.originalName,
       mimeType: storedFile.mimeType,
     };
+  }
+
+  /** Streams the employee's current photo. Caller authorization is checked in the controller. */
+  async getPhotoStream(id: number) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id },
+      include: { profile: { include: { photoFile: true } } },
+    });
+    if (!employee) throw new NotFoundException('Employee not found');
+    const file = employee.profile.photoFile;
+    if (!file) throw new NotFoundException('No photo uploaded');
+    let stream;
+    try {
+      stream = this.storage.readFile(file.storageKey);
+    } catch {
+      throw new NotFoundException('Photo file is missing from storage');
+    }
+    return { stream, mimeType: file.mimeType, sizeBytes: file.sizeBytes, profileId: employee.profileId };
+  }
+
+  /** Profile id of an employee (for self-access checks). */
+  async profileIdOf(id: number): Promise<number> {
+    const e = await this.prisma.employee.findUnique({ where: { id }, select: { profileId: true } });
+    if (!e) throw new NotFoundException('Employee not found');
+    return e.profileId;
   }
 
   // ==================== Dependants ====================
@@ -607,5 +635,31 @@ export class EmployeesService {
       ...rest,
       personIdNumber: maskPii ? this.pii.mask(personIdNumber) : personIdNumber,
     };
+  }
+}
+
+/* ---------------- photo validation (BR-MD-09) ---------------- */
+
+export const PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+const PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png'];
+
+/**
+ * Accepts only JPEG or PNG up to 10 MB. The file signature is checked as well as the
+ * name and declared type, so a renamed file of another kind is rejected.
+ */
+export function assertValidPhoto(file: UploadedFileLike): void {
+  const name = (file.originalname || '').toLowerCase();
+  const ext = name.slice(name.lastIndexOf('.'));
+  if (!PHOTO_EXTENSIONS.includes(ext)) {
+    throw new BadRequestException('Photo must be a .jpg, .jpeg or .png file');
+  }
+  if (!file.size || file.size > PHOTO_MAX_BYTES) {
+    throw new BadRequestException('Photo must be smaller than 10 MB');
+  }
+  const b = file.buffer;
+  const isJpeg = b && b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  const isPng = b && b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+  if (!isJpeg && !isPng) {
+    throw new BadRequestException('The file is not a valid JPEG or PNG image');
   }
 }

@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { RbacModule } from './rbac/rbac.module';
 import { MastersModule } from './masters/masters.module';
 import { EmployeesModule } from './employees/employees.module';
+import { EmployeeProfileModule } from './employee-profile/employee-profile.module';
 import { DocumentsModule } from './documents/documents.module';
 import appConfig from './config/app.config';
 
@@ -28,6 +29,7 @@ import { LoggerContextMiddleware } from './common/logger/logger-context.middlewa
     RbacModule,
     MastersModule,
     EmployeesModule,
+    EmployeeProfileModule,
     DocumentsModule,
   ],
 })
