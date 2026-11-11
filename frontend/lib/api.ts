@@ -1,9 +1,13 @@
 // Vercel service binding is available at runtime in server functions only.
 // Browser requests use the same-origin /api/v1 path that Vercel rewrites to the backend service.
+// Under `next dev` there is no Vercel rewrite, so the browser calls the API on port 3000 directly.
+const LOCAL_API_BASE_URL = 'http://localhost:3000/api/v1';
+
 export const API_BASE_URL =
   typeof window === 'undefined'
     ? (process.env.API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:3000/api/v1')
-    : (process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1');
+    : (process.env.NEXT_PUBLIC_API_BASE_URL ||
+        (process.env.NODE_ENV === 'development' ? LOCAL_API_BASE_URL : '/api/v1'));
 
 export interface ApiEnvelope<T> {
   data: T;
@@ -266,7 +270,7 @@ async function refreshTokens(): Promise<string> {
   return refreshPromise;
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: RequestInit = {},
   isRetry = false,
@@ -332,7 +336,25 @@ export async function getUserTypes() {
 }
 
 export async function getMyMenu() {
-  return request<any>('/rbac/my-menu');
+  return request<MenuNode[]>('/rbac/my-menu');
+}
+
+export interface MenuFlags {
+  isCreate: boolean;
+  isEdit: boolean;
+  isDelete: boolean;
+}
+
+export interface MenuNode {
+  id: number;
+  name: string;
+  pageUrl?: string | null;
+  iconClass?: string | null;
+  displayOrder: number;
+  isMainMenu: boolean;
+  isActive: boolean;
+  permissions?: MenuFlags;
+  children: MenuNode[];
 }
 
 export async function getUsers(params?: Record<string, string | number | boolean>) {

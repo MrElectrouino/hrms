@@ -15,6 +15,13 @@ import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
 import { CreateDependantDto } from './dto/create-dependant.dto';
 import { UpdateDependantDto } from './dto/update-dependant.dto';
 
+/**
+ * Prisma's default interactive-transaction timeout is 5 s. Against a remote
+ * database (e.g. Neon from a laptop) a few writes can exceed that, and Prisma
+ * then reports "Transaction already closed". Allow more time to finish.
+ */
+const INTERACTIVE_TX_OPTIONS = { maxWait: 10_000, timeout: 30_000 };
+
 export interface PaginatedEmployees<T = any> {
   items: T[];
   pagination: {
@@ -227,7 +234,7 @@ export class EmployeesService {
       }
 
       return emp;
-    });
+    }, INTERACTIVE_TX_OPTIONS);
 
     await this.audit.log({
       actorProfileId,
@@ -354,7 +361,7 @@ export class EmployeesService {
           shift: { select: { id: true, name: true } },
         },
       });
-    });
+    }, INTERACTIVE_TX_OPTIONS);
 
     await this.audit.log({
       actorProfileId,

@@ -285,11 +285,18 @@ model Session {
   revokedReason    String?
   ipAddress        String?
   userAgent        String?
+  /// NEW (D-022): all sessions created by rotating one login share a family.
+  /// Reuse of a rotated token revokes the whole family, not every session.
+  familyId         String    @default(uuid())
+  /// NEW (D-022): start of the login. Absolute lifetime is measured from here,
+  /// so rotation cannot extend a login past REFRESH_TTL_DAYS.
+  familyStartedAt  DateTime  @default(now()) @db.Timestamptz(3)
 
   user User @relation("UserSessions", fields: [userId], references: [id])
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([familyId])
   @@map("sessions")
 }
 

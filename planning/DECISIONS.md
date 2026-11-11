@@ -113,3 +113,11 @@ Append-only. Each entry: ID, date, decision, rationale, status (proposed/approve
 - Modeling rule: use typed target models for real entities that need independent lifecycle/relations; use the definitions/Parameter catalogs for parameter-backed dropdowns. Missing/empty legacy catalogs are not invented.
 - Scope rule: nothing is deleted from legacy. Leave, payroll, attendance/muster, airfare/comp-off, Excel payroll/import pipelines, PMS/e-movers integrations, and their supporting domains are deferred to later phases.
 - Rationale: preserves all three requested modules and the employee/document workflows without expanding Phase 1 into the legacy leave/payroll platform.
+
+## D-022 — Authorization model and session families (User Management)
+- Date: 2026-11-03 · Status: **Approved** (owner confirmed 2026-11-03)
+- Decision: `@Roles()` on routes, checked by `RolesGuard` against `userTypeId` (1 Executive, 2 Manager, 3 SystemAdmin, 4 HRAdmin). Users and RBAC reads: SystemAdmin + HRAdmin. RBAC writes and any change to a SystemAdmin account: SystemAdmin only. `my-menu` open to any signed-in user.
+- Sessions: each login starts a session *family*; rotation keeps the family and its `familyStartedAt`. Idle timeout `SESSION_IDLE_MINUTES` (default 180, D-007); absolute lifetime `REFRESH_TTL_DAYS` from family start. Reuse of a rotated token outside a 30 s grace window revokes the family. Every request re-checks user and session in the DB, so deactivation, password change and logout apply at once.
+- Password lifecycle: admin-set or reset passwords set `mustChangePassword`; a legacy DES login also sets it (D-014). While set, only change-password, `/auth/me` and session routes are allowed.
+- Lockout: refusals for inactive, no-site-access and locked accounts return the legacy InvalidLogin text (BR-UM-01..03); an expired lock starts a fresh count.
+- Confirmed by owner: HR Administrators may create users and reset passwords; login requires `isSiteAccess` (as legacy GetLogin does).

@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { MenuPermissionItemDto } from './dto/menu-permission-item.dto';
 import { MenuOverrideItemDto } from './dto/menu-override-item.dto';
+import { CreateMenuItemDto, UpdateMenuItemDto } from './dto/menu-item.dto';
 
 export interface MenuNode {
   id: number;
@@ -23,6 +29,17 @@ export interface MenuNode {
   children: MenuNode[];
 }
 
+interface MenuRow {
+  id: number;
+  parentId: number | null;
+  name: string;
+  pageUrl: string | null;
+  iconClass: string | null;
+  displayOrder: number;
+  isMainMenu: boolean;
+  isActive: boolean;
+}
+
 @Injectable()
 export class RbacService {
   constructor(
@@ -31,9 +48,7 @@ export class RbacService {
   ) {}
 
   async listUserTypes() {
-    return this.prisma.userType.findMany({
-      orderBy: { displayOrder: 'asc' },
-    });
+    return this.prisma.userType.findMany({ orderBy: { displayOrder: 'asc' } });
   }
 
   async listRoles() {
@@ -44,37 +59,88 @@ export class RbacService {
   }
 
   async listMenuItems() {
-    return this.prisma.menuItem.findMany({
-      orderBy: { displayOrder: 'asc' },
-    });
+    return this.prisma.menuItem.findMany({ orderBy: { displayOrder: 'asc' } });
   }
 
   async getMenuTree() {
-    const items = await this.prisma.menuItem.findMany({
-      orderBy: { displayOrder: 'asc' },
-    });
+    const items = await this.prisma.menuItem.findMany({ orderBy: { displayOrder: 'asc' } });
     return this.buildTree(items);
   }
 
-  async getMenuPermissions(userTypeId: number) {
-    const userType = await this.prisma.userType.findUnique({
-      where: { id: userTypeId },
-    });
-    if (!userType) {
-      throw new NotFoundException('User type not found');
+  // ---------------------------------------------------------------------------
+  // Menu items (menu management)
+  // ---------------------------------------------------------------------------
+
+  async createMenuItem(dto: CreateMenuItemDto, actorProfileId?: number, ip?: string) {
+    if (dto.parentId != null) {
+      await this.assertMenuItemExists(dto.parentId);
     }
 
+    const item = await this.prisma.menuItem.create({
+      data: {
+        name: dto.name.trim(),
+        pageUrl: dto.pageUrl ?? null,
+        iconClass: dto.iconClass ?? null,
+        displayOrder: dto.displayOrder,
+        parentId: dto.parentId ?? null,
+        isMainMenu: dto.isMainMenu ?? true,
+        isActive: dto.isActive ?? true,
+      },
+    });
+
+    await this.audit.log({
+      actorProfileId,
+      action: 'MENU_ITEM_CREATED',
+      entityType: 'MenuItem',
+      entityId: String(item.id),
+      ipAddress: ip,
+    });
+    return item;
+  }
+
+  async updateMenuItem(id: number, dto: UpdateMenuItemDto, actorProfileId?: number, ip?: string) {
+    const existing = await this.prisma.menuItem.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Menu item not found');
+
+    if (dto.parentId !== undefined && dto.parentId !== null) {
+      await this.assertMenuItemExists(dto.parentId);
+      await this.assertNoCycle(id, dto.parentId);
+    }
+
+    const item = await this.prisma.menuItem.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.pageUrl !== undefined ? { pageUrl: dto.pageUrl } : {}),
+        ...(dto.iconClass !== undefined ? { iconClass: dto.iconClass } : {}),
+        ...(dto.displayOrder !== undefined ? { displayOrder: dto.displayOrder } : {}),
+        ...(dto.parentId !== undefined ? { parentId: dto.parentId } : {}),
+        ...(dto.isMainMenu !== undefined ? { isMainMenu: dto.isMainMenu } : {}),
+        ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+      },
+    });
+
+    await this.audit.log({
+      actorProfileId,
+      action: 'MENU_ITEM_UPDATED',
+      entityType: 'MenuItem',
+      entityId: String(id),
+      ipAddress: ip,
+      metadata: { changes: Object.keys(dto) },
+    });
+    return item;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Role rights by user type (menu permissions)
+  // ---------------------------------------------------------------------------
+
+  async getMenuPermissions(userTypeId: number) {
+    await this.assertUserTypeExists(userTypeId);
     return this.prisma.menuUserTypePermission.findMany({
       where: { userTypeId },
       include: {
-        menuItem: {
-          select: {
-            id: true,
-            name: true,
-            pageUrl: true,
-            displayOrder: true,
-          },
-        },
+        menuItem: { select: { id: true, name: true, pageUrl: true, displayOrder: true } },
       },
     });
   }
@@ -85,24 +151,8 @@ export class RbacService {
     actorProfileId?: number,
     ip?: string,
   ) {
-    const userType = await this.prisma.userType.findUnique({
-      where: { id: userTypeId },
-    });
-    if (!userType) {
-      throw new NotFoundException('User type not found');
-    }
-
-    const menuItemIds = permissions.map((p) => p.menuItemId);
-    const existingItems = await this.prisma.menuItem.findMany({
-      where: { id: { in: menuItemIds } },
-      select: { id: true },
-    });
-    const validIds = new Set(existingItems.map((i) => i.id));
-
-    const invalid = menuItemIds.find((id) => !validIds.has(id));
-    if (invalid !== undefined) {
-      throw new NotFoundException(`Menu item ${invalid} not found`);
-    }
+    await this.assertUserTypeExists(userTypeId);
+    await this.assertMenuItemsExist(permissions.map((p) => p.menuItemId));
 
     await this.prisma.$transaction([
       this.prisma.menuUserTypePermission.deleteMany({ where: { userTypeId } }),
@@ -115,7 +165,6 @@ export class RbacService {
           isEdit: p.isEdit ?? false,
           isDelete: p.isDelete ?? false,
         })),
-        skipDuplicates: true,
       }),
     ]);
 
@@ -131,23 +180,16 @@ export class RbacService {
     return this.getMenuPermissions(userTypeId);
   }
 
-  async getMenuOverrides(userId: number) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
+  // ---------------------------------------------------------------------------
+  // Per-user menu overrides
+  // ---------------------------------------------------------------------------
 
+  async getMenuOverrides(userId: number) {
+    await this.assertUserExists(userId);
     return this.prisma.menuUserOverride.findMany({
       where: { userId },
       include: {
-        menuItem: {
-          select: {
-            id: true,
-            name: true,
-            pageUrl: true,
-            displayOrder: true,
-          },
-        },
+        menuItem: { select: { id: true, name: true, pageUrl: true, displayOrder: true } },
       },
     });
   }
@@ -158,22 +200,8 @@ export class RbacService {
     actorProfileId?: number,
     ip?: string,
   ) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const menuItemIds = overrides.map((o) => o.menuItemId);
-    const existingItems = await this.prisma.menuItem.findMany({
-      where: { id: { in: menuItemIds } },
-      select: { id: true },
-    });
-    const validIds = new Set(existingItems.map((i) => i.id));
-
-    const invalid = menuItemIds.find((id) => !validIds.has(id));
-    if (invalid !== undefined) {
-      throw new NotFoundException(`Menu item ${invalid} not found`);
-    }
+    await this.assertUserExists(userId);
+    await this.assertMenuItemsExist(overrides.map((o) => o.menuItemId));
 
     await this.prisma.$transaction([
       this.prisma.menuUserOverride.deleteMany({ where: { userId } }),
@@ -184,7 +212,6 @@ export class RbacService {
           isInclude: o.isInclude,
           pageUrlOverride: o.pageUrlOverride ?? null,
         })),
-        skipDuplicates: true,
       }),
     ]);
 
@@ -200,114 +227,180 @@ export class RbacService {
     return this.getMenuOverrides(userId);
   }
 
+  // ---------------------------------------------------------------------------
+  // Effective menu for the signed-in user (GetSiteUserMenuItem, BR-UM-30)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Visible items = the user type's base rights, adjusted by the user's
+   * per-item include/exclude overrides. Group headers are shown when a visible
+   * item sits under them, so a page is never reachable only through a hidden
+   * parent. An item whose parent chain contains a missing or inactive item is hidden.
+   */
   async getMyMenu(userId: number, userTypeId: number): Promise<MenuNode[]> {
     const [allItems, basePermissions, overrides] = await Promise.all([
       this.prisma.menuItem.findMany({
         where: { isActive: true },
         orderBy: { displayOrder: 'asc' },
       }),
-      this.prisma.menuUserTypePermission.findMany({
-        where: { userTypeId },
-      }),
-      this.prisma.menuUserOverride.findMany({
-        where: { userId },
-      }),
+      this.prisma.menuUserTypePermission.findMany({ where: { userTypeId } }),
+      this.prisma.menuUserOverride.findMany({ where: { userId } }),
     ]);
 
+    const itemById = new Map<number, MenuRow>(allItems.map((i) => [i.id, i]));
     const baseMap = new Map(basePermissions.map((p) => [p.menuItemId, p]));
     const overrideMap = new Map(overrides.map((o) => [o.menuItemId, o]));
 
-    // Determine effective inclusion for each menu item.
-    const effectiveItems = allItems
+    const visible = new Set<number>();
+    for (const item of allItems) {
+      const base = baseMap.get(item.id);
+      const override = overrideMap.get(item.id);
+      const included = override ? override.isInclude : !!base;
+      if (!included || !this.hasActiveAncestorChain(item, itemById)) continue;
+
+      let current: MenuRow | undefined = item;
+      while (current && !visible.has(current.id)) {
+        visible.add(current.id);
+        current = current.parentId !== null ? itemById.get(current.parentId) : undefined;
+      }
+    }
+
+    const nodes = allItems
+      .filter((item) => visible.has(item.id))
       .map((item) => {
         const base = baseMap.get(item.id);
         const override = overrideMap.get(item.id);
-
-        let included = !!base;
-        if (override) {
-          included = override.isInclude;
-        }
-
-        if (!included) return null;
-
         return {
           ...item,
-          effectivePageUrl:
-            override?.pageUrlOverride ?? base?.pageUrlOverride ?? item.pageUrl,
+          effectivePageUrl: override?.pageUrlOverride ?? base?.pageUrlOverride ?? item.pageUrl,
           permissions: base
-            ? {
-                isCreate: base.isCreate,
-                isEdit: base.isEdit,
-                isDelete: base.isDelete,
-              }
+            ? { isCreate: base.isCreate, isEdit: base.isEdit, isDelete: base.isDelete }
             : { isCreate: false, isEdit: false, isDelete: false },
           override: override ? { isInclude: override.isInclude } : undefined,
         };
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
+      });
 
-    return this.buildTreeWithExtras(effectiveItems);
+    return this.buildTreeWithExtras(nodes);
   }
 
-  private buildTree(items: any[]): MenuNode[] {
-    const map = new Map<number, MenuNode>();
-    const roots: MenuNode[] = [];
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
 
-    for (const item of items) {
-      map.set(item.id, {
-        id: item.id,
-        name: item.name,
-        pageUrl: item.pageUrl,
-        iconClass: item.iconClass,
-        displayOrder: item.displayOrder,
-        isMainMenu: item.isMainMenu,
-        isActive: item.isActive,
-        children: [],
-      });
+  private hasActiveAncestorChain(item: MenuRow, itemById: Map<number, MenuRow>): boolean {
+    const seen = new Set<number>([item.id]);
+    let parentId = item.parentId;
+    while (parentId !== null) {
+      if (seen.has(parentId)) return false; // cycle
+      const parent = itemById.get(parentId);
+      if (!parent) return false; // missing or inactive ancestor
+      seen.add(parentId);
+      parentId = parent.parentId;
     }
+    return true;
+  }
 
-    for (const item of items) {
-      const node = map.get(item.id)!;
-      if (item.parentId && map.has(item.parentId)) {
-        map.get(item.parentId)!.children.push(node);
-      } else {
-        roots.push(node);
+  private async assertNoCycle(itemId: number, newParentId: number) {
+    if (itemId === newParentId) {
+      throw new BadRequestException('A menu item cannot be its own parent');
+    }
+    let cursor: number | null = newParentId;
+    const seen = new Set<number>();
+    while (cursor !== null) {
+      if (cursor === itemId) {
+        throw new ConflictException('This change would create a menu loop');
       }
+      if (seen.has(cursor)) break;
+      seen.add(cursor);
+      const parent: { parentId: number | null } | null = await this.prisma.menuItem.findUnique({
+        where: { id: cursor },
+        select: { parentId: true },
+      });
+      cursor = parent?.parentId ?? null;
     }
+  }
 
-    return roots;
+  private async assertMenuItemExists(id: number) {
+    const exists = await this.prisma.menuItem.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) throw new NotFoundException(`Menu item ${id} not found`);
+  }
+
+  private async assertMenuItemsExist(menuItemIds: number[]) {
+    const unique = new Set(menuItemIds);
+    if (unique.size !== menuItemIds.length) {
+      throw new BadRequestException('Each menu item may appear only once in a request');
+    }
+    const found = await this.prisma.menuItem.findMany({
+      where: { id: { in: menuItemIds } },
+      select: { id: true },
+    });
+    const valid = new Set(found.map((i) => i.id));
+    const missing = menuItemIds.find((id) => !valid.has(id));
+    if (missing !== undefined) {
+      throw new NotFoundException(`Menu item ${missing} not found`);
+    }
+  }
+
+  private async assertUserTypeExists(userTypeId: number) {
+    const exists = await this.prisma.userType.findUnique({ where: { id: userTypeId } });
+    if (!exists) throw new NotFoundException('User type not found');
+  }
+
+  private async assertUserExists(userId: number) {
+    const exists = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!exists) throw new NotFoundException('User not found');
+  }
+
+  private buildTree(items: MenuRow[]): MenuNode[] {
+    const nodes = items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      pageUrl: item.pageUrl,
+      iconClass: item.iconClass,
+      displayOrder: item.displayOrder,
+      isMainMenu: item.isMainMenu,
+      isActive: item.isActive,
+      parentId: item.parentId,
+    }));
+    return this.nest(nodes);
   }
 
   private buildTreeWithExtras(
-    items: Array<any & { effectivePageUrl?: string; permissions?: any; override?: any }>,
+    items: Array<MenuRow & { effectivePageUrl?: string | null; permissions?: any; override?: any }>,
   ): MenuNode[] {
-    const map = new Map<number, MenuNode>();
-    const roots: MenuNode[] = [];
+    const nodes = items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      pageUrl: item.effectivePageUrl ?? item.pageUrl,
+      iconClass: item.iconClass,
+      displayOrder: item.displayOrder,
+      isMainMenu: item.isMainMenu,
+      isActive: item.isActive,
+      permissions: item.permissions,
+      override: item.override,
+      parentId: item.parentId,
+    }));
+    return this.nest(nodes);
+  }
 
-    for (const item of items) {
-      map.set(item.id, {
-        id: item.id,
-        name: item.name,
-        pageUrl: item.effectivePageUrl ?? item.pageUrl,
-        iconClass: item.iconClass,
-        displayOrder: item.displayOrder,
-        isMainMenu: item.isMainMenu,
-        isActive: item.isActive,
-        permissions: item.permissions,
-        override: item.override,
-        children: [],
-      });
+  private nest(
+    nodes: Array<Omit<MenuNode, 'children'> & { parentId: number | null }>,
+  ): MenuNode[] {
+    const byId = new Map<number, MenuNode>();
+    for (const { parentId: _parentId, ...node } of nodes) {
+      byId.set(node.id, { ...node, children: [] });
     }
 
-    for (const item of items) {
-      const node = map.get(item.id)!;
-      if (item.parentId && map.has(item.parentId)) {
-        map.get(item.parentId)!.children.push(node);
+    const roots: MenuNode[] = [];
+    for (const node of nodes) {
+      const built = byId.get(node.id)!;
+      const parent = node.parentId !== null ? byId.get(node.parentId) : undefined;
+      if (parent) {
+        parent.children.push(built);
       } else {
-        roots.push(node);
+        roots.push(built);
       }
     }
-
     return roots;
   }
 }

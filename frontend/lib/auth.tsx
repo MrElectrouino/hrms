@@ -6,40 +6,62 @@ import {
   setAccessToken,
   setRefreshToken,
   clearTokens,
-  LoginResponse,
 } from './api';
+import { getMe } from './admin-api';
+
+export interface AuthUser {
+  id: number;
+  username: string;
+  userTypeId: number;
+  profileId: number;
+  mustChangePassword: boolean;
+}
 
 interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
-  user: LoginResponse['user'] | null;
-  login: (username: string, password: string) => Promise<void>;
+  user: AuthUser | null;
+  /** Resolves to true when the user must change their password before continuing. */
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<LoginResponse['user'] | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const refreshUser = async () => {
+    const me = await getMe();
+    setUser({
+      id: me.data.id,
+      username: me.data.username,
+      userTypeId: me.data.userTypeId,
+      profileId: me.data.profileId,
+      mustChangePassword: me.data.mustChangePassword,
+    });
+  };
+
   useEffect(() => {
-    const token = getAccessToken();
-    if (!token) {
+    if (!getAccessToken()) {
       setIsLoading(false);
       return;
     }
-    // We don't decode the JWT here; pages that need the user should call /auth/me
-    // or store minimal user info. For simplicity we leave user null until login.
-    setIsLoading(false);
+    // A stored token alone does not say who the user is, so ask the API.
+    refreshUser()
+      .catch(() => clearTokens())
+      .finally(() => setIsLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {
     const response = await apiLogin(username, password);
-    const { accessToken, refreshToken, user } = response.data;
+    const { accessToken, refreshToken, mustChangePassword, user: loggedIn } = response.data;
     setAccessToken(accessToken);
     setRefreshToken(refreshToken);
-    setUser(user);
+    setUser({ ...loggedIn, mustChangePassword });
+    return mustChangePassword;
   };
 
   const logout = async () => {
@@ -51,11 +73,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        isAuthenticated: !!user || !!getAccessToken(),
+        isAuthenticated: !!user,
         isLoading,
         user,
         login,
         logout,
+        refreshUser,
       }}
     >
       {children}

@@ -151,3 +151,8 @@ Top items (full list in OPEN_QUESTIONS.md):
 3. **Integration/API smoke tests** with real DB for file upload, employee create, document create.
 4. Create dedicated `hrms_ro` SQL login for remaining/future DB reads; rotate exposed credentials (SEC-L-08/19).
 5. Produce the MIG-04 reconciliation report before any ETL or migration work.
+
+## Update 2026-11-03 — User Management hardening (Module 1)
+- Implemented: session families and rotation (`prisma/migrations/20261103090000_session_family`), per-request session/user check, `RolesGuard` + `@Roles`, `mustChangePassword` enforcement, session list/revoke endpoints, admin unlock and revoke-sessions, menu item create/update with cycle checks, effective-menu ancestor handling, JWT_SECRET ≥ 32 chars enforced at startup.
+- Tests: Jest added; 46 unit tests passing (`npm test`); `tsc --noEmit` clean.
+- Not done: guards on documents/employees/masters (next module), frontend changes (refresh flow, change-password gate, sessions page), rate limiting on login/forgot, DB migration not applied to any database (migration SQL is hand-written; run `prisma migrate dev` against local Postgres only).

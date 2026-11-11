@@ -41,8 +41,8 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(username, password);
-      router.replace('/');
+      const mustChangePassword = await login(username, password);
+      router.replace(mustChangePassword ? '/change-password' : '/');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {

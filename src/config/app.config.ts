@@ -8,13 +8,15 @@ export default registerAs('app', () => ({
     secret: process.env.JWT_SECRET ?? '',
     accessTtl: process.env.JWT_ACCESS_TTL ?? '15m',
     refreshTtlDays: parseInt(process.env.REFRESH_TTL_DAYS ?? '14', 10),
+    // D-007: idle timeout for a login session (legacy client-side limit was 180 min).
+    sessionIdleMinutes: parseInt(process.env.SESSION_IDLE_MINUTES ?? '180', 10),
   },
   storage: {
     documentsPath: process.env.DOCUMENT_STORAGE_PATH ?? './private-storage/documents',
   },
   security: {
     bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS ?? '12', 10),
-    maxLoginAttempts: 5,
+    maxLoginAttempts: parseInt(process.env.MAX_LOGIN_ATTEMPTS ?? '5', 10),
     lockoutMinutes: parseInt(process.env.LOCKOUT_MINUTES ?? '30', 10),
   },
   email: {
