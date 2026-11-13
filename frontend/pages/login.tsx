@@ -25,7 +25,9 @@ export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  // Dev convenience only: default the password field unmasked in development so you can
+  // see what you typed without clicking the eye icon every time. Never on in production.
+  const [showPassword, setShowPassword] = useState(process.env.NODE_ENV === 'development');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 

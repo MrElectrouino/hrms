@@ -602,21 +602,41 @@ export function checkCustomValue(def: CustomFieldDefLike, raw: unknown): string 
   if (empty) return def.isRequired ? `${def.label} is required` : null;
   switch (def.fieldType) {
     case 'Dropdown':
+    case 'Radio':
       return typeof raw === 'string' && def.options.includes(raw) ? null : `${def.label} must be one of the listed options`;
+    case 'Multi-select':
+      return Array.isArray(raw) && raw.every((v) => typeof v === 'string' && def.options.includes(v))
+        ? null
+        : `${def.label} must be one or more of the listed options`;
     case 'Yes/No':
       return raw === 'Yes' || raw === 'No' ? null : `${def.label} must be Yes or No`;
+    case 'Checkbox':
+      return typeof raw === 'boolean' ? null : `${def.label} must be checked or unchecked`;
     case 'Number':
+    case 'Decimal':
       return typeof raw === 'number' && Number.isFinite(raw) ? null : `${def.label} must be a number`;
     case 'Date':
       return typeof raw === 'string' && isValidDate(raw) ? null : `${def.label} must be a date (YYYY-MM-DD)`;
     case 'Textarea':
       return typeof raw === 'string' && raw.length <= 2000 ? null : `${def.label} must be text up to 2000 characters`;
+    case 'Email':
+      return typeof raw === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? null : `${def.label} must be a valid email address`;
+    case 'Phone':
+      return typeof raw === 'string' && /^[+\d][\d\s\-()]{4,19}$/.test(raw) ? null : `${def.label} must be a valid phone number`;
+    case 'URL':
+      return typeof raw === 'string' && /^https?:\/\/.+/.test(raw) ? null : `${def.label} must be a URL starting with http:// or https://`;
     default:
       return typeof raw === 'string' && raw.length <= 500 ? null : `${def.label} must be text up to 500 characters`;
   }
 }
 
-export const CUSTOM_FIELD_TYPES = ['Text', 'Textarea', 'Number', 'Date', 'Dropdown', 'Yes/No'] as const;
+export const CUSTOM_FIELD_TYPES = [
+  'Text', 'Textarea', 'Number', 'Decimal', 'Date', 'Dropdown', 'Multi-select', 'Radio', 'Checkbox',
+  'Email', 'Phone', 'URL', 'Yes/No',
+] as const;
+
+/** Types that need an options list (planning/system_application_module.md §E). */
+export const CUSTOM_FIELD_OPTIONS_REQUIRED = ['Dropdown', 'Multi-select', 'Radio'] as const;
 
 /** Custom field code from a label. Immutable after creation. */
 export function codeFromLabel(label: string): string {

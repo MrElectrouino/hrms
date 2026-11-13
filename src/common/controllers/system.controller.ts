@@ -17,20 +17,3 @@ export class MessagesController {
     return { data: items, message: { code: 'OK', text: 'Messages retrieved' } };
   }
 }
-
-@ApiTags('System')
-@Controller('system-configurations')
-export class SystemConfigurationsController {
-  constructor(private readonly prisma: PrismaService) {}
-
-  @Get()
-  async findAll() {
-    const items = await this.prisma.systemConfiguration.findMany({
-      orderBy: { id: 'asc' },
-    });
-    return {
-      data: items,
-      message: { code: 'OK', text: 'System configurations retrieved' },
-    };
-  }
-}

@@ -51,10 +51,8 @@ export default function EmployeesPage() {
           <h2 className="text-2xl font-bold text-gray-900">Employees</h2>
           <p className="text-gray-500 mt-1">Manage employee profiles, work details, documents and dependents.</p>
         </div>
-        <Link href="/employee-profile/new">
-          <a className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition">
+        <Link href="/employee-profile/new"className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition">
             + Add Employee
-          </a>
         </Link>
       </div>
 
@@ -94,8 +92,8 @@ export default function EmployeesPage() {
                 <tr key={e.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-medium text-gray-900">{e.employeeCode}</td>
                   <td className="px-6 py-4">
-                    <Link href={`/employee-profile/${e.id}`}>
-                      <a className="font-medium text-gray-900 hover:text-blue-700">{e.profile?.name} {e.profile?.lastName}</a>
+                    <Link href={`/employee-profile/${e.id}`} className="font-medium text-gray-900 hover:text-blue-700">
+                      {e.profile?.name} {e.profile?.lastName}
                     </Link>
                   </td>
                   <td className="px-6 py-4 text-gray-600">{e.profile?.email || e.workEmail || '—'}</td>
@@ -107,9 +105,7 @@ export default function EmployeesPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/employee-profile/${e.id}`}>
-                      <a className="text-blue-600 hover:text-blue-800 text-xs font-medium">View profile</a>
-                    </Link>
+                    <Link href={`/employee-profile/${e.id}`} className="text-blue-600 hover:text-blue-800 text-xs font-medium">View profile</Link>
                   </td>
                 </tr>
               ))

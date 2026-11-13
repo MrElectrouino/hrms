@@ -49,22 +49,29 @@ function makeSessions() {
   };
 }
 
-function makeService(overrides: { prisma?: any; sessions?: any } = {}) {
+function makeSecurityConfig() {
+  return {
+    getMaxLoginAttempts: jest.fn().mockResolvedValue(5),
+    getLockoutMinutes: jest.fn().mockResolvedValue(30),
+    getSessionTimeoutMinutes: jest.fn().mockResolvedValue(180),
+  };
+}
+
+function makeService(overrides: { prisma?: any; sessions?: any; securityConfig?: any } = {}) {
   const prisma = overrides.prisma ?? makePrisma();
   const sessions = overrides.sessions ?? makeSessions();
+  const securityConfig = overrides.securityConfig ?? makeSecurityConfig();
   const config = {
     get: (key: string, fallback?: unknown) =>
       ({
         'app.security.bcryptRounds': 4,
-        'app.security.maxLoginAttempts': 5,
-        'app.security.lockoutMinutes': 30,
         'app.frontendBaseUrl': 'https://hrms.example.test',
       } as Record<string, unknown>)[key] ?? fallback,
   };
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
   const email = { send: jest.fn().mockResolvedValue(undefined) };
-  const service = new AuthService(prisma as any, config as any, audit as any, email as any, sessions as any);
-  return { service, prisma, sessions, audit, email };
+  const service = new AuthService(prisma as any, config as any, audit as any, email as any, sessions as any, securityConfig as any);
+  return { service, prisma, sessions, audit, email, securityConfig };
 }
 
 function activeUser(passwordHash: string, extra: Record<string, unknown> = {}) {

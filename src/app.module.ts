@@ -10,6 +10,7 @@ import { MastersModule } from './masters/masters.module';
 import { EmployeesModule } from './employees/employees.module';
 import { EmployeeProfileModule } from './employee-profile/employee-profile.module';
 import { DocumentsModule } from './documents/documents.module';
+import { SystemAdminModule } from './system-admin/system-admin.module';
 import appConfig from './config/app.config';
 
 import { CommonModule } from './common/common.module';
@@ -31,6 +32,7 @@ import { LoggerContextMiddleware } from './common/logger/logger-context.middlewa
     EmployeesModule,
     EmployeeProfileModule,
     DocumentsModule,
+    SystemAdminModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Pins the Turbopack/webpack root so Next doesn't guess it from the
+  // monorepo's extra lockfile at the repo root.
+  turbopack: {
+    root: __dirname,
+  },
   async rewrites() {
     // Local dev only: proxy /api/* to the backend. On Vercel the top-level
     // vercel.json routes /api/* to the app service, so no rewrite is needed.

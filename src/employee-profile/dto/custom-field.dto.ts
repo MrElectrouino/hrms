@@ -1,5 +1,5 @@
 import { IsArray, IsBoolean, IsIn, IsOptional, IsString, Length, MaxLength, ValidateIf } from 'class-validator';
-import { CUSTOM_FIELD_TYPES, COUNTRIES, SECTION_KEYS } from '../profile-schema';
+import { CUSTOM_FIELD_TYPES, CUSTOM_FIELD_OPTIONS_REQUIRED, COUNTRIES, SECTION_KEYS } from '../profile-schema';
 
 /** POST /custom-fields — System Admin only (D-023). The code is generated from the label. */
 export class CreateCustomFieldDto {
@@ -17,7 +17,7 @@ export class CreateCustomFieldDto {
   @IsIn(CUSTOM_FIELD_TYPES as unknown as string[])
   fieldType!: string;
 
-  @ValidateIf((o) => o.fieldType === 'Dropdown')
+  @ValidateIf((o) => CUSTOM_FIELD_OPTIONS_REQUIRED.includes(o.fieldType))
   @IsArray()
   @IsString({ each: true })
   options?: string[];
@@ -33,6 +33,11 @@ export class CreateCustomFieldDto {
   @IsOptional()
   @IsBoolean()
   isSensitive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  placeholder?: string;
 
   @IsOptional()
   @IsString()
@@ -54,6 +59,11 @@ export class UpdateCustomFieldDto {
   @IsOptional()
   @IsBoolean()
   isRequired?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  placeholder?: string;
 
   @IsOptional()
   @IsString()

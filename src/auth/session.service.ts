@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecurityConfigService } from '../common/services/security-config.service';
 import { generateSecureToken, sha256 } from '../common/utils/crypto.util';
 
 /** Access-token activity is written back at most this often (avoids a write per request). */
@@ -38,16 +39,15 @@ export interface IssueSessionInput {
 export class SessionService {
   private readonly accessTtlSeconds: number;
   private readonly refreshTtlDays: number;
-  private readonly idleMinutes: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly securityConfig: SecurityConfigService,
     config: ConfigService,
   ) {
     this.accessTtlSeconds = parseTtlSeconds(config.get<string>('app.jwt.accessTtl', '15m'));
     this.refreshTtlDays = config.get<number>('app.jwt.refreshTtlDays', 14);
-    this.idleMinutes = config.get<number>('app.sessionIdleMinutes', 180);
   }
 
   get accessTokenLifetimeSeconds(): number {
@@ -55,8 +55,9 @@ export class SessionService {
   }
 
   /** Expiry for a session that was just issued or used at `now`. */
-  computeExpiry(familyStartedAt: Date, now: Date): Date {
-    const idleEnd = new Date(now.getTime() + this.idleMinutes * 60 * 1000);
+  async computeExpiry(familyStartedAt: Date, now: Date): Promise<Date> {
+    const idleMinutes = await this.securityConfig.getSessionTimeoutMinutes();
+    const idleEnd = new Date(now.getTime() + idleMinutes * 60 * 1000);
     const absoluteEnd = new Date(familyStartedAt.getTime() + this.refreshTtlDays * 24 * 60 * 60 * 1000);
     return idleEnd < absoluteEnd ? idleEnd : absoluteEnd;
   }
@@ -75,7 +76,7 @@ export class SessionService {
         familyStartedAt,
         issuedAt: now,
         lastUsedAt: now,
-        expiresAt: this.computeExpiry(familyStartedAt, now),
+        expiresAt: await this.computeExpiry(familyStartedAt, now),
         ipAddress: input.ip ?? null,
         userAgent: input.userAgent ?? null,
       },
@@ -118,7 +119,7 @@ export class SessionService {
         where: { id: session.id },
         data: {
           lastUsedAt: now,
-          expiresAt: this.computeExpiry(session.familyStartedAt, now),
+          expiresAt: await this.computeExpiry(session.familyStartedAt, now),
         },
       });
     }

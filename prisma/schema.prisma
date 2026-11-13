@@ -32,10 +32,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Prisma 7: connection URL moved to prisma.config.ts (see repo root).
+// Using DATABASE_URL_UNPOOLED there — the unpooled/direct connection, since
+// Prisma 7 dropped the separate directUrl and migrations need a direct
+// connection, not Neon's PgBouncer pooler.
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  provider = "postgresql"
 }
 
 // ============================================================================
@@ -903,6 +905,8 @@ model StoredFile {
   createdBy    Profile?       @relation("UploadedFiles", fields: [createdById], references: [id])
   profilePhoto Profile[]      @relation("ProfilePhoto")
   documents    DocumentFile[]
+  brandingLogo    ApplicationBranding[] @relation("BrandingLogo")
+  brandingFavicon ApplicationBranding[] @relation("BrandingFavicon")
 
   @@index([fileTypeId])
   @@map("stored_files")
@@ -990,6 +994,8 @@ model CustomFieldDefinition {
   countryCode        String   @default("ALL")
   isRequired         Boolean  @default(false)
   isSensitive        Boolean  @default(false)
+  /// NEW — System Admin > Custom Fields (planning/system_application_module.md §E).
+  placeholder        String?
   helpText           String?
   isActive           Boolean  @default(true)
   displayOrder       Int      @default(0)
@@ -1030,4 +1036,67 @@ model SalaryTemplate {
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("salary_templates")
+}
+
+/// NEW — System Admin > Country Configuration (planning/system_application_module.md §D).
+/// `isoCode` is the same string used as `countryCode` on CustomFieldDefinition/SalaryTemplate
+/// ("ALL" there is a sentinel meaning "every country", not a row here).
+model Country {
+  id              Int      @id @default(autoincrement())
+  isoCode         String   @unique
+  name            String
+  currencyCode    String
+  defaultTimezone String
+  defaultLanguage String
+  dateFormat      String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("countries")
+}
+
+/// NEW — System Admin > Application Branding (planning/system_application_module.md §A).
+/// Singleton: always id=1, created lazily on first read. Unlike other StoredFile usage
+/// (D-008, private/authenticated-only), the logo and favicon are served PUBLICLY
+/// (GET /branding/logo, /branding/favicon, no auth) because the login page must render
+/// them before the user signs in — a deliberate, narrow exception, not a precedent for
+/// other file types.
+model ApplicationBranding {
+  id                 Int      @id @default(1)
+  appName            String   @default("HRMS")
+  logoFileId         BigInt?
+  faviconFileId      BigInt?
+  primaryColor       String?
+  secondaryColor     String?
+  accentColor        String?
+  loginBrandingText  String?
+  footerText         String?
+  updatedByProfileId Int?
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  logoFile    StoredFile? @relation("BrandingLogo", fields: [logoFileId], references: [id])
+  faviconFile StoredFile? @relation("BrandingFavicon", fields: [faviconFileId], references: [id])
+
+  @@map("application_branding")
+}
+
+/// NEW — System Admin > Module Configuration (planning/system_application_module.md §G).
+/// Single-tenant simplification: no per-organization assignment yet (no Organization model —
+/// see the note at the top of system_application_module.md). `isImplemented` is separate from
+/// `isEnabled`: most of these modules (Leave, Attendance, Payroll, ...) don't exist in code yet,
+/// so toggling them here is a placeholder, not a real feature gate, until they're built.
+model ModuleConfiguration {
+  id             Int      @id @default(autoincrement())
+  moduleKey      String   @unique
+  name           String
+  isEnabled      Boolean  @default(false)
+  isImplemented  Boolean  @default(false)
+  /// moduleKeys this module depends on; UI blocks disabling a module something else still needs.
+  dependsOn      String[] @default([])
+  displayOrder   Int      @default(0)
+  updatedByProfileId Int?
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("module_configurations")
 }

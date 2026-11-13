@@ -3,12 +3,13 @@ import { AuditService } from './services/audit.service';
 import { PiiService } from './services/pii.service';
 import { FileStorageService } from './services/file-storage.service';
 import { EmailService } from './services/email.service';
-import { MessagesController, SystemConfigurationsController } from './controllers/system.controller';
+import { SecurityConfigService } from './services/security-config.service';
+import { MessagesController } from './controllers/system.controller';
 
 @Global()
 @Module({
-  controllers: [MessagesController, SystemConfigurationsController],
-  providers: [AuditService, PiiService, FileStorageService, EmailService],
-  exports: [AuditService, PiiService, FileStorageService, EmailService],
+  controllers: [MessagesController],
+  providers: [AuditService, PiiService, FileStorageService, EmailService, SecurityConfigService],
+  exports: [AuditService, PiiService, FileStorageService, EmailService, SecurityConfigService],
 })
 export class CommonModule {}

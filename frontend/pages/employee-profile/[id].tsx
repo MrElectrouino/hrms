@@ -133,17 +133,34 @@ function hasContent(v: Values): boolean {
   return Object.values(v).some((x) => (Array.isArray(x) ? x.length > 0 : x && typeof x === 'object' ? Object.values(x).some((y) => y !== '' && y !== null && y !== undefined) : x !== '' && x !== null && x !== undefined));
 }
 
+/** Admin-defined field type (planning/system_application_module.md §E) -> Control's internal type. */
+const CUSTOM_FIELD_TYPE_MAP: Record<string, string> = {
+  Text: 'text',
+  Textarea: 'textarea',
+  Number: 'number',
+  Decimal: 'decimal',
+  Date: 'date',
+  Dropdown: 'select',
+  'Multi-select': 'multiselect',
+  Radio: 'radio',
+  Checkbox: 'checkbox',
+  Email: 'email',
+  Phone: 'tel',
+  URL: 'url',
+  'Yes/No': 'yn',
+};
+
 function Control({
   def, value, onChange, disabled, error, id,
 }: {
-  def: { type: string; options?: string[]; items?: { value: string; label: string }[]; mono?: boolean; maxLength?: number; label: string };
+  def: { type: string; options?: string[]; items?: { value: string; label: string }[]; mono?: boolean; maxLength?: number; label: string; placeholder?: string };
   value: any;
   onChange: (v: any) => void;
   disabled: boolean;
   error: boolean;
   id: string;
 }) {
-  const common = { id, disabled, className: inputClass(disabled, error, def.mono) };
+  const common = { id, disabled, className: inputClass(disabled, error, def.mono), placeholder: def.placeholder };
   if (def.type === 'multiselect') {
     return <MultiSelect id={id} options={def.options ?? []} value={Array.isArray(value) ? value : []} onChange={onChange} disabled={disabled} error={error} label={def.label} />;
   }
@@ -169,14 +186,40 @@ function Control({
   if (def.type === 'textarea') {
     return <textarea {...common} rows={3} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
   }
-  const type = def.type === 'date' ? 'date' : def.type === 'number' ? 'number' : def.type === 'email' ? 'email' : def.type === 'tel' ? 'tel' : 'text';
+  if (def.type === 'radio') {
+    return (
+      <div className="flex flex-wrap gap-4 pt-1.5">
+        {(def.options ?? []).map((o) => (
+          <label key={o} className="flex items-center gap-1.5 text-sm text-gray-700">
+            <input type="radio" name={id} disabled={disabled} checked={value === o} onChange={() => onChange(o)} />
+            {o}
+          </label>
+        ))}
+      </div>
+    );
+  }
+  if (def.type === 'checkbox') {
+    return (
+      <input
+        id={id}
+        type="checkbox"
+        disabled={disabled}
+        checked={!!value}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+      />
+    );
+  }
+  const isNumeric = def.type === 'number' || def.type === 'decimal';
+  const type = def.type === 'date' ? 'date' : isNumeric ? 'number' : def.type === 'email' ? 'email' : def.type === 'tel' ? 'tel' : def.type === 'url' ? 'url' : 'text';
   return (
     <input
       {...common}
       type={type}
       value={value ?? ''}
-      min={type === 'number' ? 0 : undefined}
-      onChange={(e) => onChange(type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
+      min={isNumeric ? 0 : undefined}
+      step={def.type === 'decimal' ? 'any' : undefined}
+      onChange={(e) => onChange(isNumeric ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
     />
   );
 }
@@ -822,9 +865,10 @@ export default function EmployeeProfilePage() {
                       <Control
                         id={`custom-${f.code}`}
                         def={{
-                          type: f.fieldType === 'Dropdown' ? 'select' : f.fieldType === 'Yes/No' ? 'yn' : f.fieldType === 'Number' ? 'number' : f.fieldType === 'Date' ? 'date' : f.fieldType === 'Textarea' ? 'textarea' : 'text',
+                          type: CUSTOM_FIELD_TYPE_MAP[f.fieldType] ?? 'text',
                           options: f.options,
                           label: f.label,
+                          placeholder: f.placeholder ?? undefined,
                         }}
                         value={custom[f.code]}
                         onChange={(val) => setCustom((prev) => ({ ...prev, [f.code]: val }))}

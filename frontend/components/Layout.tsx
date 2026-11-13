@@ -36,14 +36,8 @@ const GlobeIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" />
 const MenuIcon = (p: IconProps) => <Svg {...p}><path d="M3 6h18M3 12h18M3 18h18" /></Svg>;
 
 const BrandLogo = ({ className }: IconProps) => (
-  <svg viewBox="0 0 50 46" className={className} aria-hidden="true">
-    <circle cx="10" cy="14" r="6" fill="#60a5fa" />
-    <circle cx="25" cy="10" r="7" fill="#2563eb" />
-    <circle cx="40" cy="14" r="6" fill="#60a5fa" />
-    <path d="M3 40c0-8 4-13 9-13s9 5 9 13z" fill="#60a5fa" />
-    <path d="M18 42c0-10 3-17 7-17s7 7 7 17z" fill="#2563eb" />
-    <path d="M33 40c0-8 4-13 9-13s9 5 9 13z" fill="#60a5fa" />
-  </svg>
+  <div className={`flex items-center justify-center rounded-md ${className ?? ''}`} title="HRMS">
+  <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="auto" height="auto" x="0" y="0" viewBox="0 0 509.421 509.421" xmlSpace="preserve"><g><path d="M409.421 251.348V123.073c-35.366 0-64.139 28.772-64.139 64.138s28.773 64.137 64.139 64.137"  fill="#9bc9ff" data-original="#9bc9ff"></path><path d="M473.56 187.211c0-35.366-28.772-64.138-64.139-64.138v128.275c35.367 0 64.139-28.772 64.139-64.137"  fill="#57a4ff" data-original="#57a4ff"></path><path d="M509.421 366.348c0-55.14-44.859-100-100-100-28.619 0-55.206 12.071-73.879 32.602 26.098 21.11 43.814 52.191 47.288 87.398h126.591zM173.879 298.95c-18.673-20.53-45.26-32.602-73.879-32.602-55.14 0-100 44.86-100 100v20h126.59c3.475-35.207 21.191-66.288 47.289-87.398M100 251.348V123.073c-35.366 0-64.138 28.772-64.138 64.138S64.634 251.348 100 251.348"  fill="#9bc9ff" data-original="#9bc9ff"></path><path d="M164.138 187.211c0-35.366-28.772-64.138-64.138-64.138v128.275c35.366 0 64.138-28.772 64.138-64.137"  fill="#57a4ff" data-original="#57a4ff"></path><path d="M335.542 298.95c-22.114-17.888-50.242-28.619-80.832-28.619v148.76h128.75v-20c0-4.3-.216-8.55-.63-12.742-3.474-35.208-21.19-66.289-47.288-87.399M334.71 170.331c0-44.11-35.89-80-80-80v160c44.11 0 80-35.88 80-80"  fill="#003f8a" data-original="#003f8a"></path><path d="M173.879 298.95c-26.098 21.11-43.814 52.191-47.289 87.398-.414 4.193-.63 8.443-.63 12.742v20h128.75V270.33c-30.589.001-58.717 10.732-80.831 28.62M254.71 250.331v-160c-44.11 0-80 35.89-80 80 0 44.12 35.89 80 80 80"  fill="#005ece" data-original="#005ece"></path></g></svg></div>
 );
 
 /* ------------------------------------------------------------------ navigation model */
@@ -56,7 +50,7 @@ interface NavChild {
 interface NavEntry {
   key: string;
   label: string;
-  icon: (p: IconProps) => JSX.Element;
+  icon: (p: IconProps) => React.JSX.Element;
   href?: string;
   children?: NavChild[];
   /** Module not built yet: shown (as in the mockup) but not clickable. */
@@ -79,6 +73,10 @@ const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/menus', label: 'Menus', roles: [UserType.SystemAdmin] },
   { href: '/custom-fields', label: 'Custom fields', roles: [UserType.SystemAdmin] },
   { href: '/salary-templates', label: 'Salary templates', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
+  { href: '/system-settings', label: 'System settings', roles: [UserType.SystemAdmin] },
+  { href: '/countries', label: 'Countries', roles: [UserType.SystemAdmin] },
+  { href: '/branding', label: 'Branding', roles: [UserType.SystemAdmin] },
+  { href: '/modules', label: 'Modules', roles: [UserType.SystemAdmin] },
 ];
 
 /** Menu items granted through RBAC (GET /rbac/my-menu), flattened to links. */
@@ -262,13 +260,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     if (e.href) {
       return (
-        <Link key={e.key} href={e.href}>
-          <a className={`${rowBase} ${rowPad} ${active ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'}`} aria-current={active ? 'page' : undefined}>
+        <Link key={e.key} href={e.href} className={`${rowBase} ${rowPad} ${active ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'}`} aria-current={active ? 'page' : undefined}>
             {active && <ActiveBar />}
             {iconEl}
             {label}
             <Tooltip label={e.label} />
-          </a>
         </Link>
       );
     }
@@ -300,10 +296,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             {(e.children ?? []).map((c) => {
               const childActive = pathMatches(c.href) || (c.href === '/employees' && isEmployeeProfile);
               return (
-                <Link key={c.href} href={c.href}>
-                  <a className={`block rounded-md px-3 py-1.5 text-sm ${childActive ? 'bg-slate-800/70 font-medium text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}>
+                <Link key={c.href} href={c.href} className={`block rounded-md px-3 py-1.5 text-sm ${childActive ? 'bg-slate-800/70 font-medium text-white' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'}`}>
                     {c.label}
-                  </a>
                 </Link>
               );
             })}
@@ -313,7 +307,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     );
   };
 
-  const BottomLink = ({ icon: Icon, label, href, soon, onClick }: { icon: (p: IconProps) => JSX.Element; label: string; href?: string; soon?: boolean; onClick?: () => void }) => {
+  const BottomLink = ({ icon: Icon, label, href, soon, onClick }: { icon: (p: IconProps) => React.JSX.Element; label: string; href?: string; soon?: boolean; onClick?: () => void }) => {
     const inner = (
       <>
         <Icon className={`h-5 w-5 shrink-0 ${soon ? 'text-slate-600' : 'text-slate-500 group-hover:text-slate-300'}`} />
@@ -324,8 +318,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     const cls = `${rowBase} ${rowPad} w-full text-left ${soon ? 'cursor-not-allowed text-slate-500' : pathMatches(href ?? '#') ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'}`;
     if (href && !soon) {
       return (
-        <Link href={href}>
-          <a className={cls}>{inner}</a>
+        <Link href={href} className={cls}>
+          {inner}
         </Link>
       );
     }
@@ -356,7 +350,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Brand + collapse */}
         <div className={`relative z-10 flex items-center gap-2.5 px-2 pb-6 ${collapsed ? 'lg:flex-col lg:gap-3 lg:px-0 lg:pb-5' : ''}`}>
-          <BrandLogo className={`h-[34px] w-[38px] shrink-0 ${collapsed ? 'lg:h-[30px] lg:w-[34px]' : ''}`} />
+          <BrandLogo className={`h-[40px] w-[42px] shrink-0 ${collapsed ? 'lg:h-[30px] lg:w-[34px]' : ''}`} />
           <div className={`${collapsed ? 'lg:hidden' : ''} min-w-0`}>
             <p className="text-xl font-bold leading-none tracking-tight text-white">HRMS</p>
             <p className="mt-1 whitespace-nowrap text-[11px] text-slate-400">Smart HR. Better Tomorrow.</p>
@@ -381,8 +375,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="mx-1 my-3 h-px bg-slate-800" />
           <BottomLink icon={HelpIcon} label="Help & Support" soon />
           <BottomLink icon={GearIcon} label="Settings" href="/account" />
-          <Link href="/account">
-            <a className={`group relative mt-2.5 flex items-center gap-2.5 border-t border-slate-800 px-1 pt-3.5 ${collapsed ? 'lg:justify-center lg:border-0 lg:px-0 lg:pt-2' : ''}`}>
+          <Link href="/account" className={`group relative mt-2.5 flex items-center gap-2.5 border-t border-slate-800 px-1 pt-3.5 ${collapsed ? 'lg:justify-center lg:border-0 lg:px-0 lg:pt-2' : ''}`}>
               <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-[13px] font-bold text-white ring-1 ring-slate-600">
                 {initialsOf(displayName)}
               </span>
@@ -392,7 +385,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </span>
               <ChevronDown className={`${collapsed ? 'lg:hidden' : ''} h-4 w-4 text-slate-400`} />
               <Tooltip label="My account" />
-            </a>
           </Link>
           <div className="pt-1.5">
             <BottomLink icon={LogoutIcon} label="Logout" onClick={doLogout} />
@@ -474,8 +466,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </button>
                 {profileOpen && (
                   <div className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-sm shadow-lg">
-                    <Link href="/account"><a className="block px-4 py-2 text-gray-700 hover:bg-gray-50">My account</a></Link>
-                    <Link href="/change-password"><a className="block px-4 py-2 text-gray-700 hover:bg-gray-50">Change password</a></Link>
+                    <Link href="/account" className="block px-4 py-2 text-gray-700 hover:bg-gray-50">My account</Link>
+                    <Link href="/change-password"className="block px-4 py-2 text-gray-700 hover:bg-gray-50">Change password</Link>
                     <button type="button" onClick={doLogout} className="block w-full px-4 py-2 text-left text-red-600 hover:bg-red-50">Logout</button>
                   </div>
                 )}

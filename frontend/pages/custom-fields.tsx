@@ -13,7 +13,8 @@ const TABS = [
   ['education', 'Education & Experience'],
   ['access', 'System Access'],
 ];
-const TYPES = ['Text', 'Textarea', 'Number', 'Date', 'Dropdown', 'Yes/No'];
+const TYPES = ['Text', 'Textarea', 'Number', 'Decimal', 'Date', 'Dropdown', 'Multi-select', 'Radio', 'Checkbox', 'Email', 'Phone', 'URL', 'Yes/No'];
+const OPTIONS_REQUIRED = ['Dropdown', 'Multi-select', 'Radio'];
 const COUNTRIES = [
   ['ALL', 'All countries'],
   ['IN', 'India'],
@@ -22,7 +23,7 @@ const COUNTRIES = [
   ['US', 'United States'],
 ];
 
-const blank = { label: '', tabKey: 'personal', sectionName: '', fieldType: 'Text', options: '', countryCode: 'ALL', isRequired: false, helpText: '' };
+const blank = { label: '', tabKey: 'personal', sectionName: '', fieldType: 'Text', options: '', countryCode: 'ALL', isRequired: false, placeholder: '', helpText: '' };
 
 export default function CustomFieldsPage() {
   const { isAuthenticated, user } = useAuth();
@@ -56,7 +57,7 @@ export default function CustomFieldsPage() {
     setError('');
     setMessage('');
     try {
-      const options = form.fieldType === 'Dropdown' ? form.options.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const options = OPTIONS_REQUIRED.includes(form.fieldType) ? form.options.split(',').map((s) => s.trim()).filter(Boolean) : [];
       const created = await createCustomField({
         label: form.label,
         tabKey: form.tabKey,
@@ -65,6 +66,7 @@ export default function CustomFieldsPage() {
         options,
         countryCode: form.countryCode,
         isRequired: form.isRequired,
+        placeholder: form.placeholder || undefined,
         helpText: form.helpText || undefined,
       });
       setMessage(`Custom field ${created.data.code} added. It now appears on the employee profile.`);
@@ -178,12 +180,16 @@ export default function CustomFieldsPage() {
               {TYPES.map((t) => <option key={t}>{t}</option>)}
             </select>
           </div>
-          {form.fieldType === 'Dropdown' && (
+          {OPTIONS_REQUIRED.includes(form.fieldType) && (
             <div>
               <label className="mb-1.5 block text-xs font-medium text-gray-600">Options</label>
               <input className={inputClass} value={form.options} onChange={(e) => setForm({ ...form, options: e.target.value })} placeholder="Comma separated, e.g. XS, S, M, L" />
             </div>
           )}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-gray-600">Placeholder</label>
+            <input className={inputClass} value={form.placeholder} onChange={(e) => setForm({ ...form, placeholder: e.target.value })} placeholder="Shown in the empty field" />
+          </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Applies to</label>
             <select className={inputClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>

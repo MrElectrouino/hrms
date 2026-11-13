@@ -1,6 +1,9 @@
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL_UNPOOLED });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   await seedParameterTypesAndParameters();
@@ -10,6 +13,8 @@ async function main() {
   await seedRoles();
   await seedDocumentTypes();
   await seedMenuItems();
+  await seedCountries();
+  await seedModuleConfigurations();
 }
 
 async function seedParameterTypesAndParameters() {
@@ -244,6 +249,22 @@ async function seedSystemConfigurations() {
     { id: 23, name: 'Minimum days to apply sandwitch rule', value: '2', valueKind: 'number', description: 'Minimum days to apply sandwich rule' },
     { id: 24, name: 'RamadanDates', value: '2026-02-18', valueDate: new Date('2026-03-19'), valueKind: 'date', description: 'Ramadan end date' },
     { id: 25, name: 'Annual Leave Validation', value: '0', valueKind: 'number', description: 'Annual leave validation' },
+    // 26+ are NEW (System Admin > Regional Settings, planning/system_application_module.md §B) —
+    // not legacy rows. Values are placeholders; System Admin sets them via /system-configurations.
+    { id: 26, name: 'Default Country', value: 'AE', valueKind: 'string', description: 'Default country for new employees/organizations' },
+    { id: 27, name: 'Default Timezone', value: 'Asia/Dubai', valueKind: 'string', description: 'Default timezone for display and local-date calculations' },
+    { id: 28, name: 'Default Language', value: 'en', valueKind: 'string', description: 'Default UI language' },
+    { id: 29, name: 'Default Date Format', value: 'DD/MM/YYYY', valueKind: 'string', description: 'Default date display format' },
+    { id: 30, name: 'Default Time Format', value: '24', valueKind: 'string', description: 'Default time display format: 12 or 24' },
+    { id: 31, name: 'Default Currency', value: 'AED', valueKind: 'string', description: 'Default currency code' },
+    { id: 32, name: 'Number Format', value: '1,234.56', valueKind: 'string', description: 'Default number formatting example' },
+    // 33+ are NEW (System Admin > Security Configuration, planning/system_application_module.md §I).
+    // These back SecurityConfigService; the values here match the previous env-var defaults
+    // (MAX_LOGIN_ATTEMPTS, LOCKOUT_MINUTES, SESSION_IDLE_MINUTES in config/app.config.ts), which
+    // remain the fallback if a row is ever missing.
+    { id: 33, name: 'Max Failed Login Attempts', value: '5', valueKind: 'number', description: 'Failed logins before an account is locked' },
+    { id: 34, name: 'Account Lockout Minutes', value: '30', valueKind: 'number', description: 'How long a locked account stays locked' },
+    { id: 35, name: 'Session Timeout Minutes', value: '180', valueKind: 'number', description: 'Idle minutes before a login session expires' },
   ];
 
   for (const c of configs) {
@@ -358,6 +379,62 @@ async function seedMenuItems() {
   }
 }
 
+/** NEW — System Admin > Country Configuration (planning/system_application_module.md §D). */
+async function seedCountries() {
+  const countries = [
+    { isoCode: 'IN', name: 'India', currencyCode: 'INR', defaultTimezone: 'Asia/Kolkata', defaultLanguage: 'en', dateFormat: 'DD/MM/YYYY' },
+    { isoCode: 'AE', name: 'United Arab Emirates', currencyCode: 'AED', defaultTimezone: 'Asia/Dubai', defaultLanguage: 'en', dateFormat: 'DD/MM/YYYY' },
+  ];
+
+  for (const c of countries) {
+    await prisma.country.upsert({
+      where: { isoCode: c.isoCode },
+      create: c,
+      update: c,
+    });
+  }
+}
+
+/**
+ * NEW — System Admin > Module Configuration (planning/system_application_module.md §G).
+ * Only user-management, employee-management and document-management are actually built
+ * (isImplemented: true); the rest are placeholders for modules not yet implemented.
+ */
+async function seedModuleConfigurations() {
+  const modules = [
+    { moduleKey: 'user-management', name: 'User Management', isEnabled: true, isImplemented: true, dependsOn: [], order: 1 },
+    { moduleKey: 'employee-management', name: 'Employee Management', isEnabled: true, isImplemented: true, dependsOn: ['user-management'], order: 2 },
+    { moduleKey: 'document-management', name: 'Document Management', isEnabled: true, isImplemented: true, dependsOn: ['employee-management'], order: 3 },
+    { moduleKey: 'leave-management', name: 'Leave Management', isEnabled: false, isImplemented: false, dependsOn: ['employee-management'], order: 4 },
+    { moduleKey: 'attendance-management', name: 'Attendance Management', isEnabled: false, isImplemented: false, dependsOn: ['employee-management'], order: 5 },
+    { moduleKey: 'payroll-management', name: 'Payroll Management', isEnabled: false, isImplemented: false, dependsOn: ['employee-management', 'attendance-management'], order: 6 },
+    { moduleKey: 'leave-salary', name: 'Leave Salary', isEnabled: false, isImplemented: false, dependsOn: ['leave-management', 'payroll-management'], order: 7 },
+    { moduleKey: 'full-final-settlement', name: 'Full & Final Settlement', isEnabled: false, isImplemented: false, dependsOn: ['payroll-management'], order: 8 },
+    { moduleKey: 'onboarding', name: 'Onboarding', isEnabled: false, isImplemented: false, dependsOn: ['employee-management'], order: 9 },
+    { moduleKey: 'performance-management', name: 'Performance Management', isEnabled: false, isImplemented: false, dependsOn: ['employee-management'], order: 10 },
+  ];
+
+  for (const m of modules) {
+    await prisma.moduleConfiguration.upsert({
+      where: { moduleKey: m.moduleKey },
+      create: {
+        moduleKey: m.moduleKey,
+        name: m.name,
+        isEnabled: m.isEnabled,
+        isImplemented: m.isImplemented,
+        dependsOn: m.dependsOn,
+        displayOrder: m.order,
+      },
+      update: {
+        name: m.name,
+        isImplemented: m.isImplemented,
+        dependsOn: m.dependsOn,
+        displayOrder: m.order,
+      },
+    });
+  }
+}
+
 
 /**
  * Reference masters for local development (owner approved, 2026-11-11).
@@ -417,7 +494,9 @@ async function seedReferenceMasters() {
 }
 
 main()
-  .then(() => seedReferenceMasters())
+  // SKIP_REFERENCE_MASTERS=1: used by scripts/provision-company.ts — a new company's DB
+  // should not inherit Emove's own demo sites/languages/shifts.
+  .then(() => (process.env.SKIP_REFERENCE_MASTERS === '1' ? undefined : seedReferenceMasters()))
   .catch((e) => {
     console.error(e);
     process.exit(1);

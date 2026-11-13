@@ -9,10 +9,13 @@
  * or via env vars:
  *   ADMIN_USERNAME=... ADMIN_PASSWORD=... ADMIN_NAME=... ADMIN_EMAIL=... npx ts-node scripts/create-admin.ts
  */
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL_UNPOOLED });
+const prisma = new PrismaClient({ adapter });
 
 const SYSTEM_ADMIN_USER_TYPE_ID = 3; // src/common/constants/user-types.ts
 const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;

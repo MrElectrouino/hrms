@@ -430,25 +430,105 @@ export async function createEmployee(payload: CreateEmployeePayload) {
   });
 }
 
+export interface MasterItem {
+  id: number;
+  name: string;
+  isActive: boolean;
+}
+
+export interface ShiftItem extends MasterItem {
+  startTime: string;
+  endTime: string;
+  lateMinutes: number;
+  halfDayMinutes: number;
+  altStartTime: string | null;
+  altEndTime: string | null;
+}
+
+export interface MasterItemPayload {
+  name: string;
+  isActive?: boolean;
+}
+
+export interface ShiftPayload {
+  name: string;
+  startTime: string;
+  endTime: string;
+  lateMinutes: number;
+  halfDayMinutes: number;
+  altStartTime?: string;
+  altEndTime?: string;
+  isActive?: boolean;
+}
+
+function mastersQuery(params?: Record<string, string | number | boolean>) {
+  const merged = { pageSize: 100, ...params };
+  return '?' + new URLSearchParams(Object.entries(merged).map(([k, v]) => [k, String(v)])).toString();
+}
+
 export async function getDepartments(params?: Record<string, string | number | boolean>) {
-  const query = params ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
-  return request<{ id: number; name: string; isActive: boolean }[]>(`/masters/departments${query}`);
+  return request<MasterItem[]>(`/masters/departments${mastersQuery(params)}`);
+}
+export async function createDepartment(payload: MasterItemPayload) {
+  return request<MasterItem>('/masters/departments', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateDepartment(id: number, payload: Partial<MasterItemPayload>) {
+  return request<MasterItem>(`/masters/departments/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+export async function deactivateDepartment(id: number) {
+  return request<MasterItem>(`/masters/departments/${id}`, { method: 'DELETE' });
 }
 
-export async function getLanguages() {
-  return request<{ id: number; name: string }[]>('/masters/languages');
+export async function getSites(params?: Record<string, string | number | boolean>) {
+  return request<MasterItem[]>(`/masters/sites${mastersQuery(params)}`);
+}
+export async function createSite(payload: MasterItemPayload) {
+  return request<MasterItem>('/masters/sites', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateSite(id: number, payload: Partial<MasterItemPayload>) {
+  return request<MasterItem>(`/masters/sites/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+export async function deactivateSite(id: number) {
+  return request<MasterItem>(`/masters/sites/${id}`, { method: 'DELETE' });
 }
 
-export async function getShifts() {
-  return request<{ id: number; name: string }[]>('/masters/shifts');
+export async function getLanguages(params?: Record<string, string | number | boolean>) {
+  return request<MasterItem[]>(`/masters/languages${mastersQuery(params)}`);
+}
+export async function createLanguage(payload: MasterItemPayload) {
+  return request<MasterItem>('/masters/languages', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateLanguage(id: number, payload: Partial<MasterItemPayload>) {
+  return request<MasterItem>(`/masters/languages/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+export async function deactivateLanguage(id: number) {
+  return request<MasterItem>(`/masters/languages/${id}`, { method: 'DELETE' });
 }
 
-export async function getSites() {
-  return request<{ id: number; name: string }[]>('/masters/sites');
+export async function getShifts(params?: Record<string, string | number | boolean>) {
+  return request<ShiftItem[]>(`/masters/shifts${mastersQuery(params)}`);
+}
+export async function createShift(payload: ShiftPayload) {
+  return request<ShiftItem>('/masters/shifts', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateShift(id: number, payload: Partial<ShiftPayload>) {
+  return request<ShiftItem>(`/masters/shifts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+export async function deactivateShift(id: number) {
+  return request<ShiftItem>(`/masters/shifts/${id}`, { method: 'DELETE' });
 }
 
-export async function getDocumentTypes() {
-  return request<{ id: number; name: string }[]>('/masters/document-types');
+export async function getDocumentTypes(params?: Record<string, string | number | boolean>) {
+  return request<MasterItem[]>(`/masters/document-types${mastersQuery(params)}`);
+}
+export async function createDocumentType(payload: MasterItemPayload) {
+  return request<MasterItem>('/masters/document-types', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateDocumentType(id: number, payload: Partial<MasterItemPayload>) {
+  return request<MasterItem>(`/masters/document-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+export async function deactivateDocumentType(id: number) {
+  return request<MasterItem>(`/masters/document-types/${id}`, { method: 'DELETE' });
 }
 
 export async function getDocuments(params?: Record<string, string | number | boolean>) {
@@ -597,6 +677,7 @@ export interface CustomFieldInfo {
   options: string[];
   isRequired: boolean;
   isSensitive: boolean;
+  placeholder: string | null;
   helpText: string | null;
 }
 
@@ -659,6 +740,7 @@ export interface CreateCustomFieldPayload {
   countryCode?: string;
   isRequired?: boolean;
   isSensitive?: boolean;
+  placeholder?: string;
   helpText?: string;
 }
 
@@ -666,7 +748,7 @@ export async function createCustomField(payload: CreateCustomFieldPayload) {
   return request<CustomFieldAdmin>('/custom-fields', { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export async function updateCustomField(code: string, payload: { isActive?: boolean; label?: string; isRequired?: boolean }) {
+export async function updateCustomField(code: string, payload: { isActive?: boolean; label?: string; isRequired?: boolean; placeholder?: string }) {
   return request<CustomFieldAdmin>(`/custom-fields/${code}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
 
@@ -739,4 +821,145 @@ export async function createSalaryTemplate(payload: SalaryTemplatePayload) {
 
 export async function updateSalaryTemplate(id: number, payload: SalaryTemplatePayload) {
   return request<SalaryTemplate>(`/salary-templates/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+/* -------------------------------------------------------------- system configurations (System Admin only) */
+
+export interface SystemConfigurationItem {
+  id: number;
+  name: string;
+  value: string | null;
+  valueDate: string | null;
+  valueKind: string;
+  description: string | null;
+}
+
+export interface SystemConfigurationPayload {
+  name?: string;
+  value?: string;
+  valueKind?: string;
+  description?: string;
+}
+
+export async function getSystemConfigurations() {
+  return request<SystemConfigurationItem[]>('/system-configurations');
+}
+
+export async function createSystemConfiguration(payload: SystemConfigurationPayload) {
+  return request<SystemConfigurationItem>('/system-configurations', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateSystemConfiguration(id: number, payload: SystemConfigurationPayload) {
+  return request<SystemConfigurationItem>(`/system-configurations/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+/* -------------------------------------------------------------- countries (System Admin only) */
+
+export interface CountryItem {
+  id: number;
+  isoCode: string;
+  name: string;
+  currencyCode: string;
+  defaultTimezone: string;
+  defaultLanguage: string;
+  dateFormat: string;
+  isActive: boolean;
+}
+
+export interface CountryPayload {
+  isoCode?: string;
+  name?: string;
+  currencyCode?: string;
+  defaultTimezone?: string;
+  defaultLanguage?: string;
+  dateFormat?: string;
+  isActive?: boolean;
+}
+
+export async function getCountries() {
+  return request<CountryItem[]>('/countries');
+}
+
+export async function createCountry(payload: CountryPayload) {
+  return request<CountryItem>('/countries', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export async function updateCountry(id: number, payload: CountryPayload) {
+  return request<CountryItem>(`/countries/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+/* -------------------------------------------------------------- branding (System Admin only) */
+
+export interface BrandingItem {
+  id: number;
+  appName: string;
+  logoFileId: string | null;
+  faviconFileId: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  accentColor: string | null;
+  loginBrandingText: string | null;
+  footerText: string | null;
+}
+
+export interface BrandingPayload {
+  appName?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  loginBrandingText?: string;
+  footerText?: string;
+}
+
+export async function getBranding() {
+  return request<BrandingItem>('/branding');
+}
+
+export async function updateBranding(payload: BrandingPayload) {
+  return request<BrandingItem>('/branding', { method: 'PATCH', body: JSON.stringify(payload) });
+}
+
+async function uploadBrandingFile(path: 'logo' | 'favicon', file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request<BrandingItem>(`/branding/${path}`, { method: 'POST', body: formData });
+}
+
+export async function uploadBrandingLogo(file: File) {
+  return uploadBrandingFile('logo', file);
+}
+
+export async function uploadBrandingFavicon(file: File) {
+  return uploadBrandingFile('favicon', file);
+}
+
+export function brandingLogoUrl() {
+  return `${API_BASE_URL}/branding/logo/file`;
+}
+
+export function brandingFaviconUrl() {
+  return `${API_BASE_URL}/branding/favicon/file`;
+}
+
+/* -------------------------------------------------------------- module configuration (System Admin only) */
+
+export interface ModuleConfigurationItem {
+  id: number;
+  moduleKey: string;
+  name: string;
+  isEnabled: boolean;
+  isImplemented: boolean;
+  dependsOn: string[];
+  displayOrder: number;
+}
+
+export async function getModuleConfigurations() {
+  return request<ModuleConfigurationItem[]>('/module-configurations');
+}
+
+export async function updateModuleConfiguration(moduleKey: string, isEnabled: boolean) {
+  return request<ModuleConfigurationItem>(`/module-configurations/${moduleKey}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isEnabled }),
+  });
 }

@@ -17,6 +17,7 @@ import {
   CURRENCY,
   CountryCode,
   CustomFieldDefLike,
+  CUSTOM_FIELD_OPTIONS_REQUIRED,
   LEGAL_ENTITIES,
   Lookups,
   SalaryComponentDef,
@@ -189,6 +190,7 @@ export class EmployeeProfileService {
         options: (d.options as unknown as string[]) ?? [],
         isRequired: d.isRequired,
         isSensitive: d.isSensitive,
+        placeholder: d.placeholder,
         helpText: d.helpText,
       })),
       custom,
@@ -311,6 +313,7 @@ export class EmployeeProfileService {
       countryCode: d.countryCode,
       isRequired: d.isRequired,
       isSensitive: d.isSensitive,
+      placeholder: d.placeholder,
       helpText: d.helpText,
       isActive: d.isActive,
     }));
@@ -323,8 +326,9 @@ export class EmployeeProfileService {
     if (await this.prisma.customFieldDefinition.findUnique({ where: { code } })) {
       throw new ConflictException(`A custom field with code ${code} already exists`);
     }
-    const options = dto.fieldType === 'Dropdown' ? (dto.options ?? []).map((o) => o.trim()).filter(Boolean) : [];
-    if (dto.fieldType === 'Dropdown' && options.length === 0) throw new BadRequestException('A dropdown needs at least one option');
+    const needsOptions = CUSTOM_FIELD_OPTIONS_REQUIRED.includes(dto.fieldType as (typeof CUSTOM_FIELD_OPTIONS_REQUIRED)[number]);
+    const options = needsOptions ? (dto.options ?? []).map((o) => o.trim()).filter(Boolean) : [];
+    if (needsOptions && options.length === 0) throw new BadRequestException(`${dto.fieldType} needs at least one option`);
     const created = await this.prisma.customFieldDefinition.create({
       data: {
         code,
@@ -336,6 +340,7 @@ export class EmployeeProfileService {
         countryCode: dto.countryCode ?? 'ALL',
         isRequired: dto.isRequired ?? false,
         isSensitive: dto.isSensitive ?? false,
+        placeholder: dto.placeholder ?? null,
         helpText: dto.helpText ?? null,
         createdByProfileId: user.profileId,
       },
@@ -354,6 +359,7 @@ export class EmployeeProfileService {
         ...(dto.label !== undefined ? { label: dto.label.trim() } : {}),
         ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
         ...(dto.isRequired !== undefined ? { isRequired: dto.isRequired } : {}),
+        ...(dto.placeholder !== undefined ? { placeholder: dto.placeholder } : {}),
         ...(dto.helpText !== undefined ? { helpText: dto.helpText } : {}),
       },
     });
@@ -469,7 +475,8 @@ export class EmployeeProfileService {
       salaryTemplates: await this.salaryTemplatesFor(country),
       customFields: defs.map((d) => ({
         code: d.code, label: d.label, tabKey: d.tabKey, sectionName: d.sectionName, fieldType: d.fieldType,
-        options: (d.options as unknown as string[]) ?? [], isRequired: d.isRequired, isSensitive: d.isSensitive, helpText: d.helpText,
+        options: (d.options as unknown as string[]) ?? [], isRequired: d.isRequired, isSensitive: d.isSensitive,
+        placeholder: d.placeholder, helpText: d.helpText,
       })),
     };
   }

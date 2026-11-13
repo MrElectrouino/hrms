@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { EmailService } from '../common/services/email.service';
+import { SecurityConfigService } from '../common/services/security-config.service';
 import { generateSecureToken, sha256, desDecrypt } from '../common/utils/crypto.util';
 import { LoginDto } from './dto/login.dto';
 import { SessionService } from './session.service';
@@ -59,8 +60,6 @@ type VerifyResult = { valid: boolean; legacy: boolean };
 @Injectable()
 export class AuthService {
   private readonly bcryptRounds: number;
-  private readonly maxLoginAttempts: number;
-  private readonly lockoutMinutes: number;
   private readonly legacyDesKey?: string;
   private readonly legacyDesIv?: string;
   private dummyHash?: Promise<string>;
@@ -71,10 +70,9 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly email: EmailService,
     private readonly sessions: SessionService,
+    private readonly securityConfig: SecurityConfigService,
   ) {
     this.bcryptRounds = this.config.get<number>('app.security.bcryptRounds', 12);
-    this.maxLoginAttempts = this.config.get<number>('app.security.maxLoginAttempts', 5);
-    this.lockoutMinutes = this.config.get<number>('app.security.lockoutMinutes', 30);
     this.legacyDesKey = this.config.get<string>('LEGACY_DES_KEY');
     this.legacyDesIv = this.config.get<string>('LEGACY_DES_IV');
   }
@@ -310,7 +308,7 @@ export class AuthService {
       text: `Hi ${name},\n\nYou requested a password reset. Click the link below to set a new password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request this, please ignore this email.`,
       html: `<p>Hi ${escapeHtml(name)},</p>
 <p>You requested a password reset. Click the link below to set a new password:</p>
-<p><a href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</a></p>
+<p><Link href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</Link></p>
 <p>This link expires in 1 hour. If you did not request this, please ignore this email.</p>`,
     });
   }
@@ -478,15 +476,19 @@ export class AuthService {
   }
 
   private async recordFailedLogin(userId: number, now: Date, ip?: string): Promise<void> {
-    const existing = await this.prisma.userActivity.findUnique({ where: { userId } });
+    const [existing, maxLoginAttempts, lockoutMinutes] = await Promise.all([
+      this.prisma.userActivity.findUnique({ where: { userId } }),
+      this.securityConfig.getMaxLoginAttempts(),
+      this.securityConfig.getLockoutMinutes(),
+    ]);
 
     // A lock that has expired starts a fresh count, so one more typo does not re-lock at once.
     const lockExpired = !!existing?.lockedUntil && existing.lockedUntil <= now;
     const previous = lockExpired ? 0 : existing?.failedLoginAttempts ?? 0;
     const attempts = previous + 1;
-    const shouldLock = attempts >= this.maxLoginAttempts;
+    const shouldLock = attempts >= maxLoginAttempts;
     const lockedUntil = shouldLock
-      ? new Date(now.getTime() + this.lockoutMinutes * 60 * 1000)
+      ? new Date(now.getTime() + lockoutMinutes * 60 * 1000)
       : lockExpired
         ? null
         : existing?.lockedUntil ?? null;
@@ -516,7 +518,7 @@ export class AuthService {
         entityType: 'User',
         entityId: String(userId),
         ipAddress: ip,
-        metadata: { failedAttempts: attempts, lockoutMinutes: this.lockoutMinutes },
+        metadata: { failedAttempts: attempts, lockoutMinutes },
       });
     }
   }

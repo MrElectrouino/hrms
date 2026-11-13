@@ -45,8 +45,11 @@ Append-only. Each entry: ID, date, decision, rationale, status (proposed/approve
 - Decision: replicate weekly document-expiry alert job inside the API (with dedup), not a separate Windows service; revisit message-queue job infra only if justified.
 
 ## D-010 — Error/message code preservation
-- Date: 2026-10-28 · Status: **Proposed**
+- Date: 2026-10-28 · Status: **Approved — implemented** (update 2026-11-13)
 - Decision: new `error_catalog` seeded from `MessageView` semantics; UI messages keep legacy wording at cutover; numeric MessageIds mapped to stable string codes. Pending full MessageView content (DB-03).
+- Update 2026-11-13: implemented as Prisma model `Message` (table `messages`) — `prisma/schema.prisma`, legacy `MsgId` preserved as `id`, `code` is the NEW stable slug, `text`/`shortDesc` map to legacy `MessageText`/`DescriptionText`, `messageTypeId` maps to legacy `MessageTypeId` (7=Error, 8=Warning, 9=Success via the `Parameter` type-4 catalog). Seeded today from `prisma/seed.ts` `seedMessages()`: ids 2,4,5,6,7,8,9,10,11,12,19,20,23,24,25,28,30.
+- Evidence (user-supplied `MessageView` export, chat, 2026-11-13) adds 5 more legacy rows: MsgId 22 "Records Downloaded Successfully" (type 9 Success), 23 "Column is missing {{0}}" (type 7 Error, **already seeded**), 24 "Invalid data" (type 7 Error, **already seeded**), 25 "Mandatory fields missing" (type 7 Error, **already seeded**), 26 "All user should be Processed Together" (type 8 Warning, attendance-process context).
+- Open: ids **22** and **26** are new to the catalog and not yet in `seedMessages()` — need a `code` slug each (e.g. `RECORDS_DOWNLOADED`, `ATTENDANCE_PROCESS_ALL_TOGETHER`) before seeding. Full `MessageView` content is still not confirmed exhaustive (DB-03 not fully closed) — more rows may surface later; this entry should be appended to, not replaced, as they do.
 
 ## D-011 — Response/transport redesign
 - Date: 2026-10-28 · Status: **Proposed**

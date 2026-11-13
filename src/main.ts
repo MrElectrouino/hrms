@@ -1,3 +1,7 @@
+// Must load before anything else: PrismaService reads process.env at module
+// evaluation time (see src/prisma/prisma.service.ts), which happens before
+// Nest's ConfigModule.forRoot() runs.
+import 'dotenv/config';
 import './buffer-shim';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';

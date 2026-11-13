@@ -57,7 +57,7 @@ function Sparkline({ d, stroke, fill }: { d: string; stroke: string; fill: strin
 function Metric({
   label, value, trend, down, icon: Icon, tone, spark, sample,
 }: {
-  label: string; value: React.ReactNode; trend?: string; down?: boolean; icon: (p: IconProps) => JSX.Element;
+  label: string; value: React.ReactNode; trend?: string; down?: boolean; icon: (p: IconProps) => React.JSX.Element;
   tone: 'blue' | 'green' | 'indigo' | 'orange'; spark: { d: string; stroke: string; fill: string }; sample?: boolean;
 }) {
   const tones = {
@@ -88,7 +88,7 @@ function Metric({
   );
 }
 
-function Panel({ title, icon: Icon, right, children, className = '' }: { title: string; icon?: (p: IconProps) => JSX.Element; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
+function Panel({ title, icon: Icon, right, children, className = '' }: { title: string; icon?: (p: IconProps) => React.JSX.Element; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
     <section className={`min-w-0 rounded-xl border border-gray-200 bg-white px-6 py-[22px] shadow-sm ${className}`}>
       <div className="mb-3.5 flex items-center justify-between gap-2.5">
@@ -157,7 +157,7 @@ export default function DashboardPage() {
   };
   const allOk = apiHealth === 'ok' && dbHealth === 'ok';
 
-  const quick: Array<{ label: string; icon: (p: IconProps) => JSX.Element; href?: string; orange?: boolean; soonLabel?: string }> = [
+  const quick: Array<{ label: string; icon: (p: IconProps) => React.JSX.Element; href?: string; orange?: boolean; soonLabel?: string }> = [
     { label: 'Add Employee', icon: UserPlusIcon, href: '/employee-profile/new' },
     { label: 'Manage Leave', icon: CalendarIcon, soonLabel: 'Leave management' },
     { label: 'Process Payroll', icon: WalletIcon, orange: true, soonLabel: 'Payroll' },
@@ -225,11 +225,9 @@ export default function DashboardPage() {
         <div className="relative z-10">
           <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">Welcome back, {displayName}!</h1>
           <p className="mb-[18px] mt-1.5 text-sm text-blue-200 sm:text-base">Here&apos;s what&apos;s happening in your HR system today.</p>
-          <Link href="/employees">
-            <a className="inline-flex items-center gap-2 rounded-lg bg-white px-[18px] py-2.5 text-sm font-semibold text-blue-600 shadow-sm transition hover:bg-blue-50">
+          <Link href="/employees" className="inline-flex items-center gap-2 rounded-lg bg-white px-[18px] py-2.5 text-sm font-semibold text-blue-600 shadow-sm transition hover:bg-blue-50">
               View Employees <ArrowIcon className="h-4 w-4" />
-            </a>
-          </Link>
+            </Link>
         </div>
 
         {now && (
@@ -324,7 +322,9 @@ export default function DashboardPage() {
               );
               const cls = 'flex h-[104px] flex-col items-center justify-center gap-2.5 rounded-xl border border-gray-200 bg-white text-center text-[13px] font-medium text-gray-700 shadow-sm transition hover:border-blue-300 hover:text-gray-900 hover:shadow-md';
               return q.href ? (
-                <Link key={q.label} href={q.href}><a className={cls}>{body}</a></Link>
+                <Link key={q.label} href={q.href} className={cls}>
+                  {body}
+                </Link>
               ) : (
                 <button key={q.label} type="button" className={cls} onClick={soon(q.soonLabel ?? q.label)}>
                   {body}

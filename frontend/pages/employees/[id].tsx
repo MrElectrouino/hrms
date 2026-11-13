@@ -412,13 +412,15 @@ export default function EmployeeDetailPage() {
       {/* Breadcrumb + actions */}
       <div className="flex flex-wrap items-center gap-3">
         <nav className="text-sm text-gray-500" aria-label="Breadcrumb">
-          <Link href="/employees"><a className="hover:text-gray-700">Employees</a></Link>
+          <Link href="/employees" className="hover:text-gray-700">
+            Employees
+          </Link>
           <span className="mx-2 text-gray-300">/</span>
           <span className="font-medium text-gray-900">{isNew ? 'Add employee' : fullName || 'Employee'}</span>
         </nav>
         <div className="ml-auto flex gap-2">
-          <Link href="/employees">
-            <a className="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Back to list</a>
+          <Link href="/employees" className="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+            Back to list
           </Link>
         </div>
       </div>
@@ -721,8 +723,8 @@ export default function EmployeeDetailPage() {
                 {isNew ? 'Fill in Personal and Work, then create the employee. Documents and dependents open after saving.' : 'Saves Personal and Work together.'}
               </p>
               <div className="ml-auto flex gap-2">
-                <Link href="/employees">
-                  <a className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">Cancel</a>
+                <Link href="/employees" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                  Cancel
                 </Link>
                 <button type="button" onClick={handleSave} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60">
                   {saving ? 'Saving…' : isNew ? 'Create employee' : 'Save changes'}
