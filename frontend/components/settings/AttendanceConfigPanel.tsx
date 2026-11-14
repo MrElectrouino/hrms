@@ -18,6 +18,7 @@ import {
   saveAttendanceStatus,
   setBranchTimezone,
   unassignPolicy,
+  deletePolicy,
   updatePolicy,
 } from '../../lib/attendance-marking-api';
 import Drawer, { fieldClass } from '../Drawer';
@@ -226,6 +227,7 @@ export default function AttendanceConfigPanel() {
                 <div className="flex gap-3 text-sm">
                   <button type="button" onClick={() => startPolicy(p)} className="font-medium text-blue-600 hover:text-blue-800">Edit rules</button>
                   <button type="button" onClick={() => { setAssigning(p); setError(''); setAsg({ scope: 'COUNTRY', countryCode: cfg.countries[0]?.isoCode ?? '', branchId: '', employeeId: '', effectiveFrom: todayIso(), effectiveTo: '' }); }} className="font-medium text-blue-600 hover:text-blue-800">Assign</button>
+                  <button type="button" onClick={() => window.confirm(`Delete the policy "${p.name}" and its assignments?`) && run(() => deletePolicy(p.id), 'Policy deleted')} className="font-medium text-red-600 hover:text-red-800">Delete</button>
                 </div>
               </div>
               {p.assignments.length === 0 ? (

@@ -108,6 +108,7 @@ export const createPolicy = (p: PolicyPayload) => request<Policy>('/attendance-c
 export const updatePolicy = (id: number, p: PolicyPayload) => request<Policy>(`/attendance-config/policies/${id}`, { method: 'PUT', body: JSON.stringify(p) });
 export const assignPolicy = (id: number, p: { scope: string; countryCode?: string; branchId?: number; employeeId?: number; effectiveFrom: string; effectiveTo?: string }) =>
   request<unknown>(`/attendance-config/policies/${id}/assignments`, { method: 'POST', body: JSON.stringify(p) });
+export const deletePolicy = (id: number) => request<null>(`/attendance-config/policies/${id}`, { method: 'DELETE' });
 export const unassignPolicy = (assignmentId: number) => request<null>(`/attendance-config/assignments/${assignmentId}`, { method: 'DELETE' });
 export const addRamadan = (p: { countryCode: string; startDate: string; endDate: string }) => request<unknown>('/attendance-config/ramadan', { method: 'POST', body: JSON.stringify(p) });
 export const removeRamadan = (id: number) => request<null>(`/attendance-config/ramadan/${id}`, { method: 'DELETE' });

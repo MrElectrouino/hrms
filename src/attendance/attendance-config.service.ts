@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
@@ -103,6 +103,20 @@ export class AttendanceConfigService {
     const created = await this.prisma.attendancePolicyAssignment.create({ data: { policyId, ...where, effectiveFrom: from, effectiveTo: to } });
     await this.log(user, 'ATTENDANCE_POLICY_ASSIGNED', created.id, ip);
     return created;
+  }
+
+  /** Deletes a policy and its assignments. A policy that has already been applied to attendance days is kept: switch it off instead. */
+  async deletePolicy(id: number, user: CurrentUserPayload, ip?: string) {
+    const policy = await this.prisma.attendancePolicy.findUnique({ where: { id }, select: { id: true } });
+    if (!policy) throw new NotFoundException('Policy not found');
+    if ((await this.prisma.attendance.count({ where: { policyId: id } })) > 0) {
+      throw new ConflictException('This policy has already been applied to attendance, so it cannot be deleted. Switch it off instead.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.attendancePolicyAssignment.deleteMany({ where: { policyId: id } }),
+      this.prisma.attendancePolicy.delete({ where: { id } }),
+    ]);
+    await this.log(user, 'ATTENDANCE_POLICY_DELETED', id, ip);
   }
 
   async removeAssignment(id: number, user: CurrentUserPayload, ip?: string) {

@@ -128,6 +128,11 @@ export class AttendanceConfigController {
   async updatePolicy(@Param('id', ParseIntPipe) id: number, @Body() dto: PolicyDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     return ok(await this.service.savePolicy(id, dto, u, ip), 'Policy saved');
   }
+  @Delete('policies/:id')
+  async deletePolicy(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    await this.service.deletePolicy(id, u, ip);
+    return ok(null, 'Policy deleted');
+  }
   @Post('policies/:id/assignments')
   async assign(@Param('id', ParseIntPipe) id: number, @Body() dto: AssignmentDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     return ok(await this.service.addAssignment(id, dto, u, ip), 'Policy assigned');
