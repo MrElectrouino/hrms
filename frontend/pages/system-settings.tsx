@@ -3,7 +3,7 @@ import { useAuth } from '../lib/auth';
 import { SystemConfigurationItem, getSystemConfigurations, updateSystemConfiguration } from '../lib/api';
 
 // Regional Settings (planning/system_application_module.md §B) are seeded as ids 26-32,
-// Security Configuration (§I) as 33-35; everything else is general application config (§F).
+// Security Configuration (§I) as 33-35.
 const REGIONAL_IDS = new Set([26, 27, 28, 29, 30, 31, 32]);
 const SECURITY_IDS = new Set([33, 34, 35]);
 
@@ -15,7 +15,7 @@ export default function SystemSettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'regional' | 'general' | 'security'>('regional');
+  const [tab, setTab] = useState<'regional' | 'security'>('regional');
 
   const isSystemAdmin = user?.userTypeId === 3;
 
@@ -64,8 +64,7 @@ export default function SystemSettingsPage() {
   const inputClass = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30';
   const regional = items.filter((i) => REGIONAL_IDS.has(i.id));
   const security = items.filter((i) => SECURITY_IDS.has(i.id));
-  const general = items.filter((i) => !REGIONAL_IDS.has(i.id) && !SECURITY_IDS.has(i.id));
-  const shown = tab === 'regional' ? regional : tab === 'security' ? security : general;
+  const shown = tab === 'regional' ? regional : security;
 
   return (
     <div className="space-y-6">
@@ -93,13 +92,6 @@ export default function SystemSettingsPage() {
           className={`px-4 py-2 text-sm font-medium ${tab === 'security' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
         >
           Security
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('general')}
-          className={`px-4 py-2 text-sm font-medium ${tab === 'general' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          Application configuration
         </button>
       </div>
 
