@@ -5,34 +5,37 @@ separate from the legacy repository (`D:\.net\hrms`), which remains a **read-onl
 
 ## Current status
 
-**Phase 0 / Phase 1 (Discovery & Planning)** — in progress. No implementation code exists here yet.
+Implementation is well under way. Built: employee profile, administration and system settings, branches and countries, attendance, leave (types and entitlement policies), dashboard and notifications. Payroll is not started.
 
-## Target technology stack (planned, not yet implemented)
+Start here:
 
-| Layer | Current (legacy) | Target |
-|---|---|---|
-| Backend | .NET Framework 4.5.2 / ASP.NET Core 1.0-preview2 hybrid + EF6 database-first | NestJS (Express adapter), TypeScript |
-| Frontend | Angular 7.1 SPA | Next.js (TypeScript) |
-| Database | Microsoft SQL Server | PostgreSQL |
-| ORM | Entity Framework 6.1.3 + EDMX + stored procedures | Prisma |
+- `planning/SESSION_NOTES.md` : what is built, decisions, known gaps, how to carry the work to another PC.
+- `planning/COMPANY_SETUP_GUIDE.md` : install and configure the application for a company.
+- `planning/AGENTS.md` : mandatory rules for AI coding agents.
+
+## Technology
+
+| Layer | Technology |
+|---|---|
+| Backend | NestJS 12 (TypeScript, ESM), Prisma 7 |
+| Database | PostgreSQL |
+| Frontend | Next.js 16 (pages router), React 19, Tailwind 3 |
+| Tests | Jest (`npm test`) |
 
 ## Directory layout
 
 ```
-planning/          All discovery, architecture, and migration planning documents
-  AGENTS.md          Mandatory instructions for future AI coding agents
-  PROGRESS.md        Living status report (evidence-based)
-  TASKS.md           Task backlog with IDs, status, and acceptance criteria
-  SYSTEM_OVERVIEW.md Legacy system architecture inventory
-  MODULE_INVENTORY.md Feature inventory for the three Phase-1 modules
-  BUSINESS_RULES.md  Confirmed business rules (with evidence paths)
-  DATABASE_DISCOVERY.md Read-only database findings + SS->PG type mapping
-  TARGET_ARCHITECTURE.md Proposed target architecture (proposal)
-  DATA_MIGRATION_PLAN.md SQL Server -> PostgreSQL migration strategy (draft)
-  SECURITY_REVIEW.md Security findings and risks of the legacy system
-  TEST_STRATEGY.md   Testing approach (proposal)
-  DECISIONS.md       Architecture decision records
-  OPEN_QUESTIONS.md  Questions needing business/technical clarification
+src/               NestJS API (one folder per module)
+prisma/            schema, migrations, seed
+frontend/          Next.js website
+planning/          living project documents
+  AGENTS.md          rules for AI coding agents
+  PROGRESS.md        status log
+  TASKS.md           task backlog
+  DECISIONS.md       decision records
+  SESSION_NOTES.md   handover notes
+  COMPANY_SETUP_GUIDE.md  install and company setup
+  attendance_marking_plan.md, leave_entitlement_requirements.md, system_application_module.md  design notes
 ```
 
 ## Golden rules (see `planning/AGENTS.md` for full text)

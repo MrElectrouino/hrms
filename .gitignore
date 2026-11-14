@@ -32,3 +32,6 @@ Thumbs.db
 
 # uploaded employee files (local dev storage) — never commit
 private-storage/
+
+# handover bundle (zip, db dump, git bundle): carried by hand
+handover/
