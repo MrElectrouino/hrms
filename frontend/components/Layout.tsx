@@ -86,6 +86,9 @@ const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/modules', label: 'Modules', roles: [UserType.SystemAdmin] },
 ];
 
+/** Pages that work without signing in. Every other page sends a signed-out visitor to /login. */
+const PUBLIC_PATHS = ['/login', '/reset-password'];
+
 /** Own top-level menu, System Admin only. */
 const SYSTEM_SETTINGS_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/system-settings', label: 'General settings', roles: [UserType.SystemAdmin] },
@@ -185,7 +188,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return () => router.events.off('routeChangeStart', close);
   }, [router.events]);
 
-  if (isLoading) {
+  const publicPage = PUBLIC_PATHS.includes(router.pathname);
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && !publicPage) router.replace('/login');
+  }, [isLoading, isAuthenticated, publicPage, router]);
+
+  if (isLoading || (!isAuthenticated && !publicPage)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
