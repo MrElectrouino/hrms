@@ -41,7 +41,8 @@ export default function LeaveConfigPage() {
     setSaving(true);
     setError('');
     try {
-      const payload = { ...f, annualDays: Number(f.annualDays), maxDaysPerRequest: f.maxDaysPerRequest ? Number(f.maxDaysPerRequest) : null };
+      const { id: _id, sortOrder: _sort, ...fields } = f as typeof f & { id?: number; sortOrder?: number };
+      const payload = { ...fields, annualDays: Number(f.annualDays), maxDaysPerRequest: f.maxDaysPerRequest ? Number(f.maxDaysPerRequest) : null };
       if (editing.id === null) await createLeaveType(payload);
       else await updateLeaveType(editing.id, payload);
       setEditing(null);
