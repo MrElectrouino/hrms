@@ -82,7 +82,10 @@ export class AttendanceService {
       if (b) return b.timezone;
     }
     const c = await this.prisma.country.findUnique({ where: { isoCode: country }, select: { defaultTimezone: true } });
-    return c?.defaultTimezone || 'UTC';
+    if (c?.defaultTimezone) return c.defaultTimezone;
+    // No country row: use the company timezone from General settings.
+    const setting = await this.prisma.systemConfiguration.findUnique({ where: { name: 'Default Timezone' }, select: { value: true } });
+    return setting?.value || 'UTC';
   }
 
   async context(employeeId: number, date: Date): Promise<DayContext> {

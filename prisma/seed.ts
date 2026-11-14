@@ -11,9 +11,7 @@ async function main() {
   await seedSystemConfigurations();
   await seedUserTypes();
   await seedRoles();
-  await seedDocumentTypes();
   await seedMenuItems();
-  await seedCountries();
   await seedModuleConfigurations();
 }
 
@@ -224,31 +222,6 @@ async function seedMessages() {
 
 async function seedSystemConfigurations() {
   const configs: Array<{ id: number; name: string; value?: string; valueDate?: Date; valueKind: string; description?: string }> = [
-    { id: 1, name: 'CompOff Leave Expiry', value: '90', valueKind: 'number', description: 'Days after which comp-off leave expires' },
-    { id: 2, name: 'CompOff Request Expiry', value: '30', valueKind: 'number', description: 'Days after which comp-off request expires' },
-    { id: 3, name: 'AnnualLeave Exception Months', value: '0', valueKind: 'number', description: 'Annual leave exception months' },
-    { id: 4, name: 'CompOffAvail Exception days', value: '5,6,7', valueKind: 'string', description: 'Days on which comp-off can be availed' },
-    { id: 5, name: 'WeekOffdays for Operation', value: '1', valueKind: 'number', description: 'Weekly off days for operations' },
-    { id: 6, name: 'HalfDay Min work hours', value: '0', valueKind: 'number', description: 'Minimum work hours for half day' },
-    { id: 7, name: 'Full Day Min work hours', value: '8', valueKind: 'number', description: 'Minimum work hours for full day' },
-    { id: 8, name: 'Break Time In Min-Upload', value: '30', valueKind: 'number', description: 'Break time in minutes for upload' },
-    { id: 9, name: 'Break Time In Min-ERP', value: '30', valueKind: 'number', description: 'Break time in minutes for ERP' },
-    { id: 10, name: 'Attendance Sync Date', value: '1', valueKind: 'number', description: 'Attendance sync date' },
-    { id: 11, name: 'PayrollMonth', value: '6', valueKind: 'number', description: 'Payroll month' },
-    { id: 12, name: 'IsHrAdminAvailable', value: '1', valueKind: 'number', description: 'Is HR admin available' },
-    // Config 13 (PayrollPassword) is a secret and is intentionally NOT seeded (SEC-L-19).
-    { id: 14, name: 'OTRequired', value: '1', valueKind: 'number', description: 'OT required' },
-    { id: 15, name: 'LeaveEncashment', value: '1', valueKind: 'number', description: 'Leave encashment enabled' },
-    { id: 16, name: 'GratuityDate', value: '2000-01-01', valueKind: 'date', description: 'Gratuity date' },
-    { id: 17, name: 'CompOffAvail Exception days Site1', value: '5,6', valueKind: 'string', description: 'Comp-off availing exception days for site 1' },
-    { id: 18, name: 'CompOffAvail Exception days Site2', value: '6,7', valueKind: 'string', description: 'Comp-off availing exception days for site 2' },
-    { id: 19, name: 'Family Airfare required', value: '1', valueKind: 'number', description: 'Family airfare required' },
-    { id: 20, name: 'MaxNoOfFamilyMembers', value: '4', valueKind: 'number', description: 'Maximum number of family members' },
-    { id: 21, name: 'Deduction Perccentage', value: '20', valueKind: 'number', description: 'Deduction percentage' },
-    { id: 22, name: 'Full day work minutes', value: '480', valueKind: 'number', description: 'Full day work minutes' },
-    { id: 23, name: 'Minimum days to apply sandwitch rule', value: '2', valueKind: 'number', description: 'Minimum days to apply sandwich rule' },
-    { id: 24, name: 'RamadanDates', value: '2026-02-18', valueDate: new Date('2026-03-19'), valueKind: 'date', description: 'Ramadan end date' },
-    { id: 25, name: 'Annual Leave Validation', value: '0', valueKind: 'number', description: 'Annual leave validation' },
     // 26+ are NEW (System Admin > Regional Settings, planning/system_application_module.md §B) —
     // not legacy rows. Values are placeholders; System Admin sets them via /system-configurations.
     { id: 26, name: 'Default Country', value: 'AE', valueKind: 'string', description: 'Default country for new employees/organizations' },
@@ -291,10 +264,6 @@ async function seedSystemConfigurations() {
 
 async function seedUserTypes() {
   const types = [
-    { id: 1, name: 'Executive', order: 1 },
-    { id: 2, name: 'Manager', order: 2 },
-    { id: 3, name: 'SystemAdmin', order: 3 },
-    { id: 4, name: 'HRAdmin', order: 4 },
   ];
 
   for (const t of types) {
@@ -309,9 +278,6 @@ async function seedUserTypes() {
 async function seedRoles() {
   // D-016: legacy duplicate "Admin" rows are deduplicated here.
   const roles = [
-    { id: 1, name: 'Admin' },
-    { id: 2, name: 'Manager' },
-    { id: 3, name: 'Employee' },
   ];
 
   for (const r of roles) {
@@ -323,47 +289,15 @@ async function seedRoles() {
   }
 }
 
-async function seedDocumentTypes() {
-  const types = [
-    { id: 1, name: 'Passport' },
-    { id: 2, name: 'Work Permit' },
-    { id: 3, name: 'Emirates Id' },
-    { id: 4, name: 'Health Insurance' },
-    { id: 5, name: 'Trade License' },
-    { id: 6, name: 'Driving License' },
-    { id: 106, name: 'nol' },
-    { id: 107, name: 'Visa' },
-    { id: 108, name: 'Traffic Fine' },
-    { id: 109, name: 'Warning Letter' },
-    { id: 110, name: 'Accident Document' },
-  ];
-
-  for (const t of types) {
-    await prisma.documentType.upsert({
-      where: { id: t.id },
-      create: { id: t.id, name: t.name },
-      update: { name: t.name },
-    });
-  }
-}
-
 async function seedMenuItems() {
   // Phase-1 relevant menu tree subset extracted from legacy menu catalog.
   const items: Array<{ id: number; name: string; parentId?: number; pageUrl?: string; iconClass?: string; displayOrder: number; isMainMenu: boolean; isActive: boolean }> = [
     // Root menus first
     { id: 37, name: 'Profile', iconClass: 'fa fa-book', displayOrder: 1, isMainMenu: true, isActive: true },
     { id: 155, name: 'Profile', displayOrder: 2, isMainMenu: true, isActive: true },
-    { id: 2, name: 'Master Setup', iconClass: 'fa fa-cogs', displayOrder: 2, isMainMenu: true, isActive: true },
     // Children of Profile (37)
-    { id: 1, name: 'Employee List', parentId: 37, pageUrl: '/profilelist', iconClass: 'fa fa-users', displayOrder: 1, isMainMenu: true, isActive: true },
-    { id: 12, name: 'Document List', parentId: 37, pageUrl: '/documentlist', iconClass: 'fa fa-folder-open-o', displayOrder: 2, isMainMenu: true, isActive: true },
     { id: 156, name: 'My Profile', parentId: 37, pageUrl: '/myprofile', iconClass: 'fa fa-user-secret', displayOrder: 3, isMainMenu: true, isActive: true },
     // Children of Master Setup (2)
-    { id: 3, name: 'Language', parentId: 2, displayOrder: 1, isMainMenu: false, isActive: true },
-    { id: 4, name: 'Role', parentId: 2, displayOrder: 2, isMainMenu: false, isActive: true },
-    { id: 6, name: 'Department', parentId: 2, displayOrder: 3, isMainMenu: false, isActive: true },
-    { id: 7, name: 'Site', parentId: 2, displayOrder: 4, isMainMenu: false, isActive: true },
-    { id: 21, name: 'Document Type', parentId: 2, displayOrder: 5, isMainMenu: false, isActive: true },
     // Children of Profile (155)
     { id: 146, name: 'Basic & Work Details', parentId: 155, displayOrder: 1, isMainMenu: false, isActive: true },
     { id: 147, name: 'Document', parentId: 155, displayOrder: 2, isMainMenu: false, isActive: true },
@@ -379,34 +313,18 @@ async function seedMenuItems() {
   }
 }
 
-/** NEW — System Admin > Country Configuration (planning/system_application_module.md §D). */
-async function seedCountries() {
-  const countries = [
-    { isoCode: 'IN', name: 'India', currencyCode: 'INR', defaultTimezone: 'Asia/Kolkata', defaultLanguage: 'en', dateFormat: 'DD/MM/YYYY' },
-    { isoCode: 'AE', name: 'United Arab Emirates', currencyCode: 'AED', defaultTimezone: 'Asia/Dubai', defaultLanguage: 'en', dateFormat: 'DD/MM/YYYY' },
-  ];
-
-  for (const c of countries) {
-    await prisma.country.upsert({
-      where: { isoCode: c.isoCode },
-      create: c,
-      update: c,
-    });
-  }
-}
-
 /**
  * NEW — System Admin > Module Configuration (planning/system_application_module.md §G).
- * Only user-management, employee-management and document-management are actually built
- * (isImplemented: true); the rest are placeholders for modules not yet implemented.
+ * User, employee, document, leave and attendance management are built (isImplemented: true);
+ * the rest are placeholders for modules not yet implemented.
  */
 async function seedModuleConfigurations() {
   const modules = [
     { moduleKey: 'user-management', name: 'User Management', isEnabled: true, isImplemented: true, dependsOn: [], order: 1 },
     { moduleKey: 'employee-management', name: 'Employee Management', isEnabled: true, isImplemented: true, dependsOn: ['user-management'], order: 2 },
     { moduleKey: 'document-management', name: 'Document Management', isEnabled: true, isImplemented: true, dependsOn: ['employee-management'], order: 3 },
-    { moduleKey: 'leave-management', name: 'Leave Management', isEnabled: false, isImplemented: false, dependsOn: ['employee-management'], order: 4 },
-    { moduleKey: 'attendance-management', name: 'Attendance Management', isEnabled: false, isImplemented: false, dependsOn: ['employee-management'], order: 5 },
+    { moduleKey: 'leave-management', name: 'Leave Management', isEnabled: true, isImplemented: true, dependsOn: ['employee-management'], order: 4 },
+    { moduleKey: 'attendance-management', name: 'Attendance Management', isEnabled: true, isImplemented: true, dependsOn: ['employee-management'], order: 5 },
     { moduleKey: 'payroll-management', name: 'Payroll Management', isEnabled: false, isImplemented: false, dependsOn: ['employee-management', 'attendance-management'], order: 6 },
     { moduleKey: 'leave-salary', name: 'Leave Salary', isEnabled: false, isImplemented: false, dependsOn: ['leave-management', 'payroll-management'], order: 7 },
     { moduleKey: 'full-final-settlement', name: 'Full & Final Settlement', isEnabled: false, isImplemented: false, dependsOn: ['payroll-management'], order: 8 },
