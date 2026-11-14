@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { DashboardSummary, getDashboard } from '../lib/dashboard-api';
 
@@ -27,9 +28,14 @@ const Stat = ({ label, value, href, tone = 'text-gray-900' }: { label: string; v
 
 /** Home page: what matters today for this person, from live records. */
 export default function Dashboard() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) router.replace('/login');
+  }, [isLoading, isAuthenticated, router]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
