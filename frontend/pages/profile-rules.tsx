@@ -1,18 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { ProfileRule, ProfileRuleCatalog, getProfileRules, resetProfileRules, saveProfileRules } from '../lib/api';
+import { ProfileRule, ProfileRuleCatalog, getProfileRules, getSystemConfigurations, resetProfileRules, saveProfileRules } from '../lib/api';
 
 const COUNTRY_NAMES: Record<string, string> = { IN: 'India', AE: 'UAE', GB: 'United Kingdom', US: 'United States' };
 
 type Override = { isVisible: boolean | null; isRequired: boolean | null };
 const keyOf = (s: string, g: string, f: string) => `${s}|${g}|${f}`;
 
-/** Per-country control of which profile tabs, groups and fields appear, and which fields are required. */
+/** Which profile tabs, groups and fields appear, and which are required, for the company country (Default Country in System settings). */
 export default function ProfileRulesPage() {
   const { isAuthenticated, user } = useAuth();
   const isSystemAdmin = user?.userTypeId === 3;
 
-  const [country, setCountry] = useState('IN');
+  const [country, setCountry] = useState('');
   const [catalog, setCatalog] = useState<ProfileRuleCatalog | null>(null);
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
   const [saved, setSaved] = useState<Record<string, Override>>({});
@@ -40,10 +40,17 @@ export default function ProfileRulesPage() {
     }
   };
 
+  // The company has one country: the Default Country setting.
   useEffect(() => {
-    if (isAuthenticated && isSystemAdmin) load(country);
-    else if (isAuthenticated) setLoading(false);
-  }, [isAuthenticated, isSystemAdmin, country]);
+    if (!isAuthenticated) return;
+    if (!isSystemAdmin) { setLoading(false); return; }
+    getSystemConfigurations()
+      .then((r) => setCountry(r.data.find((i) => i.name === 'Default Country')?.value || 'AE'))
+      .catch(() => setCountry('AE'));
+  }, [isAuthenticated, isSystemAdmin]);
+  useEffect(() => {
+    if (country) load(country);
+  }, [country]);
 
   const dirty = useMemo(() => JSON.stringify(overrides) !== JSON.stringify(saved), [overrides, saved]);
 
@@ -60,12 +67,6 @@ export default function ProfileRulesPage() {
   // Setting a value equal to the code default clears the override, so only real changes are stored.
   const setVisible = (k: string, value: boolean, def: boolean) => setOv(k, { isVisible: value === def ? null : value });
   const setRequired = (k: string, value: boolean, def: boolean) => setOv(k, { isRequired: value === def ? null : value });
-
-  const changeCountry = (c: string) => {
-    if (dirty && !window.confirm('Discard unsaved changes?')) return;
-    setCountry(c);
-    setNotice('');
-  };
 
   const save = async () => {
     setSaving(true);
@@ -114,23 +115,14 @@ export default function ProfileRulesPage() {
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Profile rules</h2>
         <p className="mt-1 text-gray-500">
-          Choose, for each country, which employee profile tabs, groups and fields appear and which fields are required. Fields marked
+          Choose which employee profile tabs, groups and fields appear and which fields are required. Fields marked
           <span className="mx-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs">default</span>
-          follow the built-in country layout.
+          follow the built-in layout for your company country. To change the country, use Default Country in System settings.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {(catalog?.countries ?? ['IN', 'AE', 'GB', 'US']).map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => changeCountry(c)}
-            className={`rounded-lg border px-4 py-2 text-sm font-medium ${c === country ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
-          >
-            {COUNTRY_NAMES[c] ?? c}
-          </button>
-        ))}
+        {country && <span className="rounded-lg border border-blue-600 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">{COUNTRY_NAMES[country] ?? country}</span>}
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={reset} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Reset to defaults</button>
           <button type="button" onClick={save} disabled={!dirty || saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">
