@@ -11,6 +11,7 @@ async function main() {
   await seedParameterTypesAndParameters();
   await seedMessages();
   await seedSystemConfigurations();
+  await seedCompanyProfile();
   await seedUserTypes();
   await seedSystemAdmin();
   await seedRoles();
@@ -261,6 +262,33 @@ async function seedSystemConfigurations() {
         valueKind: c.valueKind,
         description: c.description ?? null,
       },
+    });
+  }
+}
+
+/**
+ * NEW — System Admin > Company: the company's own details. Created empty; the seed never overwrites
+ * what an administrator has typed in (only the description is refreshed).
+ */
+async function seedCompanyProfile() {
+  const rows: Array<{ id: number; name: string; valueKind: string; description: string }> = [
+    { id: 36, name: 'Company Name', valueKind: 'string', description: 'The name the company trades under' },
+    { id: 37, name: 'Legal Name', valueKind: 'string', description: 'Registered legal name, if different' },
+    { id: 38, name: 'Trade Licence Number', valueKind: 'string', description: 'Trade or business licence number' },
+    { id: 39, name: 'Trade Licence Issuing Authority', valueKind: 'string', description: 'Authority that issued the licence' },
+    { id: 40, name: 'Trade Licence Expiry Date', valueKind: 'date', description: 'System Admin is reminded before this date' },
+    { id: 41, name: 'Company Registration Number', valueKind: 'string', description: 'Company registration or incorporation number' },
+    { id: 42, name: 'Tax Registration Number', valueKind: 'string', description: 'Tax, VAT or GST registration number' },
+    { id: 43, name: 'Company Address', valueKind: 'string', description: 'Registered office address' },
+    { id: 44, name: 'Company Phone', valueKind: 'string', description: 'Main company phone number' },
+    { id: 45, name: 'Company Email', valueKind: 'string', description: 'Main company email address' },
+    { id: 46, name: 'Company Website', valueKind: 'string', description: 'Company website' },
+  ];
+  for (const r of rows) {
+    await prisma.systemConfiguration.upsert({
+      where: { id: r.id },
+      create: { id: r.id, name: r.name, value: null, valueKind: r.valueKind, description: r.description },
+      update: { description: r.description },
     });
   }
 }

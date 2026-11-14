@@ -6,6 +6,10 @@ import { CountryItem, SystemConfigurationItem, createCountry, getCountries, getS
 // Security Configuration (§I) as 33-35.
 const REGIONAL_IDS = new Set([26, 27, 28, 29, 30, 31, 32]);
 const SECURITY_IDS = new Set([33, 34, 35]);
+// Company details (name, licence, registration, contact) are ids 36-46.
+const COMPANY_IDS = new Set([36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]);
+const WIDE = new Set(['Company Address']);
+const daysUntil = (iso: string) => Math.round((new Date(`${iso}T00:00:00Z`).getTime() - Date.now()) / 86_400_000);
 
 /** Settings with a fixed list of valid values are shown as a dropdown. */
 const CHOICES: Record<string, { value: string; label: string }[]> = {
@@ -26,7 +30,7 @@ export default function SystemSettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'regional' | 'security' | 'countries'>('regional');
+  const [tab, setTab] = useState<'company' | 'regional' | 'security' | 'countries'>('company');
   const [countries, setCountries] = useState<CountryItem[]>([]);
 
   const isSystemAdmin = user?.userTypeId === 3;
@@ -50,7 +54,7 @@ export default function SystemSettingsPage() {
     else if (isAuthenticated) setLoading(false);
   }, [isAuthenticated, isSystemAdmin]);
 
-  const shown = tab === 'countries' ? [] : items.filter((i) => (tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
+  const shown = tab === 'countries' ? [] : items.filter((i) => (tab === 'company' ? COMPANY_IDS : tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
   const changed = shown.filter((i) => (drafts[i.id] ?? '') !== (i.value ?? ''));
 
   /** One Save for the whole tab: only the settings that changed are sent. */
@@ -103,7 +107,7 @@ export default function SystemSettingsPage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-2 border-b border-gray-200">
-        {([['regional', 'Regional settings'], ['countries', 'Countries'], ['security', 'Security']] as const).map(([key, label]) => (
+        {([['company', 'Company'], ['countries', 'Countries'], ['regional', 'Regional settings'], ['security', 'Security']] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -134,15 +138,22 @@ export default function SystemSettingsPage() {
               const value = drafts[item.id] ?? '';
               const set = (v: string) => setDrafts((d) => ({ ...d, [item.id]: v }));
               return (
-                <label key={item.id} className="block text-sm font-medium text-gray-700">
+                <label key={item.id} className={`block text-sm font-medium text-gray-700 ${WIDE.has(item.name) ? 'md:col-span-2' : ''}`}>
                   {item.name}
                   {choices ? (
                     <select className={inputClass} value={value} onChange={(e) => set(e.target.value)}>
                       {!choices.some((c) => c.value === value) && <option value={value}>{value || 'Select…'}</option>}
                       {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
+                  ) : WIDE.has(item.name) ? (
+                    <textarea className={inputClass} rows={3} maxLength={500} value={value} onChange={(e) => set(e.target.value)} />
                   ) : (
-                    <input className={inputClass} inputMode={NUMERIC.has(item.name) ? 'numeric' : undefined} value={value} onChange={(e) => set(e.target.value)} />
+                    <input className={inputClass} type={item.valueKind === 'date' ? 'date' : 'text'} inputMode={NUMERIC.has(item.name) ? 'numeric' : undefined} value={value} onChange={(e) => set(e.target.value)} />
+                  )}
+                  {item.valueKind === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(value) && daysUntil(value) <= 60 && (
+                    <span className={`mt-1 block text-xs font-semibold ${daysUntil(value) < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                      {daysUntil(value) < 0 ? `Expired ${-daysUntil(value)} day${daysUntil(value) === -1 ? '' : 's'} ago` : `Expires in ${daysUntil(value)} day${daysUntil(value) === 1 ? '' : 's'}`}
+                    </span>
                   )}
                   {item.description && <span className="mt-1 block text-xs font-normal text-gray-500">{item.description}</span>}
                 </label>

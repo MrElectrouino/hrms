@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { HR_USER_TYPES } from '../common/guards/hr-write.guard';
+import { UserType } from '../common/constants/user-types';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (s: string, n: number) => iso(new Date(new Date(`${s}T00:00:00Z`).getTime() + n * 86_400_000));
@@ -176,6 +177,13 @@ export class DashboardService {
     if (this.isHr(u)) {
       const h = await this.hrNumbers(u, today, todayStr);
       if (h.documentsExpiring || h.documentsExpired) out.push({ id: 'docs', kind: 'DOCUMENT_EXPIRING', title: `${h.documentsExpired} expired, ${h.documentsExpiring} expiring documents`, detail: 'Expiring within 30 days', href: '/documents', at: nowIso });
+    }
+    if (u.userTypeId === UserType.SystemAdmin) {
+      const lic = await this.prisma.systemConfiguration.findUnique({ where: { name: 'Trade Licence Expiry Date' }, select: { value: true } });
+      if (lic?.value && /^\d{4}-\d{2}-\d{2}$/.test(lic.value)) {
+        const days = Math.round((day(lic.value).getTime() - today.getTime()) / 86_400_000);
+        if (days <= 60) out.push({ id: 'licence', kind: 'DOCUMENT_EXPIRING', title: days < 0 ? `Trade licence expired on ${lic.value}` : days === 0 ? 'Trade licence expires today' : `Trade licence expires in ${days} day${days === 1 ? '' : 's'} (${lic.value})`, detail: 'Renew it and update the date in System settings, Company', href: '/system-settings', at: nowIso });
+      }
     }
     return out.sort((a, b) => b.at.localeCompare(a.at));
   }

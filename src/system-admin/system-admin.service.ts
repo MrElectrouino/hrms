@@ -69,6 +69,9 @@ export class SystemAdminService {
     const existing = await this.prisma.systemConfiguration.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Configuration not found');
     await this.assertKnownValue(existing.name, dto.value);
+    if (existing.valueKind === 'date' && dto.value && !/^\d{4}-\d{2}-\d{2}$/.test(dto.value)) {
+      throw new BadRequestException(`"${existing.name}" must be a date (YYYY-MM-DD)`);
+    }
     const updated = await this.prisma.systemConfiguration.update({
       where: { id },
       data: {
