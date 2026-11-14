@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL_UNPOOLED });
 const prisma = new PrismaClient({ adapter });
@@ -10,6 +12,7 @@ async function main() {
   await seedMessages();
   await seedSystemConfigurations();
   await seedUserTypes();
+  await seedSystemAdmin();
   await seedRoles();
   await seedMenuItems();
   await seedModuleConfigurations();
@@ -264,6 +267,10 @@ async function seedSystemConfigurations() {
 
 async function seedUserTypes() {
   const types = [
+    { id: 1, name: 'Executive', order: 1 },
+    { id: 2, name: 'Manager', order: 2 },
+    { id: 3, name: 'SystemAdmin', order: 3 },
+    { id: 4, name: 'HRAdmin', order: 4 },
   ];
 
   for (const t of types) {
@@ -275,9 +282,37 @@ async function seedUserTypes() {
   }
 }
 
+/**
+ * The first System Administrator. A fresh database has no users and the app has no self-registration.
+ * Username: ADMIN_USERNAME (default "admin"). Password: ADMIN_PASSWORD, or a random one printed once
+ * (and the user must change it at first login). Existing users are left alone.
+ */
+async function seedSystemAdmin() {
+  const username = (process.env.ADMIN_USERNAME ?? 'admin').trim().toLowerCase();
+  if (username.length < 3 || username.length > 50) throw new Error('ADMIN_USERNAME must be 3-50 characters');
+  if (await prisma.user.findUnique({ where: { username } })) {
+    console.log(`System admin "${username}" already exists, left unchanged.`);
+    return;
+  }
+  const given = process.env.ADMIN_PASSWORD ?? '';
+  if (given && !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,128}$/.test(given)) {
+    throw new Error('ADMIN_PASSWORD must be 8-128 characters with upper, lower, digit and special characters');
+  }
+  const password = given || `${randomBytes(9).toString('base64url')}aA1!`;
+  const passwordHash = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS ?? '12', 10));
+  await prisma.$transaction(async (tx) => {
+    const profile = await tx.profile.create({ data: { name: process.env.ADMIN_NAME?.trim() || 'System Admin', email: process.env.ADMIN_EMAIL?.trim() || null, isSiteAccess: true } });
+    await tx.user.create({ data: { username, passwordHash, userTypeId: 3, profileId: profile.id, isActive: true, mustChangePassword: !given } });
+  });
+  console.log(`Created System Admin "${username}".${given ? '' : ` Temporary password (shown once, must be changed at first login): ${password}`}`);
+}
+
 async function seedRoles() {
   // D-016: legacy duplicate "Admin" rows are deduplicated here.
   const roles = [
+    { id: 1, name: 'Admin' },
+    { id: 2, name: 'Manager' },
+    { id: 3, name: 'Employee' },
   ];
 
   for (const r of roles) {
@@ -295,9 +330,17 @@ async function seedMenuItems() {
     // Root menus first
     { id: 37, name: 'Profile', iconClass: 'fa fa-book', displayOrder: 1, isMainMenu: true, isActive: true },
     { id: 155, name: 'Profile', displayOrder: 2, isMainMenu: true, isActive: true },
+    { id: 2, name: 'Master Setup', iconClass: 'fa fa-cogs', displayOrder: 2, isMainMenu: true, isActive: true },
     // Children of Profile (37)
+    { id: 1, name: 'Employee List', parentId: 37, pageUrl: '/profilelist', iconClass: 'fa fa-users', displayOrder: 1, isMainMenu: true, isActive: true },
+    { id: 12, name: 'Document List', parentId: 37, pageUrl: '/documentlist', iconClass: 'fa fa-folder-open-o', displayOrder: 2, isMainMenu: true, isActive: true },
     { id: 156, name: 'My Profile', parentId: 37, pageUrl: '/myprofile', iconClass: 'fa fa-user-secret', displayOrder: 3, isMainMenu: true, isActive: true },
     // Children of Master Setup (2)
+    { id: 3, name: 'Language', parentId: 2, displayOrder: 1, isMainMenu: false, isActive: true },
+    { id: 4, name: 'Role', parentId: 2, displayOrder: 2, isMainMenu: false, isActive: true },
+    { id: 6, name: 'Department', parentId: 2, displayOrder: 3, isMainMenu: false, isActive: true },
+    { id: 7, name: 'Site', parentId: 2, displayOrder: 4, isMainMenu: false, isActive: true },
+    { id: 21, name: 'Document Type', parentId: 2, displayOrder: 5, isMainMenu: false, isActive: true },
     // Children of Profile (155)
     { id: 146, name: 'Basic & Work Details', parentId: 155, displayOrder: 1, isMainMenu: false, isActive: true },
     { id: 147, name: 'Document', parentId: 155, displayOrder: 2, isMainMenu: false, isActive: true },
