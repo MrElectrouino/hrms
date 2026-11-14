@@ -7,11 +7,28 @@ import { SystemConfigurationItem, getSystemConfigurations, updateSystemConfigura
 const REGIONAL_IDS = new Set([26, 27, 28, 29, 30, 31, 32]);
 const SECURITY_IDS = new Set([33, 34, 35]);
 
+/** Settings with a fixed list of valid values are shown as a dropdown. */
+const CHOICES: Record<string, { value: string; label: string }[]> = {
+  'Default Country': [
+    { value: 'IN', label: 'India (IN)' },
+    { value: 'AE', label: 'United Arab Emirates (AE)' },
+    { value: 'GB', label: 'United Kingdom (GB)' },
+    { value: 'US', label: 'United States (US)' },
+  ],
+  'Default Time Format': [
+    { value: '12', label: '12-hour (3:30 PM)' },
+    { value: '24', label: '24-hour (15:30)' },
+  ],
+};
+const NUMERIC = new Set(['Max Failed Login Attempts', 'Account Lockout Minutes', 'Session Timeout Minutes']);
+
+const inputClass = 'mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30';
+
 export default function SystemSettingsPage() {
   const { isAuthenticated, user } = useAuth();
   const [items, setItems] = useState<SystemConfigurationItem[]>([]);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [savingId, setSavingId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -37,18 +54,34 @@ export default function SystemSettingsPage() {
     else if (isAuthenticated) setLoading(false);
   }, [isAuthenticated, isSystemAdmin]);
 
-  const save = async (item: SystemConfigurationItem) => {
+  const shown = items.filter((i) => (tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
+  const changed = shown.filter((i) => (drafts[i.id] ?? '') !== (i.value ?? ''));
+
+  /** One Save for the whole tab: only the settings that changed are sent. */
+  const saveAll = async (e: React.FormEvent) => {
+    e.preventDefault();
     setError('');
     setMessage('');
-    setSavingId(item.id);
+    for (const i of changed) {
+      if (NUMERIC.has(i.name) && !/^\d+$/.test((drafts[i.id] ?? '').trim())) {
+        setError(`"${i.name}" must be a whole number.`);
+        return;
+      }
+    }
+    setSaving(true);
+    const done: string[] = [];
     try {
-      await updateSystemConfiguration(item.id, { value: drafts[item.id] });
-      setMessage(`"${item.name}" updated.`);
-      load();
+      for (const i of changed) {
+        await updateSystemConfiguration(i.id, { value: (drafts[i.id] ?? '').trim() });
+        done.push(i.name);
+      }
+      setMessage(`Saved: ${done.join(', ')}.`);
     } catch (err: any) {
-      setError(err.message || `Could not update "${item.name}"`);
+      const failed = changed[done.length]?.name;
+      setError(`${failed ? `"${failed}": ` : ''}${err.message || 'Could not save'}${done.length ? ` (already saved: ${done.join(', ')})` : ''}`);
     } finally {
-      setSavingId(null);
+      setSaving(false);
+      await load();
     }
   };
 
@@ -60,11 +93,6 @@ export default function SystemSettingsPage() {
       </div>
     );
   }
-
-  const inputClass = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30';
-  const regional = items.filter((i) => REGIONAL_IDS.has(i.id));
-  const security = items.filter((i) => SECURITY_IDS.has(i.id));
-  const shown = tab === 'regional' ? regional : security;
 
   return (
     <div className="space-y-6">
@@ -79,20 +107,16 @@ export default function SystemSettingsPage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-2 border-b border-gray-200">
-        <button
-          type="button"
-          onClick={() => setTab('regional')}
-          className={`px-4 py-2 text-sm font-medium ${tab === 'regional' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          Regional settings
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('security')}
-          className={`px-4 py-2 text-sm font-medium ${tab === 'security' ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          Security
-        </button>
+        {([['regional', 'Regional settings'], ['security', 'Security']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => { setTab(key); setMessage(''); setError(''); setDrafts(Object.fromEntries(items.map((i) => [i.id, i.value ?? '']))); }}
+            className={`px-4 py-2 text-sm font-medium ${tab === key ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {tab === 'security' && !loading && (
@@ -105,52 +129,50 @@ export default function SystemSettingsPage() {
       {loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
       ) : (
-        <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Value</th>
-                  <th className="px-4 py-3">Description</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {shown.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
-                    <td className="px-4 py-3">
-                      <input
-                        className={inputClass}
-                        value={drafts[item.id] ?? ''}
-                        onChange={(e) => setDrafts((d) => ({ ...d, [item.id]: e.target.value }))}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">{item.description}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => save(item)}
-                        disabled={savingId === item.id || drafts[item.id] === (item.value ?? '')}
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {savingId === item.id ? 'Saving…' : 'Save'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {shown.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
-                      No settings in this section.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        <form onSubmit={saveAll} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
+            {shown.map((item) => {
+              const choices = CHOICES[item.name];
+              const value = drafts[item.id] ?? '';
+              const set = (v: string) => setDrafts((d) => ({ ...d, [item.id]: v }));
+              return (
+                <label key={item.id} className="block text-sm font-medium text-gray-700">
+                  {item.name}
+                  {choices ? (
+                    <select className={inputClass} value={value} onChange={(e) => set(e.target.value)}>
+                      {!choices.some((c) => c.value === value) && <option value={value}>{value || 'Select…'}</option>}
+                      {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                  ) : (
+                    <input className={inputClass} inputMode={NUMERIC.has(item.name) ? 'numeric' : undefined} value={value} onChange={(e) => set(e.target.value)} />
+                  )}
+                  {item.description && <span className="mt-1 block text-xs font-normal text-gray-500">{item.description}</span>}
+                </label>
+              );
+            })}
+            {shown.length === 0 && <p className="text-sm text-gray-500">No settings in this section.</p>}
           </div>
-        </section>
+          {shown.length > 0 && (
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-gray-100 pt-4">
+              {changed.length > 0 && <span className="mr-auto text-xs text-gray-500">{changed.length} unsaved change{changed.length === 1 ? '' : 's'}</span>}
+              <button
+                type="button"
+                disabled={saving || changed.length === 0}
+                onClick={() => setDrafts(Object.fromEntries(items.map((i) => [i.id, i.value ?? ''])))}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Discard
+              </button>
+              <button
+                type="submit"
+                disabled={saving || changed.length === 0}
+                className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          )}
+        </form>
       )}
     </div>
   );
