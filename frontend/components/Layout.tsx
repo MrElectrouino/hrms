@@ -94,7 +94,6 @@ const SYSTEM_SETTINGS_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/profile-rules', label: 'Profile rules', roles: [UserType.SystemAdmin] },
   { href: '/attendance-config', label: 'Attendance configuration', roles: [UserType.SystemAdmin] },
   { href: '/leave-config', label: 'Leave configuration', roles: [UserType.SystemAdmin] },
-  { href: '/countries', label: 'Countries', roles: [UserType.SystemAdmin] },
 ];
 
 /** Menu items granted through RBAC (GET /rbac/my-menu), flattened to links. */
