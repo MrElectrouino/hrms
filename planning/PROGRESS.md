@@ -165,3 +165,9 @@ Top items (full list in OPEN_QUESTIONS.md):
 - Security: writes limited to HR/System Admin, employee and document reads scoped, branch access enforced; users spec repaired. 141 unit tests pass (`npm test`).
 - Dashboard: `GET /dashboard` and `GET /dashboard/notifications`; role-based home page (employee / manager / HR) and a working notification bell. Checked against the local dev DB, which has no employees, so the employee and team numbers were not exercised with data.
 - Not done / needs a business decision: leave proration, service-based entitlement, probation transition, carry-forward, encashment; India status list; weekday-specific schedule hours; branch scoping of the Users list, reporting-manager list and dashboard employee counts for non-HR; Excel employee import; salary templates page (orphaned); browser walkthrough with real employee/manager/HR accounts.
+
+### 2026-11-17 — Leave entitlement engine (phase 1 of `leave_entitlement_requirements.md`)
+- Added: leave policies (scope by country, branch, employee type, employee; effective dates; statutory and company layers), per-leave-type rules (annual days, upfront/monthly credit, joining-part-way proration, rounding with tie rule, min/max, service slabs with immediate/next-year timing), entitlement run records, preview endpoint, HR/System Admin screen `Leave policies` under Administration.
+- Accrual now uses a covering policy when there is one (catch-up per month, safe to rerun) and falls back to the leave type's own setting otherwise.
+- Policies that produced entitlements are locked (only name, note, priority, end date, on/off can change).
+- Not built yet (needs the answers in section 13 of the requirements): probation rules, year-end carry-forward / lapse / encashment, exit settlement, leave across two leave years, policy-change recalculation, rejoin and transfer handling. The leave year start is still the single organization-wide setting.

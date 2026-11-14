@@ -81,6 +81,7 @@ const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/masters', label: 'Masters', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/users', label: 'Users', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/access-control', label: 'Menus & rights', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
+  { href: '/leave-policies', label: 'Leave policies', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/salary-templates', label: 'Salary templates', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/modules', label: 'Modules', roles: [UserType.SystemAdmin] },
 ];

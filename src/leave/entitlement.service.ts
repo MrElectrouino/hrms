@@ -37,10 +37,14 @@ export class EntitlementService {
       select: { id: true, dateOfJoining: true, branchId: true, employeeTypeId: true },
     });
     const sections = await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'organization', employeeId: { in: emps.map((e) => e.id) } }, select: { employeeId: true, data: true } });
-    const country = new Map(sections.map((s) => [s.employeeId, (s.data as { legalEntityCountry?: unknown } | null)?.legalEntityCountry]));
+    const org = new Map(sections.map((s) => [s.employeeId, (s.data ?? {}) as { legalEntityCountry?: unknown; employmentType?: unknown }]));
+    // The profile stores the employment type by name; policies point at the Employee Type parameter.
+    const typeIds = new Map((await this.prisma.parameter.findMany({ where: { parameterType: { name: 'Employee Type' } }, select: { id: true, text: true } })).map((p) => [p.text, p.id]));
     return emps.map((e) => {
-      const c = country.get(e.id);
-      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, employeeTypeId: e.employeeTypeId, countryCode: typeof c === 'string' && c ? c : null };
+      const o = org.get(e.id);
+      const c = o?.legalEntityCountry;
+      const t = typeof o?.employmentType === 'string' ? typeIds.get(o.employmentType) : undefined;
+      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, employeeTypeId: e.employeeTypeId ?? t ?? null, countryCode: typeof c === 'string' && c ? c : null };
     });
   }
 
