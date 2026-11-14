@@ -6,6 +6,8 @@ import {
   brandingFaviconUrl,
   brandingLogoUrl,
   getBranding,
+  getSystemConfigurations,
+  updateSystemConfiguration,
   updateBranding,
   uploadBrandingFavicon,
   uploadBrandingLogo,
@@ -16,6 +18,9 @@ export default function BrandingPanel() {
   const { reload: reloadBranding } = useBranding();
   const [branding, setBranding] = useState<BrandingItem | null>(null);
   const [form, setForm] = useState({ appName: '', primaryColor: '#2563eb', secondaryColor: '#1e40af', accentColor: '#f97316', loginBrandingText: '', footerText: '' });
+  // Time format and number format are company-wide display settings kept in the system configuration table.
+  const [formats, setFormats] = useState<{ time: { id: number; value: string } | null; number: { id: number; value: string } | null }>({ time: null, number: null });
+  const [savedFormats, setSavedFormats] = useState({ time: '', number: '' });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -28,7 +33,11 @@ export default function BrandingPanel() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await getBranding();
+      const [res, cfg] = await Promise.all([getBranding(), getSystemConfigurations()]);
+      const time = cfg.data.find((i) => i.name === 'Default Time Format');
+      const number = cfg.data.find((i) => i.name === 'Number Format');
+      setFormats({ time: time ? { id: time.id, value: time.value ?? '24' } : null, number: number ? { id: number.id, value: number.value ?? '' } : null });
+      setSavedFormats({ time: time?.value ?? '24', number: number?.value ?? '' });
       setBranding(res.data);
       setForm({
         appName: res.data.appName,
@@ -57,6 +66,9 @@ export default function BrandingPanel() {
     setSaving(true);
     try {
       const res = await updateBranding(form);
+      if (formats.time && formats.time.value !== savedFormats.time) await updateSystemConfiguration(formats.time.id, { value: formats.time.value });
+      if (formats.number && formats.number.value.trim() !== savedFormats.number) await updateSystemConfiguration(formats.number.id, { value: formats.number.value.trim() });
+      setSavedFormats({ time: formats.time?.value ?? '', number: formats.number?.value.trim() ?? '' });
       setBranding(res.data);
       setMessage('Branding updated.');
       reloadBranding();
@@ -187,6 +199,23 @@ export default function BrandingPanel() {
           Footer text
           <input className={inputClass} value={form.footerText} onChange={(e) => setForm((f) => ({ ...f, footerText: e.target.value }))} />
         </label>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {formats.time && (
+            <label className="block text-sm font-medium text-gray-700">
+              Time format
+              <select className={inputClass} value={formats.time.value} onChange={(e) => setFormats((f) => (f.time ? { ...f, time: { ...f.time, value: e.target.value } } : f))}>
+                <option value="12">12-hour (3:30 PM)</option>
+                <option value="24">24-hour (15:30)</option>
+              </select>
+            </label>
+          )}
+          {formats.number && (
+            <label className="block text-sm font-medium text-gray-700">
+              Number format
+              <input className={inputClass} value={formats.number.value} placeholder="1,234.56" onChange={(e) => setFormats((f) => (f.number ? { ...f, number: { ...f.number, value: e.target.value } } : f))} />
+            </label>
+          )}
+        </div>
         <div className="flex justify-end">
           <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
             {saving ? 'Saving…' : 'Save'}

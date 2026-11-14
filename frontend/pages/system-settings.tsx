@@ -6,9 +6,8 @@ import AttendanceConfigPanel from '../components/settings/AttendanceConfigPanel'
 import LeaveConfigPanel from '../components/settings/LeaveConfigPanel';
 import { CountryItem, SystemConfigurationItem, createCountry, getCountries, getSystemConfigurations, updateCountry, updateSystemConfiguration } from '../lib/api';
 
-// Regional settings: Default Country, Time Format and Number Format (ids 26, 30, 32);
+// Default Country now lives in the Countries tab; time and number format in the Branding tab.
 // Security Configuration (§I) as 33-35.
-const REGIONAL_IDS = new Set([26, 30, 32]);
 const SECURITY_IDS = new Set([33, 34, 35]);
 // Company details (name, licence, registration, contact) are ids 36-46.
 const COMPANY_IDS = new Set([36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]);
@@ -34,8 +33,8 @@ export default function SystemSettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  type Tab = 'company' | 'countries' | 'regional' | 'branding' | 'attendance' | 'leave' | 'security';
-  const TABS: [Tab, string][] = [['company', 'Company'], ['countries', 'Countries'], ['regional', 'Regional settings'], ['branding', 'Branding'], ['attendance', 'Attendance configuration'], ['leave', 'Leave configuration'], ['security', 'Security']];
+  type Tab = 'company' | 'countries' | 'branding' | 'attendance' | 'leave' | 'security';
+  const TABS: [Tab, string][] = [['company', 'Company'], ['countries', 'Countries'], ['branding', 'Branding'], ['attendance', 'Attendance configuration'], ['leave', 'Leave configuration'], ['security', 'Security']];
   const router = useRouter();
   const [tab, setTabState] = useState<Tab>('company');
   // The tab is kept in the address (?tab=branding) so it can be linked to and survives a refresh.
@@ -70,7 +69,7 @@ export default function SystemSettingsPage() {
     else if (isAuthenticated) setLoading(false);
   }, [isAuthenticated, isSystemAdmin]);
 
-  const shown = tab === 'countries' || tab === 'branding' || tab === 'attendance' || tab === 'leave' ? [] : items.filter((i) => (tab === 'company' ? COMPANY_IDS : tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
+  const shown = tab === 'countries' || tab === 'branding' || tab === 'attendance' || tab === 'leave' ? [] : items.filter((i) => (tab === 'company' ? COMPANY_IDS : SECURITY_IDS).has(i.id));
   const changed = shown.filter((i) => (drafts[i.id] ?? '') !== (i.value ?? ''));
 
   /** One Save for the whole tab: only the settings that changed are sent. */
@@ -149,7 +148,7 @@ export default function SystemSettingsPage() {
       ) : tab === 'leave' ? (
         <LeaveConfigPanel />
       ) : tab === 'countries' ? (
-        <CountryList countries={countries} onChanged={load} onMessage={setMessage} onError={setError} />
+        <CountryList countries={countries} defaultCountry={items.find((i) => i.name === 'Default Country') ?? null} onChanged={load} onMessage={setMessage} onError={setError} />
       ) : loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
       ) : (
@@ -212,7 +211,7 @@ export default function SystemSettingsPage() {
 const blank = { isoCode: '', name: '', currencyCode: '', defaultTimezone: '', defaultLanguage: 'en', dateFormat: 'DD/MM/YYYY' };
 
 /** The list of countries the company works with. Default Country, attendance and policies pick from it. */
-function CountryList({ countries, onChanged, onMessage, onError }: { countries: CountryItem[]; onChanged: () => void; onMessage: (t: string) => void; onError: (t: string) => void }) {
+function CountryList({ countries, defaultCountry, onChanged, onMessage, onError }: { countries: CountryItem[]; defaultCountry: SystemConfigurationItem | null; onChanged: () => void; onMessage: (t: string) => void; onError: (t: string) => void }) {
   const [form, setForm] = useState(blank);
   const field = (key: keyof typeof blank, label: string, placeholder: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
     <label className="block text-sm font-medium text-gray-700">
@@ -238,6 +237,19 @@ function CountryList({ countries, onChanged, onMessage, onError }: { countries: 
       onChanged();
     } catch (err: any) {
       onError(err.message || 'Could not add the country');
+    }
+  };
+  /** The company country: new employees start with it, and attendance falls back to its timezone. */
+  const makeDefault = async (c: CountryItem) => {
+    if (!defaultCountry) return;
+    onError('');
+    onMessage('');
+    try {
+      await updateSystemConfiguration(defaultCountry.id, { value: c.isoCode });
+      onMessage(c.name + ' is now the default country.');
+      onChanged();
+    } catch (err: any) {
+      onError(err.message || 'Could not set the default country');
     }
   };
   const toggle = async (c: CountryItem) => {
@@ -266,7 +278,7 @@ function CountryList({ countries, onChanged, onMessage, onError }: { countries: 
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-              <tr><th className="px-4 py-3">ISO</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Currency</th><th className="px-4 py-3">Timezone</th><th className="px-4 py-3">Language</th><th className="px-4 py-3">Date format</th><th className="px-4 py-3">Status</th><th className="px-4 py-3" /></tr>
+              <tr><th className="px-4 py-3">ISO</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Currency</th><th className="px-4 py-3">Timezone</th><th className="px-4 py-3">Language</th><th className="px-4 py-3">Date format</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Default</th><th className="px-4 py-3" /></tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {countries.map((c) => (
@@ -278,10 +290,11 @@ function CountryList({ countries, onChanged, onMessage, onError }: { countries: 
                   <td className="px-4 py-3">{c.defaultLanguage}</td>
                   <td className="px-4 py-3">{c.dateFormat}</td>
                   <td className="px-4 py-3"><span className={'rounded-full px-2 py-0.5 text-xs font-medium ' + (c.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600')}>{c.isActive ? 'Active' : 'Inactive'}</span></td>
+                  <td className="px-4 py-3">{defaultCountry?.value === c.isoCode ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Default</span> : c.isActive ? <button type="button" onClick={() => makeDefault(c)} className="text-sm font-medium text-blue-600 hover:text-blue-800">Make default</button> : null}</td>
                   <td className="px-4 py-3 text-right"><button type="button" onClick={() => toggle(c)} className="text-sm font-medium text-blue-600 hover:text-blue-800">{c.isActive ? 'Deactivate' : 'Activate'}</button></td>
                 </tr>
               ))}
-              {countries.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-500">No countries yet. Add your company's country first, then choose it as Default Country in Regional settings.</td></tr>}
+              {countries.length === 0 && <tr><td colSpan={9} className="px-4 py-6 text-center text-gray-500">No countries yet. Add your company's country first, then mark it as the default.</td></tr>}
             </tbody>
           </table>
         </div>
