@@ -171,3 +171,6 @@ Top items (full list in OPEN_QUESTIONS.md):
 - Accrual now uses a covering policy when there is one (catch-up per month, safe to rerun) and falls back to the leave type's own setting otherwise.
 - Policies that produced entitlements are locked (only name, note, priority, end date, on/off can change).
 - Not built yet (needs the answers in section 13 of the requirements): probation rules, year-end carry-forward / lapse / encashment, exit settlement, leave across two leave years, policy-change recalculation, rejoin and transfer handling. The leave year start is still the single organization-wide setting.
+
+### 2026-11-18 — Legacy analysis documents removed
+- Removed `planning/discovery/`, `DATABASE_DISCOVERY.md`, `DATA_MIGRATION_PLAN.md`, `SYSTEM_OVERVIEW.md`, `MODULE_INVENTORY.md`, `BUSINESS_RULES.md`, `API_SPECIFICATION.md`, `OPEN_QUESTIONS.md` and `SECURITY_REVIEW.md`. Earlier entries in this file, `TASKS.md`, `DECISIONS.md` and `AGENTS.md` still mention them as history. Recover any of them with `git show 5f7df40:planning/<file>`.
