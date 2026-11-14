@@ -121,9 +121,6 @@ export class DocumentsService {
       include: {
         documentType: { select: { id: true, name: true } },
         profile: { select: { id: true, name: true, lastName: true } },
-        fieldValues: {
-          include: { field: { select: { id: true, fieldName: true, displayName: true } } },
-        },
         files: {
           include: {
             file: {

@@ -131,14 +131,11 @@ model Profile {
 
   user            User?
   employee        Employee?
-  photoFile       StoredFile?            @relation("ProfilePhoto", fields: [photoFileId], references: [id])
-  uploadedFiles   StoredFile[]           @relation("UploadedFiles")
-  dependantsOwned Dependant[]            @relation("DependantProfile")
-  dependantsOf    Dependant[]            @relation("EmployeeProfile")
+  photoFile       StoredFile?  @relation("ProfilePhoto", fields: [photoFileId], references: [id])
+  uploadedFiles   StoredFile[] @relation("UploadedFiles")
+  dependantsOwned Dependant[]  @relation("DependantProfile")
+  dependantsOf    Dependant[]  @relation("EmployeeProfile")
   documents       Document[]
-  weeklyOffs      WeeklyOffAssignment[]
-  holidays        HolidayCalendarEntry[]
-  bankAccount     BankAccount?
   // NOT migrated from legacy Profile: `IsUpdated` (app-level dirty flag, no
   // business meaning found); column_id 7 was dropped in legacy (schema drift).
 
@@ -173,7 +170,6 @@ model User {
   userType            UserType             @relation(fields: [userTypeId], references: [id])
   sessions            Session[]            @relation("UserSessions")
   activity            UserActivity?        @relation("Activity")
-  activityLogs        ActivityLog[]        @relation("ActivityLogs")
   overrides           MenuUserOverride[]
   oneTimeTokens       OneTimeLoginToken[]
   passwordResetTokens PasswordResetToken[]
@@ -225,26 +221,6 @@ model PasswordResetToken {
 
   @@index([userId, expiresAt])
   @@map("password_reset_tokens")
-}
-
-/// legacy: usr.SiteUserActivityLog (33,508 rows — ONLY "Login" events exist).
-/// FIX (SEC-L-12 target): also log failed attempts, logouts, password
-/// changes/resets — legacy never recorded them.
-model ActivityLog {
-  id        BigInt   @id @default(autoincrement())
-  userId    Int
-  /// legacy: LogTypeId -> system.Parameter (ParameterTypeId 3). Legacy only
-  /// ever wrote 6=Login. Kept as FK to Parameter so admins can extend types.
-  logTypeId Int
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-
-  user User @relation("ActivityLogs", fields: [userId], references: [id])
-
-  @@index([userId, createdAt])
-  @@index([logTypeId])
-  @@map("activity_logs")
 }
 
 /// NEW — DECISION D-007.
@@ -482,9 +458,7 @@ model Site {
   name     String  @unique
   isActive Boolean @default(true)
 
-  employees        Employee[]
-  weeklyOffConfigs WeeklyOffConfig[]
-  holidayLists     HolidayList[]
+  employees Employee[]
 
   @@map("sites")
 }
@@ -522,75 +496,6 @@ model Shift {
   rosterEntries RosterEntry[]
 
   @@map("shifts")
-}
-
-/// legacy: system.WeeklyOffConfig — weekly-off pattern per site/year.
-/// NEW: `daysOfWeek Int[]` replaces legacy CSV/flag storage; convention
-/// documented here: 1=Sunday ... 7=Saturday (ISO-8601). App validates
-/// 1..7 at write time (legacy accepted free-form values).
-model WeeklyOffConfig {
-  id         Int     @id @default(autoincrement())
-  name       String
-  siteId     Int?
-  /// NEW: see docblock — replaces legacy CSV storage (BR-MD-18).
-  daysOfWeek Int[]
-  year       Int
-  isActive   Boolean @default(true)
-
-  site        Site?                 @relation(fields: [siteId], references: [id])
-  assignments WeeklyOffAssignment[]
-
-  @@unique([siteId, year, name])
-  @@map("weekly_off_configs")
-}
-
-/// legacy: system.WeeklyOffList — stored WOFListId/WOFId/Year/PrevYear/ProfileId
-/// and a CSV of SiteIds in a varchar(200) column.
-/// NEW shape: one row per (employee, year) pointing at a config — replaces the
-/// CSV column with a real relation (FIX of BR-MD-18). Prev-year carryover is
-/// represented by the previous year's row, not a duplicate copy.
-model WeeklyOffAssignment {
-  id                Int @id @default(autoincrement())
-  profileId         Int
-  weeklyOffConfigId Int
-  year              Int
-
-  profile Profile         @relation(fields: [profileId], references: [id])
-  config  WeeklyOffConfig @relation(fields: [weeklyOffConfigId], references: [id])
-
-  @@unique([profileId, year])
-  @@map("weekly_off_assignments")
-}
-
-/// legacy: master.HolidayList (9 rows — named holiday calendars per site)
-model HolidayList {
-  id       Int     @id @default(autoincrement())
-  name     String
-  siteId   Int?
-  isActive Boolean @default(true)
-
-  entries HolidayCalendarEntry[]
-  site    Site?                  @relation(fields: [siteId], references: [id])
-
-  @@map("holiday_lists")
-}
-
-/// legacy: HolidayCalendar — per-profile assigned holidays with
-/// PrevHolidayDate carryover semantics (BR-MD-12).
-model HolidayCalendarEntry {
-  id              Int       @id @default(autoincrement())
-  holidayListId   Int
-  profileId       Int
-  date            DateTime  @db.Date
-  /// legacy: PrevHolidayDate — used when a holiday shifts across the
-  /// employment year boundary; kept because leave calculations depend on it.
-  prevHolidayDate DateTime? @db.Date
-
-  holidayList HolidayList @relation(fields: [holidayListId], references: [id])
-  profile     Profile     @relation(fields: [profileId], references: [id])
-
-  @@unique([profileId, holidayListId, date])
-  @@map("holiday_calendar_entries")
 }
 
 /// legacy: system.MetaData (42 rows) — logical form entities
@@ -650,9 +555,8 @@ model FormField {
   /// NEW: absorbs legacy sparse columns (dropdown config, cascades, width...).
   config          Json?
 
-  entity              FormEntity           @relation(fields: [entityId], references: [id])
-  documentType        DocumentType?        @relation(fields: [documentTypeId], references: [id])
-  documentFieldValues DocumentFieldValue[]
+  entity       FormEntity    @relation(fields: [entityId], references: [id])
+  documentType DocumentType? @relation(fields: [documentTypeId], references: [id])
 
   /// Document MetaDataId has multiple `ExpiryDate` definitions, one per
   /// DocumentType; fieldName alone must therefore not be unique.
@@ -745,26 +649,6 @@ model Dependant {
   @@map("dependants")
 }
 
-/// legacy: usr.Account (bank details, MetaDataId 7 "Bank")
-model BankAccount {
-  id            Int     @id @default(autoincrement())
-  profileId     Int     @unique
-  /// Field names to be confirmed against a live SELECT of usr.Account during
-  /// migration ETL build (bank name, IBAN/account no, currency).
-  accountName   String?
-  /// NEW (D-015): bank account numbers are treated as financial PII; store
-  /// ciphertext + keyed lookup hash, never plaintext.
-  accountNoEnc  String?
-  accountNoHash String?
-  bankName      String?
-  isActive      Boolean @default(true)
-
-  profile Profile @relation(fields: [profileId], references: [id])
-
-  @@index([accountNoHash])
-  @@map("bank_accounts")
-}
-
 // ============================================================================
 // MODULE 3 — DOCUMENT MANAGEMENT
 // ============================================================================
@@ -820,9 +704,8 @@ model Document {
   createdById    Int?
   updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
 
-  documentType DocumentType         @relation(fields: [documentTypeId], references: [id])
-  profile      Profile              @relation(fields: [profileId], references: [id])
-  fieldValues  DocumentFieldValue[]
+  documentType DocumentType     @relation(fields: [documentTypeId], references: [id])
+  profile      Profile          @relation(fields: [profileId], references: [id])
   files        DocumentFile[]
   expiryAlerts ExpiryAlertLog[]
 
@@ -833,30 +716,6 @@ model Document {
   /// conversion over AdditinalDocumentValue (BR-DOC-17).
   @@index([expiryDate, isActive])
   @@map("documents")
-}
-
-/// legacy: master.AdditinalDocumentValue (4,417 rows) — per-document extra
-/// field values, keyed by MetaDataDetailId, ALL values as varchar(5000)
-/// strings (dates stored as dd/mm/yyyy strings — the source of the mixed-
-/// format bug, BR-DOC-15).
-/// NEW shape: expiry (DataTypeId 17) is PROMOTED to Document.expiryDate; this
-/// table keeps only the remaining extra fields. `valueEnc` applies D-015 if a
-/// future extra field is classified PII; plain `value` otherwise.
-model DocumentFieldValue {
-  id         BigInt  @id @default(autoincrement())
-  documentId BigInt
-  /// legacy: MetaDataDetailId -> system.MetaDataDetail (28=Passport expiry,
-  /// 1149/1150/1153/1154/1151 = other expiry fields, ...).
-  fieldId    Int
-  value      String?
-  /// NEW: for sensitive extra fields only (D-015); null for normal values.
-  valueEnc   String?
-
-  document Document  @relation(fields: [documentId], references: [id])
-  field    FormField @relation(fields: [fieldId], references: [id])
-
-  @@unique([documentId, fieldId])
-  @@map("document_field_values")
 }
 
 /// legacy: master.FileDoc (11,063 rows) — physical file records.
