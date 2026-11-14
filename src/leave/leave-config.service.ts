@@ -58,6 +58,22 @@ export class LeaveConfigService {
     }
   }
 
+  /** A leave type that has been used (applications, balances, ledger or a policy rule) is kept: switch it off instead. */
+  async remove(id: number, user: CurrentUserPayload, ip?: string) {
+    if (!(await this.prisma.leaveType.findUnique({ where: { id }, select: { id: true } }))) throw new NotFoundException('Leave type not found');
+    const [applications, credits, transactions, rules] = await Promise.all([
+      this.prisma.leaveApplication.count({ where: { leaveTypeId: id } }),
+      this.prisma.leaveCredit.count({ where: { leaveTypeId: id } }),
+      this.prisma.leaveTransaction.count({ where: { leaveTypeId: id } }),
+      this.prisma.leavePolicyRule.count({ where: { leaveTypeId: id } }),
+    ]);
+    if (applications + credits + transactions + rules > 0) {
+      throw new ConflictException('This leave type has been used (applications, balances or a leave policy), so it cannot be deleted. Switch it off instead.');
+    }
+    await this.prisma.leaveType.delete({ where: { id } });
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_TYPE_DELETED', entityType: 'LeaveType', entityId: String(id), ipAddress: ip });
+  }
+
   async update(id: number, dto: LeaveTypeDto, user: CurrentUserPayload, ip?: string) {
     if (!(await this.prisma.leaveType.findUnique({ where: { id } }))) throw new NotFoundException('Leave type not found');
     try {

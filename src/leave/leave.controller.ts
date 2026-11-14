@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Ip, Param, ParseIntPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Ip, Param, ParseIntPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -120,6 +120,11 @@ export class LeaveConfigController {
   @Put('types/:id')
   async update(@Param('id', ParseIntPipe) id: number, @Body() dto: LeaveTypeDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     return ok(await this.config.update(id, dto, u, ip), 'Leave type saved');
+  }
+  @Delete('types/:id')
+  async removeType(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    await this.config.remove(id, u, ip);
+    return ok(null, 'Leave type deleted');
   }
   @Put('settings')
   async settings(@Body() dto: LeaveSettingsDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {

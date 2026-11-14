@@ -25,7 +25,7 @@ import Drawer, { fieldClass } from '../Drawer';
 type Tab = 'policies' | 'periods' | 'settings' | 'statuses' | 'processing';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'policies', label: 'Policies' },
-  { key: 'periods', label: 'Ramadan / special periods' },
+  { key: 'periods', label: 'Special periods' },
   { key: 'settings', label: 'Marking settings' },
   { key: 'statuses', label: 'Statuses' },
   { key: 'processing', label: 'Daily processing' },

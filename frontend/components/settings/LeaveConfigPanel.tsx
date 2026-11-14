@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { UserType } from '../../lib/user-types';
-import { LeaveSettings, LeaveType, LeaveTypePayload, createLeaveType, getLeaveConfig, runAccrual, saveLeaveSettings, syncCompOff, updateLeaveType } from '../../lib/leave-api';
+import { LeaveSettings, LeaveType, LeaveTypePayload, createLeaveType, deleteLeaveType, getLeaveConfig, runAccrual, saveLeaveSettings, syncCompOff, updateLeaveType } from '../../lib/leave-api';
 import Drawer, { fieldClass } from '../Drawer';
 
 const blankType: LeaveTypePayload = {
@@ -72,6 +72,18 @@ export default function LeaveConfigPanel() {
 
   const check = 'rounded border-gray-300 text-blue-600 focus:ring-blue-500';
   const set = (patch: Partial<LeaveSettings>) => settings && setSettings({ ...settings, ...patch });
+  const removeType = async (t: LeaveType) => {
+    if (!window.confirm(`Delete the leave type "${t.name}"?`)) return;
+    setError('');
+    setNotice('');
+    try {
+      await deleteLeaveType(t.id);
+      setNotice('Leave type deleted');
+      await load();
+    } catch (e: any) {
+      setError(e.message || 'Could not delete');
+    }
+  };
   const setF = (patch: Partial<LeaveTypePayload>) => editing && setEditing({ ...editing, form: { ...editing.form, ...patch } });
 
   return (
@@ -100,7 +112,7 @@ export default function LeaveConfigPanel() {
                   <td className="px-4 py-3 text-gray-700">{t.isCompOff ? 'Earned (comp off)' : !t.balanceTracking ? 'No balance kept' : t.accrual === 'NONE' ? 'Set by HR' : `${t.annualDays} days / year, ${t.accrual === 'MONTHLY' ? 'monthly' : 'yearly'}`}</td>
                   <td className="px-4 py-3">{t.isSandwichEligible ? <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">Eligible</span> : <span className="text-gray-400">—</span>}</td>
                   <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${t.isActive ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>{t.isActive ? 'Active' : 'Inactive'}</span></td>
-                  <td className="px-4 py-3 text-right"><button type="button" onClick={() => { setError(''); setEditing({ id: t.id, form: { ...t } }); }} className="text-xs font-medium text-blue-600 hover:text-blue-800">Edit</button></td>
+                  <td className="px-4 py-3 text-right"><button type="button" onClick={() => { setError(''); setEditing({ id: t.id, form: { ...t } }); }} className="text-xs font-medium text-blue-600 hover:text-blue-800">Edit</button><button type="button" onClick={() => removeType(t)} className="ml-3 text-xs font-medium text-red-600 hover:text-red-800">Delete</button></td>
                 </tr>
               ))}
             </tbody>

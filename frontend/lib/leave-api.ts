@@ -116,6 +116,7 @@ export const syncCompOff = () => request<{ granted: number }>('/leave/comp-off/s
 
 export const getLeaveConfig = () => request<{ types: LeaveType[]; settings: LeaveSettings }>('/leave-config');
 export const createLeaveType = (p: LeaveTypePayload) => request<LeaveType>('/leave-config/types', { method: 'POST', body: json(p) });
+export const deleteLeaveType = (id: number) => request<null>(`/leave-config/types/${id}`, { method: 'DELETE' });
 export const updateLeaveType = (id: number, p: LeaveTypePayload) => request<LeaveType>(`/leave-config/types/${id}`, { method: 'PUT', body: json(p) });
 export const saveLeaveSettings = (p: LeaveSettings) => request<LeaveSettings>('/leave-config/settings', { method: 'PUT', body: json(p) });
 
