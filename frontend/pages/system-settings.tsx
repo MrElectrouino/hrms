@@ -6,9 +6,9 @@ import AttendanceConfigPanel from '../components/settings/AttendanceConfigPanel'
 import LeaveConfigPanel from '../components/settings/LeaveConfigPanel';
 import { CountryItem, SystemConfigurationItem, createCountry, getCountries, getSystemConfigurations, updateCountry, updateSystemConfiguration } from '../lib/api';
 
-// Regional Settings (planning/system_application_module.md §B) are seeded as ids 26-32,
+// Regional settings: Default Country, Time Format and Number Format (ids 26, 30, 32);
 // Security Configuration (§I) as 33-35.
-const REGIONAL_IDS = new Set([26, 27, 28, 29, 30, 31, 32]);
+const REGIONAL_IDS = new Set([26, 30, 32]);
 const SECURITY_IDS = new Set([33, 34, 35]);
 // Company details (name, licence, registration, contact) are ids 36-46.
 const COMPANY_IDS = new Set([36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]);

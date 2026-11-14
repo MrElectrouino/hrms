@@ -229,11 +229,7 @@ async function seedSystemConfigurations() {
     // 26+ are NEW (System Admin > Regional Settings, planning/system_application_module.md §B) —
     // not legacy rows. Values are placeholders; System Admin sets them via /system-configurations.
     { id: 26, name: 'Default Country', value: 'AE', valueKind: 'string', description: 'Default country for new employees/organizations' },
-    { id: 27, name: 'Default Timezone', value: 'Asia/Dubai', valueKind: 'string', description: 'Default timezone for display and local-date calculations' },
-    { id: 28, name: 'Default Language', value: 'en', valueKind: 'string', description: 'Default UI language' },
-    { id: 29, name: 'Default Date Format', value: 'DD/MM/YYYY', valueKind: 'string', description: 'Default date display format' },
     { id: 30, name: 'Default Time Format', value: '24', valueKind: 'string', description: 'Default time display format: 12 or 24' },
-    { id: 31, name: 'Default Currency', value: 'AED', valueKind: 'string', description: 'Default currency code' },
     { id: 32, name: 'Number Format', value: '1,234.56', valueKind: 'string', description: 'Default number formatting example' },
     // 33+ are NEW (System Admin > Security Configuration, planning/system_application_module.md §I).
     // These back SecurityConfigService; the values here match the previous env-var defaults
