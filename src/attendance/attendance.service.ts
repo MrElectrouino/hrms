@@ -81,11 +81,11 @@ export class AttendanceService {
       const b = await this.prisma.branchTimezone.findUnique({ where: { branchId } });
       if (b) return b.timezone;
     }
-    const c = await this.prisma.country.findUnique({ where: { isoCode: country }, select: { defaultTimezone: true } });
-    if (c?.defaultTimezone) return c.defaultTimezone;
-    // No country row: use the company timezone from General settings.
+    // The company timezone is the Default Timezone in System Settings > Regional settings.
     const setting = await this.prisma.systemConfiguration.findUnique({ where: { name: 'Default Timezone' }, select: { value: true } });
-    return setting?.value || 'UTC';
+    if (setting?.value) return setting.value;
+    const c = await this.prisma.country.findUnique({ where: { isoCode: country }, select: { defaultTimezone: true } });
+    return c?.defaultTimezone || 'UTC';
   }
 
   async context(employeeId: number, date: Date): Promise<DayContext> {
@@ -449,15 +449,16 @@ export class AttendanceService {
   private async timeZones(employeeIds: number[]): Promise<Map<number, string>> {
     const map = new Map<number, string>();
     if (!employeeIds.length) return map;
-    const [emps, sections, branchTz, countries] = await Promise.all([
+    const [emps, sections, branchTz, countries, companyTz] = await Promise.all([
       this.prisma.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, branchId: true } }),
       this.prisma.employeeProfileSection.findMany({ where: { employeeId: { in: employeeIds }, sectionKey: 'organization' }, select: { employeeId: true, data: true } }),
       this.prisma.branchTimezone.findMany(),
       this.prisma.country.findMany({ select: { isoCode: true, defaultTimezone: true } }),
+      this.prisma.systemConfiguration.findUnique({ where: { name: 'Default Timezone' }, select: { value: true } }),
     ]);
     for (const e of emps) {
       const country = (sections.find((s) => s.employeeId === e.id)?.data as { legalEntityCountry?: string } | null)?.legalEntityCountry ?? 'IN';
-      map.set(e.id, branchTz.find((b) => b.branchId === e.branchId)?.timezone ?? countries.find((c) => c.isoCode === country)?.defaultTimezone ?? 'UTC');
+      map.set(e.id, branchTz.find((b) => b.branchId === e.branchId)?.timezone ?? companyTz?.value ?? countries.find((c) => c.isoCode === country)?.defaultTimezone ?? 'UTC');
     }
     return map;
   }
