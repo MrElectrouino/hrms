@@ -4,6 +4,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { brandLogoSrc, useBranding } from '../lib/branding';
 import BranchSwitcher from './BranchSwitcher';
+import { NotificationItem, getNotifications } from '../lib/dashboard-api';
 import { getMyMenu, MenuNode } from '../lib/api';
 import { UserType } from '../lib/user-types';
 
@@ -118,6 +119,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [profileOpen, setProfileOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [notes, setNotes] = useState<NotificationItem[]>([]);
+  const [seenAt, setSeenAt] = useState(0);
+  useEffect(() => {
+    try { setSeenAt(Number(localStorage.getItem('hrms.notesSeen') || 0)); } catch { /* storage unavailable */ }
+  }, []);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const load = () => getNotifications().then((r) => setNotes(r.data)).catch(() => {});
+    load();
+    const t = setInterval(load, 120_000);
+    return () => clearInterval(t);
+  }, [isAuthenticated]);
+  const unread = notes.filter((n) => new Date(n.at).getTime() > seenAt).length;
+  const openBell = () => {
+    setBellOpen((v) => !v);
+    const now = Date.now();
+    setSeenAt(now);
+    try { localStorage.setItem('hrms.notesSeen', String(now)); } catch { /* storage unavailable */ }
+  };
 
   const mustChangePassword = !!user?.mustChangePassword;
 
@@ -433,17 +453,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => { setBellOpen((v) => !v); setProfileOpen(false); }}
+                  onClick={() => { openBell(); setProfileOpen(false); }}
                   className="relative flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-500 shadow-sm hover:bg-gray-50"
                   aria-label="Notifications"
                   aria-expanded={bellOpen}
                 >
                   <BellIcon className="h-[18px] w-[18px]" />
+                  {unread > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">{unread > 9 ? '9+' : unread}</span>}
                 </button>
                 {bellOpen && (
-                  <div className="absolute right-0 z-40 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-4 text-sm shadow-lg">
-                    <p className="font-semibold text-gray-900">Notifications</p>
-                    <p className="mt-1 text-gray-500">You are all caught up. Document expiry and approval alerts will appear here.</p>
+                  <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-gray-200 bg-white text-sm shadow-lg">
+                    <p className="border-b border-gray-100 px-4 py-3 font-semibold text-gray-900">Notifications</p>
+                    {notes.length === 0 ? (
+                      <p className="px-4 py-4 text-gray-500">You are all caught up.</p>
+                    ) : (
+                      <ul className="max-h-96 divide-y divide-gray-100 overflow-y-auto">
+                        {notes.map((n) => (
+                          <li key={n.id}>
+                            <Link href={n.href} onClick={() => setBellOpen(false)} className="block px-4 py-3 hover:bg-gray-50">
+                              <p className="font-medium text-gray-900">{n.title}</p>
+                              <p className="mt-0.5 text-xs text-gray-500">{n.detail}</p>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 )}
               </div>

@@ -15,6 +15,7 @@ import { BranchesModule } from './branches/branches.module';
 import { AttendanceSetupModule } from './attendance-setup/attendance-setup.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { LeaveModule } from './leave/leave.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import appConfig from './config/app.config';
 
 import { CommonModule } from './common/common.module';
@@ -41,6 +42,7 @@ import { LoggerContextMiddleware } from './common/logger/logger-context.middlewa
     AttendanceSetupModule,
     AttendanceModule,
     LeaveModule,
+    DashboardModule,
   ],
 })
 export class AppModule implements NestModule {
