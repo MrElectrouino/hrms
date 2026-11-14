@@ -52,7 +52,33 @@ export class DashboardService {
     const scope = await this.scope(u, meId);
     const team = scope ? await this.teamToday(scope, today, todayStr) : null;
     const hr = this.isHr(u) ? await this.hrNumbers(u, today, todayStr) : null;
-    return { today: todayStr, role: this.isHr(u) ? 'HR' : team ? 'MANAGER' : 'EMPLOYEE', mine, team, hr };
+    const charts = scope ? await this.charts(scope, todayStr) : null;
+    return { today: todayStr, role: this.isHr(u) ? 'HR' : team ? 'MANAGER' : 'EMPLOYEE', mine, team, hr, charts };
+  }
+
+  /** Headcount at the end of each of the last six months, and how people are spread across departments. */
+  private async charts(scope: Prisma.EmployeeWhereInput, todayStr: string) {
+    const people = await this.prisma.employee.findMany({ where: scope, select: { id: true, dateOfJoining: true } });
+    const months: { month: string; count: number }[] = [];
+    const base = new Date(`${todayStr.slice(0, 7)}-01T00:00:00Z`);
+    for (let i = 5; i >= 0; i -= 1) {
+      const start = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() - i, 1));
+      const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0, 23, 59, 59));
+      months.push({ month: iso(start).slice(0, 7), count: people.filter((p) => p.dateOfJoining <= end).length });
+    }
+    const sections = await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'organization', employeeId: { in: people.map((p) => p.id) } }, select: { employeeId: true, data: true } });
+    const byDept = new Map<string, number>();
+    const seen = new Set<number>();
+    for (const s of sections) {
+      seen.add(s.employeeId);
+      const dept = (s.data as { department?: unknown } | null)?.department;
+      const name = typeof dept === 'string' && dept ? dept : 'Unassigned';
+      byDept.set(name, (byDept.get(name) ?? 0) + 1);
+    }
+    const missing = people.length - seen.size;
+    if (missing > 0) byDept.set('Unassigned', (byDept.get('Unassigned') ?? 0) + missing);
+    const departments = [...byDept.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+    return { headcount: months, departments };
   }
 
   private async mineToday(employeeId: number, today: Date, todayStr: string) {

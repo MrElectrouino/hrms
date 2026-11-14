@@ -24,6 +24,7 @@ export interface DashboardSummary {
   mine: MineToday | null;
   team: TeamToday | null;
   hr: { documentsExpired: number; documentsExpiring: number } | null;
+  charts: { headcount: { month: string; count: number }[]; departments: { name: string; count: number }[] } | null;
 }
 export interface NotificationItem {
   id: string;
