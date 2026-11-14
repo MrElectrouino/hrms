@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { SystemConfigurationItem, getSystemConfigurations, updateSystemConfiguration } from '../lib/api';
+import { CountryItem, SystemConfigurationItem, createCountry, getCountries, getSystemConfigurations, updateCountry, updateSystemConfiguration } from '../lib/api';
 
 // Regional Settings (planning/system_application_module.md §B) are seeded as ids 26-32,
 // Security Configuration (§I) as 33-35.
@@ -9,12 +9,6 @@ const SECURITY_IDS = new Set([33, 34, 35]);
 
 /** Settings with a fixed list of valid values are shown as a dropdown. */
 const CHOICES: Record<string, { value: string; label: string }[]> = {
-  'Default Country': [
-    { value: 'IN', label: 'India (IN)' },
-    { value: 'AE', label: 'United Arab Emirates (AE)' },
-    { value: 'GB', label: 'United Kingdom (GB)' },
-    { value: 'US', label: 'United States (US)' },
-  ],
   'Default Time Format': [
     { value: '12', label: '12-hour (3:30 PM)' },
     { value: '24', label: '24-hour (15:30)' },
@@ -32,14 +26,16 @@ export default function SystemSettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'regional' | 'security'>('regional');
+  const [tab, setTab] = useState<'regional' | 'security' | 'countries'>('regional');
+  const [countries, setCountries] = useState<CountryItem[]>([]);
 
   const isSystemAdmin = user?.userTypeId === 3;
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await getSystemConfigurations();
+      const [res, cs] = await Promise.all([getSystemConfigurations(), getCountries()]);
+      setCountries(cs.data);
       setItems(res.data);
       setDrafts(Object.fromEntries(res.data.map((i) => [i.id, i.value ?? ''])));
     } catch (err: any) {
@@ -54,7 +50,7 @@ export default function SystemSettingsPage() {
     else if (isAuthenticated) setLoading(false);
   }, [isAuthenticated, isSystemAdmin]);
 
-  const shown = items.filter((i) => (tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
+  const shown = tab === 'countries' ? [] : items.filter((i) => (tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
   const changed = shown.filter((i) => (drafts[i.id] ?? '') !== (i.value ?? ''));
 
   /** One Save for the whole tab: only the settings that changed are sent. */
@@ -107,7 +103,7 @@ export default function SystemSettingsPage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-2 border-b border-gray-200">
-        {([['regional', 'Regional settings'], ['security', 'Security']] as const).map(([key, label]) => (
+        {([['regional', 'Regional settings'], ['countries', 'Countries'], ['security', 'Security']] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -126,13 +122,15 @@ export default function SystemSettingsPage() {
         </div>
       )}
 
-      {loading ? (
+      {tab === 'countries' ? (
+        <CountryList countries={countries} onChanged={load} onMessage={setMessage} onError={setError} />
+      ) : loading ? (
         <p className="text-sm text-gray-500">Loading…</p>
       ) : (
         <form onSubmit={saveAll} className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="grid gap-x-6 gap-y-5 md:grid-cols-2">
             {shown.map((item) => {
-              const choices = CHOICES[item.name];
+              const choices = item.name === 'Default Country' ? countries.filter((c) => c.isActive).map((c) => ({ value: c.isoCode, label: `${c.name} (${c.isoCode})` })) : CHOICES[item.name];
               const value = drafts[item.id] ?? '';
               const set = (v: string) => setDrafts((d) => ({ ...d, [item.id]: v }));
               return (
@@ -174,6 +172,87 @@ export default function SystemSettingsPage() {
           )}
         </form>
       )}
+    </div>
+  );
+}
+
+const blank = { isoCode: '', name: '', currencyCode: '', defaultTimezone: '', defaultLanguage: 'en', dateFormat: 'DD/MM/YYYY' };
+
+/** The list of countries the company works with. Default Country, attendance and policies pick from it. */
+function CountryList({ countries, onChanged, onMessage, onError }: { countries: CountryItem[]; onChanged: () => void; onMessage: (t: string) => void; onError: (t: string) => void }) {
+  const [form, setForm] = useState(blank);
+  const field = (key: keyof typeof blank, label: string, placeholder: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
+    <label className="block text-sm font-medium text-gray-700">
+      {label}
+      <input className={inputClass} value={form[key]} placeholder={placeholder} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))} required {...extra} />
+    </label>
+  );
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    onError('');
+    onMessage('');
+    try {
+      const created = await createCountry({
+        isoCode: form.isoCode.trim().toUpperCase(),
+        name: form.name.trim(),
+        currencyCode: form.currencyCode.trim().toUpperCase(),
+        defaultTimezone: form.defaultTimezone.trim(),
+        defaultLanguage: form.defaultLanguage.trim(),
+        dateFormat: form.dateFormat.trim(),
+      });
+      onMessage(created.data.name + ' added.');
+      setForm(blank);
+      onChanged();
+    } catch (err: any) {
+      onError(err.message || 'Could not add the country');
+    }
+  };
+  const toggle = async (c: CountryItem) => {
+    onError('');
+    try {
+      await updateCountry(c.id, { isActive: !c.isActive });
+      onChanged();
+    } catch (err: any) {
+      onError(err.message || 'Could not update the country');
+    }
+  };
+  return (
+    <div className="space-y-5">
+      <form onSubmit={add} className="grid grid-cols-1 gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
+        {field('isoCode', 'ISO code', 'AE', { maxLength: 2 })}
+        <div className="sm:col-span-2">{field('name', 'Name', 'United Arab Emirates')}</div>
+        {field('currencyCode', 'Currency code', 'AED', { maxLength: 3 })}
+        {field('defaultTimezone', 'Default timezone', 'Asia/Dubai')}
+        {field('defaultLanguage', 'Default language', 'en')}
+        {field('dateFormat', 'Date format', 'DD/MM/YYYY')}
+        <div className="flex items-end sm:col-span-2 lg:col-span-3">
+          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Add country</button>
+        </div>
+      </form>
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <tr><th className="px-4 py-3">ISO</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Currency</th><th className="px-4 py-3">Timezone</th><th className="px-4 py-3">Language</th><th className="px-4 py-3">Date format</th><th className="px-4 py-3">Status</th><th className="px-4 py-3" /></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {countries.map((c) => (
+                <tr key={c.id} className={c.isActive ? '' : 'opacity-50'}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{c.isoCode}</td>
+                  <td className="px-4 py-3">{c.name}</td>
+                  <td className="px-4 py-3">{c.currencyCode}</td>
+                  <td className="px-4 py-3">{c.defaultTimezone}</td>
+                  <td className="px-4 py-3">{c.defaultLanguage}</td>
+                  <td className="px-4 py-3">{c.dateFormat}</td>
+                  <td className="px-4 py-3"><span className={'rounded-full px-2 py-0.5 text-xs font-medium ' + (c.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600')}>{c.isActive ? 'Active' : 'Inactive'}</span></td>
+                  <td className="px-4 py-3 text-right"><button type="button" onClick={() => toggle(c)} className="text-sm font-medium text-blue-600 hover:text-blue-800">{c.isActive ? 'Deactivate' : 'Activate'}</button></td>
+                </tr>
+              ))}
+              {countries.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-500">No countries yet. Add your company's country first, then choose it as Default Country in Regional settings.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

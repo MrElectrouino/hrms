@@ -3,7 +3,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { FileStorageService, UploadedFileLike } from '../common/services/file-storage.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
-import { COUNTRIES } from '../employee-profile/profile-schema';
 import { CreateSystemConfigurationDto, UpdateSystemConfigurationDto } from './dto/system-configuration.dto';
 import { CreateCountryDto, UpdateCountryDto } from './dto/country.dto';
 import { UpdateBrandingDto } from './dto/branding.dto';
@@ -27,7 +26,6 @@ function assertValidBrandingImage(file: UploadedFileLike, allowedExtensions: str
 
 /** Configs with a known, closed set of valid values (System Admin > Regional Settings). */
 const KNOWN_VALUE_CONSTRAINTS: Record<string, string[]> = {
-  'Default Country': COUNTRIES as unknown as string[],
   'Default Time Format': ['12', '24'],
 };
 
@@ -47,7 +45,7 @@ export class SystemAdminService {
     if (await this.prisma.systemConfiguration.findUnique({ where: { name: dto.name } })) {
       throw new ConflictException(`A configuration named "${dto.name}" already exists`);
     }
-    this.assertKnownValue(dto.name, dto.value);
+    await this.assertKnownValue(dto.name, dto.value);
     const created = await this.prisma.systemConfiguration.create({
       data: {
         name: dto.name,
@@ -70,7 +68,7 @@ export class SystemAdminService {
   async updateConfiguration(id: number, dto: UpdateSystemConfigurationDto, user: CurrentUserPayload, ip: string) {
     const existing = await this.prisma.systemConfiguration.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Configuration not found');
-    this.assertKnownValue(existing.name, dto.value);
+    await this.assertKnownValue(existing.name, dto.value);
     const updated = await this.prisma.systemConfiguration.update({
       where: { id },
       data: {
@@ -89,8 +87,14 @@ export class SystemAdminService {
     return updated;
   }
 
-  private assertKnownValue(name: string, value: string | undefined) {
+  private async assertKnownValue(name: string, value: string | undefined) {
     if (value === undefined) return;
+    if (name === 'Default Country') {
+      // The company country must be one of the active countries in the country list.
+      const found = await this.prisma.country.findFirst({ where: { isoCode: value, isActive: true }, select: { id: true } });
+      if (!found) throw new BadRequestException('"Default Country" must be an active country. Add it under System settings > Countries first.');
+      return;
+    }
     const allowed = KNOWN_VALUE_CONSTRAINTS[name];
     if (allowed && !allowed.includes(value)) {
       throw new BadRequestException(`"${name}" must be one of: ${allowed.join(', ')}`);

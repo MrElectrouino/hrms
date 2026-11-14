@@ -278,7 +278,7 @@ export default function AttendanceConfigPage() {
 
       {cfg && tab === 'timezones' && (
         <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-600">Each country has a default timezone (set under Countries). A branch can override it. Times shown to employees and used for the late rule follow this.</p>
+          <p className="text-sm text-gray-600">Each country has a default timezone (set in System settings, Countries). A branch can override it. Times shown to employees and used for the late rule follow this.</p>
           <datalist id="tzlist">{timeZones.map((z) => <option key={z} value={z} />)}</datalist>
           <table className="mt-4 min-w-full text-sm">
             <thead className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500"><tr><th className="py-1">Branch</th><th className="py-1">Timezone override</th><th /></tr></thead>
