@@ -1,18 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { ProfileRule, ProfileRuleCatalog, getProfileRules, getSystemConfigurations, resetProfileRules, saveProfileRules } from '../lib/api';
-
-const COUNTRY_NAMES: Record<string, string> = { IN: 'India', AE: 'UAE', GB: 'United Kingdom', US: 'United States' };
+import { CountryItem, ProfileRule, ProfileRuleCatalog, getCountries, getProfileRules, getSystemConfigurations, resetProfileRules, saveProfileRules } from '../lib/api';
 
 type Override = { isVisible: boolean | null; isRequired: boolean | null };
 const keyOf = (s: string, g: string, f: string) => `${s}|${g}|${f}`;
 
-/** Which profile tabs, groups and fields appear, and which are required, for the company country (Default Country in System settings). */
+/** Per-country control of which profile tabs, groups and fields appear, and which are required. Countries come from System settings > Countries. */
 export default function ProfileRulesPage() {
   const { isAuthenticated, user } = useAuth();
   const isSystemAdmin = user?.userTypeId === 3;
 
   const [country, setCountry] = useState('');
+  const [countries, setCountries] = useState<CountryItem[]>([]);
   const [catalog, setCatalog] = useState<ProfileRuleCatalog | null>(null);
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
   const [saved, setSaved] = useState<Record<string, Override>>({});
@@ -40,13 +39,20 @@ export default function ProfileRulesPage() {
     }
   };
 
-  // The company has one country: the Default Country setting.
+  // The countries in the country list; the Default Country is shown first.
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!isSystemAdmin) { setLoading(false); return; }
-    getSystemConfigurations()
-      .then((r) => setCountry(r.data.find((i) => i.name === 'Default Country')?.value || 'AE'))
-      .catch(() => setCountry('AE'));
+    Promise.all([getCountries(), getSystemConfigurations()])
+      .then(([cs, cfg]) => {
+        const active = cs.data.filter((c) => c.isActive);
+        const def = cfg.data.find((i) => i.name === 'Default Country')?.value;
+        setCountries(active);
+        const first = active.find((c) => c.isoCode === def) ?? active[0];
+        if (first) setCountry(first.isoCode);
+        else setLoading(false);
+      })
+      .catch((e: any) => { setError(e.message || 'Could not load the country list'); setLoading(false); });
   }, [isAuthenticated, isSystemAdmin]);
   useEffect(() => {
     if (country) load(country);
@@ -68,6 +74,13 @@ export default function ProfileRulesPage() {
   const setVisible = (k: string, value: boolean, def: boolean) => setOv(k, { isVisible: value === def ? null : value });
   const setRequired = (k: string, value: boolean, def: boolean) => setOv(k, { isRequired: value === def ? null : value });
 
+  const changeCountry = (c: string) => {
+    if (c === country) return;
+    if (dirty && !window.confirm('Discard unsaved changes?')) return;
+    setCountry(c);
+    setNotice('');
+  };
+
   const save = async () => {
     setSaving(true);
     setError('');
@@ -82,7 +95,7 @@ export default function ProfileRulesPage() {
       const m = toMap(res.data.rules);
       setOverrides(m);
       setSaved(m);
-      setNotice(`Rules saved for ${COUNTRY_NAMES[country] ?? country}. They apply to employees of this country straight away.`);
+      setNotice(`Rules saved for ${countryName}. They apply to employees of this country straight away.`);
     } catch (e: any) {
       setError(e.message || 'Could not save rules');
     } finally {
@@ -91,7 +104,7 @@ export default function ProfileRulesPage() {
   };
 
   const reset = async () => {
-    if (!window.confirm(`Reset ${COUNTRY_NAMES[country] ?? country} to the built-in defaults? All its overrides are removed.`)) return;
+    if (!window.confirm(`Reset ${countryName} to the built-in defaults? All its overrides are removed.`)) return;
     setError('');
     try {
       const res = await resetProfileRules(country);
@@ -108,6 +121,7 @@ export default function ProfileRulesPage() {
     return <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Only System Admin can manage profile rules.</div>;
   }
 
+  const countryName = countries.find((c) => c.isoCode === country)?.name ?? country;
   const checkbox = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-40';
 
   return (
@@ -117,12 +131,22 @@ export default function ProfileRulesPage() {
         <p className="mt-1 text-gray-500">
           Choose which employee profile tabs, groups and fields appear and which fields are required. Fields marked
           <span className="mx-1 rounded bg-gray-100 px-1.5 py-0.5 text-xs">default</span>
-          follow the built-in layout for your company country. To change the country, use Default Country in System settings.
+          follow the built-in country layout. Countries are managed in System settings, Countries.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {country && <span className="rounded-lg border border-blue-600 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">{COUNTRY_NAMES[country] ?? country}</span>}
+        {countries.map((c) => (
+          <button
+            key={c.isoCode}
+            type="button"
+            onClick={() => changeCountry(c.isoCode)}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium ${c.isoCode === country ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+          >
+            {c.name}
+          </button>
+        ))}
+        {countries.length === 0 && !loading && <span className="text-sm text-gray-500">No countries yet. Add them in System settings, Countries.</span>}
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={reset} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Reset to defaults</button>
           <button type="button" onClick={save} disabled={!dirty || saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">
@@ -149,7 +173,7 @@ export default function ProfileRulesPage() {
                     <span className="font-semibold text-gray-900">{s.title}</span>
                   </label>
                   {s.locked && <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">always shown</span>}
-                  {!sectionVisible && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">tab hidden for {COUNTRY_NAMES[country] ?? country}</span>}
+                  {!sectionVisible && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">tab hidden for {countryName}</span>}
                 </header>
 
                 <div className={sectionVisible ? '' : 'opacity-50'}>
