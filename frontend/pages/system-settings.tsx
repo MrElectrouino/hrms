@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
+import BrandingPanel from '../components/settings/BrandingPanel';
+import AttendanceConfigPanel from '../components/settings/AttendanceConfigPanel';
+import LeaveConfigPanel from '../components/settings/LeaveConfigPanel';
 import { CountryItem, SystemConfigurationItem, createCountry, getCountries, getSystemConfigurations, updateCountry, updateSystemConfiguration } from '../lib/api';
 
 // Regional Settings (planning/system_application_module.md §B) are seeded as ids 26-32,
@@ -30,7 +34,19 @@ export default function SystemSettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'company' | 'regional' | 'security' | 'countries'>('company');
+  type Tab = 'company' | 'countries' | 'regional' | 'branding' | 'attendance' | 'leave' | 'security';
+  const TABS: [Tab, string][] = [['company', 'Company'], ['countries', 'Countries'], ['regional', 'Regional settings'], ['branding', 'Branding'], ['attendance', 'Attendance configuration'], ['leave', 'Leave configuration'], ['security', 'Security']];
+  const router = useRouter();
+  const [tab, setTabState] = useState<Tab>('company');
+  // The tab is kept in the address (?tab=branding) so it can be linked to and survives a refresh.
+  useEffect(() => {
+    const q = router.query.tab;
+    if (typeof q === 'string' && TABS.some(([k]) => k === q)) setTabState(q as Tab);
+  }, [router.query.tab]);
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    router.replace({ pathname: router.pathname, query: { tab: t } }, undefined, { shallow: true });
+  };
   const [countries, setCountries] = useState<CountryItem[]>([]);
 
   const isSystemAdmin = user?.userTypeId === 3;
@@ -54,7 +70,7 @@ export default function SystemSettingsPage() {
     else if (isAuthenticated) setLoading(false);
   }, [isAuthenticated, isSystemAdmin]);
 
-  const shown = tab === 'countries' ? [] : items.filter((i) => (tab === 'company' ? COMPANY_IDS : tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
+  const shown = tab === 'countries' || tab === 'branding' || tab === 'attendance' || tab === 'leave' ? [] : items.filter((i) => (tab === 'company' ? COMPANY_IDS : tab === 'regional' ? REGIONAL_IDS : SECURITY_IDS).has(i.id));
   const changed = shown.filter((i) => (drafts[i.id] ?? '') !== (i.value ?? ''));
 
   /** One Save for the whole tab: only the settings that changed are sent. */
@@ -107,7 +123,7 @@ export default function SystemSettingsPage() {
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="flex gap-2 border-b border-gray-200">
-        {([['company', 'Company'], ['countries', 'Countries'], ['regional', 'Regional settings'], ['security', 'Security']] as const).map(([key, label]) => (
+        {TABS.map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -126,7 +142,13 @@ export default function SystemSettingsPage() {
         </div>
       )}
 
-      {tab === 'countries' ? (
+      {tab === 'branding' ? (
+        <BrandingPanel />
+      ) : tab === 'attendance' ? (
+        <AttendanceConfigPanel />
+      ) : tab === 'leave' ? (
+        <LeaveConfigPanel />
+      ) : tab === 'countries' ? (
         <CountryList countries={countries} onChanged={load} onMessage={setMessage} onError={setError} />
       ) : loading ? (
         <p className="text-sm text-gray-500">Loading…</p>

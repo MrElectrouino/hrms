@@ -92,11 +92,8 @@ const PUBLIC_PATHS = ['/login', '/reset-password'];
 /** Own top-level menu, System Admin only. */
 const SYSTEM_SETTINGS_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/system-settings', label: 'General settings', roles: [UserType.SystemAdmin] },
-  { href: '/branding', label: 'Branding', roles: [UserType.SystemAdmin] },
   { href: '/custom-fields', label: 'Custom fields', roles: [UserType.SystemAdmin] },
   { href: '/profile-rules', label: 'Profile rules', roles: [UserType.SystemAdmin] },
-  { href: '/attendance-config', label: 'Attendance configuration', roles: [UserType.SystemAdmin] },
-  { href: '/leave-config', label: 'Leave configuration', roles: [UserType.SystemAdmin] },
 ];
 
 /** Menu items granted through RBAC (GET /rbac/my-menu), flattened to links. */
