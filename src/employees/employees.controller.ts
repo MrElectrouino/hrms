@@ -26,6 +26,7 @@ import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { EmployeeBranchGuard } from '../common/guards/branch-access.guard';
+import { HrWriteGuard } from '../common/guards/hr-write.guard';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -36,7 +37,7 @@ import { UploadedFileLike } from '../common/services/file-storage.service';
 
 @ApiTags('Employees')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, EmployeeBranchGuard)
+@UseGuards(JwtAuthGuard, HrWriteGuard, EmployeeBranchGuard)
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}

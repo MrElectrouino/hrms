@@ -222,9 +222,15 @@ export class UsersService {
     if (changesType) data.userTypeId = dto.userTypeId;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
-    const [, , updated] = await this.prisma.$transaction([
-      this.prisma.userBranch.deleteMany({ where: { userId: id, ...(branchChange ? {} : { userId: -1 }) } }),
-      this.prisma.userBranch.createMany({ data: (branchChange?.branchIds ?? []).map((branchId) => ({ userId: id, branchId })) }),
+    // Branch access is only touched when it was part of the request.
+    const branchOps = branchChange
+      ? [
+          this.prisma.userBranch.deleteMany({ where: { userId: id } }),
+          this.prisma.userBranch.createMany({ data: branchChange.branchIds.map((branchId) => ({ userId: id, branchId })) }),
+        ]
+      : [];
+    const results = await this.prisma.$transaction([
+      ...branchOps,
       this.prisma.user.update({ where: { id }, data, select: userSelect }),
       ...(deactivates
         ? [
@@ -235,6 +241,7 @@ export class UsersService {
           ]
         : []),
     ]);
+    const updated = results[branchOps.length] as Prisma.UserGetPayload<{ select: typeof userSelect }>;
 
     await this.audit.log({
       actorProfileId: actor.profileId,

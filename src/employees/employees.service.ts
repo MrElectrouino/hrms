@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { PiiService } from '../common/services/pii.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import { UserType } from '../common/constants/user-types';
 import { FileStorageService, UploadedFileLike } from '../common/services/file-storage.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -54,6 +55,11 @@ export class EmployeesService {
     const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
 
     const where: any = {};
+    // Not HR: yourself and the people who report to you.
+    if (user && ![UserType.SystemAdmin, UserType.HRAdmin].includes(user.userTypeId)) {
+      const me = await this.prisma.employee.findUnique({ where: { profileId: user.profileId }, select: { id: true } });
+      where.AND = [{ OR: [{ profileId: user.profileId }, ...(me ? [{ reportingToId: me.id }] : [])] }];
+    }
     // Branch scope from the header switcher, clamped to what the account may access.
     if (user?.activeBranchIds) where.branchId = { in: user.activeBranchIds };
     if (query.isActive !== undefined) {

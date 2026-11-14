@@ -29,10 +29,11 @@ import { CreateParameterDto, UpdateParameterDto } from './dto/parameter.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserType } from '../common/constants/user-types';
+import { HrWriteGuard } from '../common/guards/hr-write.guard';
 
 @ApiTags('Masters')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, HrWriteGuard)
 @Controller('masters')
 export class MastersController {
   constructor(private readonly mastersService: MastersService) {}

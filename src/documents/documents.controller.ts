@@ -21,7 +21,7 @@ import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { Response } from 'express';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { DocumentBranchGuard } from '../common/guards/branch-access.guard';
+import { DocumentAccessGuard, DocumentBranchGuard } from '../common/guards/branch-access.guard';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -30,7 +30,7 @@ import { UploadedFileLike } from '../common/services/file-storage.service';
 
 @ApiTags('Documents')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, DocumentBranchGuard)
+@UseGuards(JwtAuthGuard, DocumentAccessGuard, DocumentBranchGuard)
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}

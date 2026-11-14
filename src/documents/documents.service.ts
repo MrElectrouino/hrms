@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { PiiService } from '../common/services/pii.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import { UserType } from '../common/constants/user-types';
 import {
   FileStorageService,
   UploadedFileLike,
@@ -56,6 +57,8 @@ export class DocumentsService {
     // Branch scope: documents of employees in the active branches only.
     if (user?.activeBranchIds) where.profile = { employee: { branchId: { in: user.activeBranchIds } } };
     if (query.profileId) where.profileId = query.profileId;
+    // Not HR: only your own documents, whatever was asked for.
+    if (user && ![UserType.SystemAdmin, UserType.HRAdmin].includes(user.userTypeId)) where.profileId = user.profileId;
     if (query.documentTypeId) where.documentTypeId = query.documentTypeId;
     if (query.isActive !== undefined) where.isActive = query.isActive;
     if (query.search) {
