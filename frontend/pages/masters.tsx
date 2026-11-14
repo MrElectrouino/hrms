@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
+import ParametersPanel from '../components/ParametersPanel';
 import {
   MasterItem,
   ShiftItem,
-  getDepartments,
+  DocumentTypeItem,
   getSites,
   getDocumentTypes,
   getLanguages,
   getShifts,
-  createDepartment,
-  updateDepartment,
-  deactivateDepartment,
   createSite,
   updateSite,
   deactivateSite,
@@ -26,10 +25,9 @@ import {
   ShiftPayload,
 } from '../lib/api';
 
-type MasterTab = 'departments' | 'sites' | 'languages' | 'shifts' | 'document-types';
+type MasterTab = 'sites' | 'languages' | 'shifts' | 'document-types';
 
 const tabs: { key: MasterTab; label: string; description: string }[] = [
-  { key: 'departments', label: 'Departments', description: 'Teams and departments employees belong to.' },
   { key: 'sites', label: 'Sites', description: 'Work locations and office sites.' },
   { key: 'languages', label: 'Languages', description: 'Mother tongue options for employee profiles.' },
   { key: 'shifts', label: 'Shifts', description: 'Work shifts with timing and grace rules.' },
@@ -37,7 +35,6 @@ const tabs: { key: MasterTab; label: string; description: string }[] = [
 ];
 
 const api = {
-  departments: { list: getDepartments, create: createDepartment, update: updateDepartment, deactivate: deactivateDepartment },
   sites: { list: getSites, create: createSite, update: updateSite, deactivate: deactivateSite },
   languages: { list: getLanguages, create: createLanguage, update: updateLanguage, deactivate: deactivateLanguage },
   shifts: { list: getShifts, create: createShift, update: updateShift, deactivate: deactivateShift },
@@ -52,6 +49,7 @@ const emptyForm = {
   halfDayMinutes: '0',
   altStartTime: '',
   altEndTime: '',
+  hasExpiry: false,
 };
 
 /** The backend stores shift times as 1970-01-01T<HH:mm> parsed in the server's local timezone. */
@@ -64,9 +62,17 @@ function toTimeInput(value?: string | null): string {
 
 export default function MastersPage() {
   const { isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<MasterTab>('departments');
-  const [items, setItems] = useState<Record<MasterTab, (MasterItem | ShiftItem)[]>>({
-    departments: [],
+  const router = useRouter();
+  // Parameters carries its own screen inside this page.
+  const [special, setSpecial] = useState<'parameters' | null>(null);
+
+  // Old /branches and /parameters URLs arrive as ?tab=…
+  useEffect(() => {
+    const q = router.query.tab;
+    if (q === 'parameters') setSpecial(q);
+  }, [router.query.tab]);
+  const [activeTab, setActiveTab] = useState<MasterTab>('sites');
+  const [items, setItems] = useState<Record<MasterTab, (MasterItem | ShiftItem | DocumentTypeItem)[]>>({
     sites: [],
     languages: [],
     shifts: [],
@@ -84,7 +90,7 @@ export default function MastersPage() {
     setError('');
     return Promise.all(tabs.map((t) => api[t.key].list()))
       .then((results) => {
-        const next: typeof items = { departments: [], sites: [], languages: [], shifts: [], 'document-types': [] };
+        const next: typeof items = { sites: [], languages: [], shifts: [], 'document-types': [] };
         tabs.forEach((t, i) => {
           next[t.key] = results[i].data;
         });
@@ -100,6 +106,7 @@ export default function MastersPage() {
   }, [isAuthenticated]);
 
   const switchTab = (tab: MasterTab) => {
+    setSpecial(null);
     setActiveTab(tab);
     setEditingId(null);
     setError('');
@@ -125,9 +132,10 @@ export default function MastersPage() {
         halfDayMinutes: String(s.halfDayMinutes ?? 0),
         altStartTime: toTimeInput(s.altStartTime),
         altEndTime: toTimeInput(s.altEndTime),
+        hasExpiry: false,
       });
     } else {
-      setForm({ ...emptyForm, name: item.name });
+      setForm({ ...emptyForm, name: item.name, hasExpiry: !!(item as DocumentTypeItem).hasExpiry });
     }
     setError('');
     setNotice('');
@@ -172,9 +180,15 @@ export default function MastersPage() {
         if (editingId === 'new') await (create as typeof createShift)(payload);
         else await (update as typeof updateShift)(editingId as number, payload);
       } else {
-        const payload = { name: form.name.trim() };
-        if (editingId === 'new') await (create as typeof createDepartment)(payload);
-        else await (update as typeof updateDepartment)(editingId as number, payload);
+        if (activeTab === 'document-types') {
+          const dp = { name: form.name.trim(), hasExpiry: form.hasExpiry };
+          if (editingId === 'new') await (create as typeof createDocumentType)(dp);
+          else await (update as typeof updateDocumentType)(editingId as number, dp);
+        } else {
+          const payload = { name: form.name.trim() };
+          if (editingId === 'new') await (create as typeof createSite)(payload);
+          else await (update as typeof updateSite)(editingId as number, payload);
+        }
       }
       setNotice(editingId === 'new' ? 'Item created' : 'Item saved');
       setEditingId(null);
@@ -194,7 +208,7 @@ export default function MastersPage() {
         await api[activeTab].deactivate(item.id);
         setNotice(`"${item.name}" deactivated`);
       } else {
-        await (api[activeTab].update as typeof updateDepartment)(item.id, { isActive: true });
+        await (api[activeTab].update as typeof updateSite)(item.id, { isActive: true });
         setNotice(`"${item.name}" activated`);
       }
       await loadAll();
@@ -206,6 +220,7 @@ export default function MastersPage() {
   const currentTab = tabs.find((t) => t.key === activeTab)!;
   const currentItems = items[activeTab];
   const isShifts = activeTab === 'shifts';
+  const isDocTypes = activeTab === 'document-types';
 
   const inputClass =
     'mt-1.5 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm transition-colors';
@@ -226,7 +241,7 @@ export default function MastersPage() {
         <nav aria-label="Master categories" className="rounded-xl border border-gray-200 bg-white p-2 shadow-sm lg:sticky lg:top-6 lg:col-span-3 lg:self-start">
           <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Reference data</p>
           {tabs.map((t) => {
-            const active = activeTab === t.key;
+            const active = !special && activeTab === t.key;
             return (
               <button
                 key={t.key}
@@ -242,9 +257,23 @@ export default function MastersPage() {
               </button>
             );
           })}
+          <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Dropdown options</p>
+          <button
+            type="button"
+            onClick={() => { setSpecial('parameters'); setEditingId(null); setError(''); setNotice(''); }}
+            aria-current={special === 'parameters' ? 'true' : undefined}
+            className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium ${special === 'parameters' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            Parameters
+          </button>
         </nav>
 
         {/* Section panel */}
+        {special ? (
+          <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-9">
+            <ParametersPanel />
+          </section>
+        ) : (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-9">
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -279,15 +308,16 @@ export default function MastersPage() {
                       <th className="px-4 py-3">Late / Half-day</th>
                     </>
                   )}
+                  {isDocTypes && <th className="px-4 py-3">Expiry</th>}
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={isShifts ? 5 : 3} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 4 : 3} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
                 ) : currentItems.length === 0 ? (
-                  <tr><td colSpan={isShifts ? 5 : 3} className="px-4 py-8 text-center text-gray-500">No {currentTab.label.toLowerCase()} yet.</td></tr>
+                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 4 : 3} className="px-4 py-8 text-center text-gray-500">No {currentTab.label.toLowerCase()} yet.</td></tr>
                 ) : (
                   currentItems.map((item) => {
                     const shift = isShifts ? (item as ShiftItem) : null;
@@ -299,6 +329,9 @@ export default function MastersPage() {
                             <td className="px-4 py-3 text-gray-700 font-mono text-[13px]">{toTimeInput(shift.startTime)} – {toTimeInput(shift.endTime)}</td>
                             <td className="px-4 py-3 text-gray-700">{shift.lateMinutes}m / {shift.halfDayMinutes}m</td>
                           </>
+                        )}
+                        {isDocTypes && (
+                          <td className="px-4 py-3 text-gray-700">{(item as DocumentTypeItem).hasExpiry ? 'Issue + expiry required' : 'No expiry'}</td>
                         )}
                         <td className="px-4 py-3">
                           {item.isActive ? (
@@ -327,6 +360,7 @@ export default function MastersPage() {
             </table>
           </div>
         </section>
+        )}
       </div>
 
       {editingId !== null && (
@@ -354,6 +388,16 @@ export default function MastersPage() {
                 Name
                 <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
               </label>
+
+              {isDocTypes && (
+                <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+                  <input type="checkbox" className="mt-0.5" checked={form.hasExpiry} onChange={(e) => setForm({ ...form, hasExpiry: e.target.checked })} />
+                  <span>
+                    <span className="font-medium">This document expires</span>
+                    <span className="block text-gray-500">Issue date and expiry date become required for documents of this type.</span>
+                  </span>
+                </label>
+              )}
 
               {isShifts && (
                 <>

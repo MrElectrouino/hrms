@@ -9,4 +9,8 @@ export class UpdateDocumentTypeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  hasExpiry?: boolean;
 }

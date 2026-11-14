@@ -11,6 +11,10 @@ import { EmployeesModule } from './employees/employees.module';
 import { EmployeeProfileModule } from './employee-profile/employee-profile.module';
 import { DocumentsModule } from './documents/documents.module';
 import { SystemAdminModule } from './system-admin/system-admin.module';
+import { BranchesModule } from './branches/branches.module';
+import { AttendanceSetupModule } from './attendance-setup/attendance-setup.module';
+import { AttendanceModule } from './attendance/attendance.module';
+import { LeaveModule } from './leave/leave.module';
 import appConfig from './config/app.config';
 
 import { CommonModule } from './common/common.module';
@@ -33,6 +37,10 @@ import { LoggerContextMiddleware } from './common/logger/logger-context.middlewa
     EmployeeProfileModule,
     DocumentsModule,
     SystemAdminModule,
+    BranchesModule,
+    AttendanceSetupModule,
+    AttendanceModule,
+    LeaveModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -22,6 +22,12 @@ export class BrandingController {
     return { data, message: { code: 'OK', text } };
   }
 
+  /** Public, no auth: colours, name and texts for the app shell and the login page. */
+  @Get('public')
+  async getPublic() {
+    return this.ok(await this.service.getPublicBranding(), 'Branding retrieved');
+  }
+
   @Get()
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,6 +72,8 @@ export class BrandingController {
     const { stream, mimeType } = await this.service.getBrandingFileStream('logoFileId');
     res.setHeader('Content-Type', mimeType || 'application/octet-stream');
     res.setHeader('Cache-Control', 'public, max-age=300');
+    // helmet defaults to same-origin; the app and API run on different origins, and these images are public.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     stream.pipe(res);
   }
 
@@ -75,6 +83,8 @@ export class BrandingController {
     const { stream, mimeType } = await this.service.getBrandingFileStream('faviconFileId');
     res.setHeader('Content-Type', mimeType || 'application/octet-stream');
     res.setHeader('Cache-Control', 'public, max-age=300');
+    // helmet defaults to same-origin; the app and API run on different origins, and these images are public.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     stream.pipe(res);
   }
 }

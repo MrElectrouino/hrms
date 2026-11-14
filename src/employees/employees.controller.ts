@@ -25,6 +25,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { EmployeesService } from './employees.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { EmployeeBranchGuard } from '../common/guards/branch-access.guard';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -35,7 +36,7 @@ import { UploadedFileLike } from '../common/services/file-storage.service';
 
 @ApiTags('Employees')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, EmployeeBranchGuard)
 @Controller('employees')
 export class EmployeesController {
   constructor(private readonly employeesService: EmployeesService) {}
@@ -45,8 +46,8 @@ export class EmployeesController {
   }
 
   @Get()
-  async findAll(@Query() query: ListEmployeesQueryDto) {
-    const result = await this.employeesService.findAll(query);
+  async findAll(@Query() query: ListEmployeesQueryDto, @CurrentUser() user: CurrentUserPayload) {
+    const result = await this.employeesService.findAll(query, user);
     return this.okEnvelope(result.items, 'Employees retrieved', result.pagination);
   }
 
@@ -56,7 +57,7 @@ export class EmployeesController {
     @CurrentUser() user: CurrentUserPayload,
     @Ip() ip: string,
   ) {
-    const created = await this.employeesService.create(dto, user.profileId, ip);
+    const created = await this.employeesService.create(dto, user.profileId, ip, user);
     return this.okEnvelope(created, 'Employee created');
   }
 

@@ -17,7 +17,6 @@ export const SECTION_KEYS = [
   'employment',
   'organization',
   'attendance',
-  'compensation',
   'bank',
   'documents',
   'education',
@@ -43,7 +42,11 @@ export interface FieldDef {
   /** Render a Yes/No field as a checkbox (stored as "Yes" / "No"). */
   display?: 'checkbox';
   /** Options come from a master table at request time (see Lookups). */
-  optionsSource?: 'languages' | 'nationalities' | 'employees';
+  optionsSource?: 'languages' | 'nationalities' | 'employees' | 'noticeReasons' | 'departments' | 'branches' | 'employeeTypes' | 'relationships' | 'shifts';
+  /** Options come from the parameter type with this name (Masters > Parameters). */
+  optionsParameter?: string;
+  /** Show this field only when another field in the same section equals a value; hidden fields are not stored or required. */
+  showWhen?: { key: string; equals: string };
   /** Value/label pairs when the stored value differs from the shown label (e.g. employee id → name). */
   optionItems?: OptionItem[];
 }
@@ -57,6 +60,20 @@ export interface OptionItem {
 export interface Lookups {
   languages?: string[];
   nationalities?: string[];
+  /** Parameter type "Notice Reason". */
+  noticeReasons?: string[];
+  /** Parameter type "Department". */
+  departments?: string[];
+  /** Parameter type "Employee Type". */
+  employeeTypes?: string[];
+  /** Parameter type "Emergency Relationship". */
+  relationships?: string[];
+  /** Options by parameter type name, for fields with `optionsParameter`. */
+  parameters?: Record<string, string[]>;
+  /** Active shifts (value = shift id). */
+  shifts?: OptionItem[];
+  /** Active branches the account may use (value = branch id). */
+  branches?: OptionItem[];
   /** Active employees other than the one being edited (value = employee id). */
   employees?: OptionItem[];
 }
@@ -111,20 +128,6 @@ export const ADDRESS_LEVELS: Record<CountryCode, string[]> = {
 
 export const CURRENCY: Record<CountryCode, string> = { IN: 'INR', AE: 'AED', GB: 'GBP', US: 'USD' };
 
-export const LEGAL_ENTITIES: Record<CountryCode, string[]> = {
-  IN: ['Meridian Systems India Pvt Ltd'],
-  AE: ['Meridian Systems FZ-LLC'],
-  GB: ['Meridian Systems UK Ltd'],
-  US: ['Meridian Systems Inc.'],
-};
-
-export const BRANCHES: Record<CountryCode, string[]> = {
-  IN: ['Pune HQ', 'Bengaluru', 'Chennai'],
-  AE: ['Dubai Office', 'Abu Dhabi'],
-  GB: ['London', 'Manchester'],
-  US: ['Austin HQ', 'New York'],
-};
-
 export const DOCUMENT_TYPES: Record<CountryCode, string[]> = {
   IN: ['Passport', 'PAN Card', 'Aadhaar Card', 'UAN / PF Documents', 'Work Permit', 'Driving Licence', 'Educational Certificates', 'Relieving Letter', 'Form 16 (last 3 years)'],
   AE: ['Emirates ID', 'Visa', 'Work Permit', 'Labour Card', 'Passport', 'Driving Licence', 'Educational Certificates', 'Experience Certificate'],
@@ -133,34 +136,6 @@ export const DOCUMENT_TYPES: Record<CountryCode, string[]> = {
 };
 
 const ORG_COUNTRY_OPTIONS = [...COUNTRIES];
-const GENDER = ['Male', 'Female', 'Other'];
-const MARITAL = ['Single', 'Married', 'Divorced', 'Widowed'];
-const BLOOD = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
-const RELATION = ['Parent', 'Spouse', 'Sibling', 'Friend', 'Other'];
-const EMP_CATEGORY = ['Staff', 'Management', 'Worker'];
-const EMP_TYPE = ['Full Time', 'Part Time', 'Contract', 'Intern'];
-const EMP_STATUS = ['Active', 'On Notice', 'Inactive'];
-const PROBATION = ['3 months', '6 months', '1 year'];
-const NOTICE = ['1 month', '2 months', '3 months'];
-const DEPARTMENTS = ['Engineering', 'Finance', 'Product', 'Customer Success', 'HR', 'Operations'];
-const GRADES = ['G3', 'G4', 'G5', 'G6', 'G7'];
-const APPROVERS = ['HR Approvers', 'Finance Approvers', 'Department Heads'];
-const ATT_PROCESSING = ['Automatic', 'Manual'];
-const ATT_TYPE = ['Biometric', 'Web', 'Mobile'];
-const SHIFTS = ['General 09:00–18:00', 'Day 08:00–17:00', 'Night 20:00–05:00'];
-const ROSTER = ['Fixed', 'Rotational'];
-const WEEKLY_OFF = ['Saturday, Sunday', 'Friday, Saturday', 'Sunday only'];
-const GRACE = ['0 min', '5 min', '10 min', '15 min'];
-const OT = ['None', '1.25x', '1.5x', '2x'];
-const LEAVE_CALENDAR = ['Jan – Dec', 'Apr – Mar'];
-const ACCRUAL = ['Monthly', 'Annual', 'Front-loaded'];
-const PAYMENT_MODE = ['Bank Transfer', 'Cheque', 'Cash'];
-const PAY_FREQ = ['Monthly', 'Bi-weekly'];
-const PAY_GROUP = ['A – Monthly', 'B – Contract'];
-const PROFICIENCY = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
-const ACCESS_ROLE = ['Employee', 'Manager', 'HR Admin', 'Payroll Admin', 'System Admin'];
-const LOGIN_STATUS = ['Active', 'Locked', 'Disabled'];
-const MFA = ['Enabled', 'Disabled'];
 
 /* ------------------------------------------------------------------ schema builder */
 
@@ -168,19 +143,98 @@ function F(key: string, label: string, type: FieldType = 'text', extra: Partial<
   return { key, label, type, ...extra };
 }
 
-/** Builds the nine sections for one employee country (country-dependent options resolved). */
-export function buildSections(country: CountryCode, lookups: Lookups = {}): SectionDef[] {
+/**
+ * Admin override for one tab, group or field in one country (System Admin > Profile field rules).
+ * groupTitle "" = the whole tab; fieldKey "" = the whole group. null = keep the code default.
+ */
+export interface FieldRule {
+  sectionKey: string;
+  groupTitle: string;
+  fieldKey: string;
+  isVisible: boolean | null;
+  isRequired: boolean | null;
+}
+
+/** Needed to create an employee or resolve their country; admins cannot hide or relax these. */
+export const LOCKED_FIELDS: readonly string[] = ['firstName', 'lastName', 'legalEntityCountry'];
+export const LOCKED_SECTIONS: readonly string[] = ['personal', 'organization'];
+
+const ruleKey = (s: string, g: string, f: string) => `${s}|${g}|${f}`;
+
+/**
+ * Keeps only what applies to the country (a field's `countries` list), then applies admin rules.
+ * A rule can hide a tab, group or field, show a field that is not a default for the country,
+ * or change whether a field is required. Fields come out with `countries` cleared, so the
+ * validators treat everything that survives as applicable.
+ */
+function applyCountryAndRules(sections: SectionDef[], country: CountryCode, rules: FieldRule[]): SectionDef[] {
+  const byScope = new Map(rules.map((r) => [ruleKey(r.sectionKey, r.groupTitle, r.fieldKey), r]));
+  const out: SectionDef[] = [];
+  for (const s of sections) {
+    if (byScope.get(ruleKey(s.key, '', ''))?.isVisible === false && !LOCKED_SECTIONS.includes(s.key)) continue;
+    const groups: GroupDef[] = [];
+    for (const g of s.groups) {
+      if (byScope.get(ruleKey(s.key, g.title, ''))?.isVisible === false) continue;
+      const shape = (f: FieldDef): FieldDef | null => {
+        const r = byScope.get(ruleKey(s.key, g.title, f.key));
+        if (LOCKED_FIELDS.includes(f.key)) return { ...f, countries: undefined };
+        const visible = r?.isVisible ?? applies(f, country);
+        if (!visible) return null;
+        return { ...f, countries: undefined, required: r?.isRequired ?? f.required };
+      };
+      const next: GroupDef = { ...g };
+      if (g.fields) next.fields = g.fields.map(shape).filter((f): f is FieldDef => f !== null);
+      if (g.rows) next.rows = { ...g.rows, fields: g.rows.fields.map(shape).filter((f): f is FieldDef => f !== null) };
+      const emptied = (g.fields && !next.fields!.length && !g.rows && !g.addressLevels && !g.salaryComponents) || (g.rows && !next.rows!.fields.length);
+      if (emptied) continue;
+      groups.push(next);
+    }
+    if (groups.length === 0 && s.groups.length > 0) continue;
+    out.push({ ...s, groups });
+  }
+  return out;
+}
+
+/** Builds the profile sections for one employee country (country options resolved, country and admin rules applied). */
+export function buildSections(country: CountryCode, lookups: Lookups = {}, rules: FieldRule[] = []): SectionDef[] {
   const fill = (f: FieldDef): FieldDef => {
+    if (f.optionsParameter) return { ...f, options: lookups.parameters?.[f.optionsParameter] ?? [] };
     if (!f.optionsSource) return f;
-    if (f.optionsSource === 'employees') {
-      const items = lookups.employees ?? [];
+    if (f.optionsSource === 'employees' || f.optionsSource === 'branches' || f.optionsSource === 'shifts') {
+      const items = (f.optionsSource === 'employees' ? lookups.employees : f.optionsSource === 'branches' ? lookups.branches : lookups.shifts) ?? [];
       return { ...f, options: items.map((i) => i.value), optionItems: items };
     }
     return { ...f, options: lookups[f.optionsSource] ?? [] };
   };
-  return rawSections(country)
+  const built = rawSections(country)
     .map((s) => resolveSection(s, country))
     .map((s) => ({ ...s, groups: s.groups.map((g) => (g.fields ? { ...g, fields: g.fields.map(fill) } : g)) }));
+  return applyCountryAndRules(built, country, rules);
+}
+
+/** Everything an admin can configure for a country, with code defaults (before rules and filtering). */
+export interface RuleCatalogSection {
+  key: string;
+  title: string;
+  locked: boolean;
+  groups: { title: string; fields: { key: string; label: string; defaultVisible: boolean; defaultRequired: boolean; locked: boolean }[] }[];
+}
+export function ruleCatalog(country: CountryCode): RuleCatalogSection[] {
+  return rawSections(country).map((s) => ({
+    key: s.key,
+    title: s.title,
+    locked: LOCKED_SECTIONS.includes(s.key),
+    groups: s.groups.map((g) => ({
+      title: g.title,
+      fields: [...(g.fields ?? []), ...(g.rows?.fields ?? [])].map((f) => ({
+        key: f.key,
+        label: f.label,
+        defaultVisible: applies(f, country),
+        defaultRequired: !!f.required,
+        locked: LOCKED_FIELDS.includes(f.key),
+      })),
+    })),
+  }));
 }
 
 function rawSections(country: CountryCode): SectionDef[] {
@@ -197,10 +251,10 @@ function rawSections(country: CountryCode): SectionDef[] {
         ] },
         { title: 'Personal details', columns: 3, fields: [
           F('dateOfBirth', 'Date of birth', 'date', { required: true }),
-          F('gender', 'Gender', 'select', { options: GENDER, required: true }),
-          F('maritalStatus', 'Marital status', 'select', { options: MARITAL }),
+          F('gender', 'Gender', 'select', { optionsParameter: 'Gender', required: true }),
+          F('maritalStatus', 'Marital status', 'select', { optionsParameter: 'Marital Status' }),
           F('nationality', 'Nationality', 'select', { required: true, optionsSource: 'nationalities' }),
-          F('bloodGroup', 'Blood group', 'select', { options: BLOOD }),
+          F('bloodGroup', 'Blood group', 'select', { optionsParameter: 'BloodGroup' }),
           F('religion', 'Religion'),
           F('languages', 'Languages known', 'multiselect', { wide: true, optionsSource: 'languages', hint: 'Choose all that apply' }),
         ] },
@@ -212,7 +266,7 @@ function rawSections(country: CountryCode): SectionDef[] {
         ] },
         { title: 'Emergency contact', columns: 2, fields: [
           F('emergencyName', 'Contact name'),
-          F('emergencyRelation', 'Relationship', 'select', { options: RELATION }),
+          F('emergencyRelation', 'Relationship', 'select', { optionsSource: 'relationships' }),
           F('emergencyNumber', 'Phone number', 'tel'),
           F('emergencyEmail', 'Email', 'email'),
         ] },
@@ -227,93 +281,54 @@ function rawSections(country: CountryCode): SectionDef[] {
     },
     {
       key: 'employment', title: 'Employment', group: 'Employment', hrOnly: false,
-      description: 'Status, joining, probation, contract and previous employers.',
+      description: 'Status, joining, probation and contract.',
       groups: [
         { title: 'Employment details', fields: [
-          F('employeeCategory', 'Employee category', 'select', { options: EMP_CATEGORY }),
-          F('employmentType', 'Employment type', 'select', { options: EMP_TYPE, required: true }),
-          F('employmentStatus', 'Employment status', 'select', { options: EMP_STATUS, required: true }),
+          F('employeeCategory', 'Employee category', 'select', { optionsParameter: 'Employee Category' }),
+          F('employmentType', 'Employment type', 'select', { optionsSource: 'employeeTypes', required: true }),
+          F('employmentStatus', 'Employment status', 'select', { optionsParameter: 'Employment Status', required: true }),
           F('dateOfJoining', 'Date of joining', 'date', { required: true }),
           F('confirmationDate', 'Confirmation date', 'date'),
-          F('probationPeriod', 'Probation period', 'select', { options: PROBATION }),
-          F('contractStartDate', 'Contract start date', 'date'),
-          F('contractEndDate', 'Contract end date', 'date'),
-          F('noticePeriod', 'Notice period', 'select', { options: NOTICE }),
-          F('lastWorkingDate', 'Last working date', 'date'),
-          F('employmentEndDate', 'Employment end date', 'date'),
+          F('probationPeriod', 'Probation period', 'select', { optionsParameter: 'Probation Period' }),
+          F('contractStartDate', 'Contract start date', 'date', { showWhen: { key: 'employmentType', equals: 'On Contract' } }),
+          F('contractEndDate', 'Contract end date', 'date', { showWhen: { key: 'employmentType', equals: 'On Contract' } }),
+          F('noticePeriod', 'Notice period', 'select', { optionsParameter: 'Notice Period', showWhen: { key: 'employmentStatus', equals: 'On Notice' } }),
+          F('lastWorkingDate', 'Last working date', 'date', { showWhen: { key: 'employmentStatus', equals: 'On Notice' } }),
+          F('noticeReason', 'Reason', 'select', { optionsSource: 'noticeReasons', showWhen: { key: 'employmentStatus', equals: 'On Notice' } }),
         ] },
-        { title: 'Previous employment', rows: {
-          key: 'previousEmployment', label: 'Previous employer', addLabel: 'Add previous employer', max: 10,
-          fields: [F('employer', 'Employer'), F('jobTitle', 'Job title'), F('startDate', 'Start date', 'date'), F('endDate', 'End date', 'date'), F('reasonForLeaving', 'Reason for leaving')],
-        } },
       ],
     },
     {
       key: 'organization', title: 'Organization', group: 'Employment', hrOnly: false,
-      description: 'Legal entity, branch, department, designation, grade and reporting lines.',
+      description: 'Country of employment, branch, department, designation, grade and reporting manager.',
       groups: [
         { title: 'Assignment', fields: [
           F('legalEntityCountry', 'Country of employment', 'select', { options: ORG_COUNTRY_OPTIONS, required: true, hint: 'Drives address, bank, statutory and document fields' }),
-          F('legalEntity', 'Legal entity', 'select', { options: LEGAL_ENTITIES[country], required: true }),
-          F('branch', 'Branch', 'select', { options: BRANCHES[country] }),
+          F('branch', 'Branch', 'select', { optionsSource: 'branches' }),
           F('workLocation', 'Work location'),
           F('payrollSite', 'Payroll site'),
-          F('department', 'Department', 'select', { options: DEPARTMENTS, required: true }),
+          F('department', 'Department', 'select', { optionsSource: 'departments', required: true }),
           F('designation', 'Designation', 'text', { required: true }),
-          F('grade', 'Grade', 'select', { options: GRADES }),
+          F('grade', 'Grade', 'select', { optionsParameter: 'Grade' }),
           F('costCentre', 'Cost centre'),
         ] },
         { title: 'Reporting structure', fields: [
           F('reportingManager', 'Reporting manager', 'select', { optionsSource: 'employees' }),
-          F('functionalManager', 'Functional manager (dotted line)'),
-          F('hrManager', 'HR manager'),
-          F('approverGroup', 'Approver group', 'select', { options: APPROVERS }),
         ] },
       ],
     },
     {
       key: 'attendance', title: 'Attendance & Leave', group: 'Time & pay', hrOnly: false,
-      description: 'Attendance policy, shift, roster, weekly off, OT and leave policy.',
+      description: 'Attendance policy, shift, roster, weekly off and OT.',
       groups: [
         { title: 'Attendance', fields: [
           F('attendanceApplicable', 'Attendance applicable', 'yn'),
-          F('attendanceProcessing', 'Attendance processing', 'select', { options: ATT_PROCESSING }),
-          F('attendanceType', 'Attendance type', 'select', { options: ATT_TYPE }),
-          F('shift', 'Shift', 'select', { options: SHIFTS }),
-          F('roster', 'Roster', 'select', { options: ROSTER }),
-          F('weeklyOff', 'Weekly off', 'select', { options: WEEKLY_OFF }),
-          F('gracePeriod', 'Grace period', 'select', { options: GRACE }),
-          F('lateDeductionApplicable', 'Late deduction applicable', 'yn'),
-          F('overtimeEligible', 'Overtime eligible', 'yn'),
-          F('otConfiguration', 'OT configuration', 'select', { options: OT }),
-          F('attendanceDeviceId', 'Attendance device ID', 'text', { mono: true }),
-          F('biometricId', 'Biometric ID', 'text', { mono: true }),
+          F('attendanceProcessing', 'Attendance processing', 'select', { optionsParameter: 'Attendance Processing' }),
+          F('shift', 'Shift', 'select', { optionsSource: 'shifts' }),
+          F('roster', 'Roster', 'select', { optionsParameter: 'Roster' }),
+          F('weeklyOff', 'Weekly off', 'select', { optionsParameter: 'Weekly Off' }),
+          F('otConfiguration', 'OT configuration', 'select', { optionsParameter: 'OT Configuration' }),
         ] },
-        { title: 'Leave', fields: [
-          F('leaveCalendar', 'Leave calendar', 'select', { options: LEAVE_CALENDAR }),
-          F('accrualType', 'Accrual type', 'select', { options: ACCRUAL }),
-          F('leaveEffectiveFrom', 'Leave effective from', 'date'),
-          F('leaveEffectiveTo', 'Leave effective to', 'date'),
-          F('annualLeaveEligible', 'Annual leave eligible', 'yn'),
-          F('sickLeaveEligible', 'Sick leave eligible', 'yn'),
-          F('leaveEncashmentEligible', 'Leave encashment eligible', 'yn'),
-        ] },
-      ],
-    },
-    {
-      key: 'compensation', title: 'Compensation & Payroll', group: 'Time & pay', hrOnly: false,
-      description: 'Salary structure, components, payment mode and payroll configuration.',
-      groups: [
-        { title: 'Salary structure', fields: [
-          F('salaryEffectiveFrom', 'Effective from', 'date'),
-          F('salaryEffectiveTo', 'Effective to', 'date'),
-          F('paymentMode', 'Payment mode', 'select', { options: PAYMENT_MODE }),
-          F('payFrequency', 'Pay frequency', 'select', { options: PAY_FREQ }),
-          F('payrollGroup', 'Payroll group', 'select', { options: PAY_GROUP }),
-          F('payrollEligible', 'Payroll eligible', 'yn'),
-          F('wpsApplicable', 'WPS applicable', 'yn', { countries: ['AE'] }),
-        ] },
-        { title: 'Salary components (monthly)', salaryComponents: true },
       ],
     },
     {
@@ -330,7 +345,7 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('swiftCode', 'SWIFT code', 'text', { mono: true, countries: ['AE'] }),
           F('sortCode', 'Sort code', 'text', { sensitive: true, mono: true, countries: ['GB'] }),
           F('routingNumber', 'Routing number', 'text', { sensitive: true, mono: true, countries: ['US'] }),
-          F('accountType', 'Account type', 'select', { options: ['Checking', 'Savings'], countries: ['US'] }),
+          F('accountType', 'Account type', 'select', { optionsParameter: 'Bank Account Type', countries: ['US'] }),
         ] },
         { title: 'Statutory & tax', fields: [
           F('pan', 'PAN', 'text', { sensitive: true, mono: true, countries: ['IN'] }),
@@ -340,8 +355,8 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('pfWage', 'PF wage', 'number', { countries: ['IN'] }),
           F('esicApplicable', 'ESIC applicable', 'yn', { countries: ['IN'] }),
           F('esicIpNumber', 'ESIC IP number', 'text', { countries: ['IN'] }),
-          F('professionalTaxState', 'Professional tax state', 'select', { options: ['Maharashtra', 'Karnataka', 'Tamil Nadu', 'Delhi'], countries: ['IN'] }),
-          F('taxRegime', 'Tax regime', 'select', { options: ['Old Regime', 'New Regime'], countries: ['IN'] }),
+          F('professionalTaxState', 'Professional tax state', 'select', { optionsParameter: 'Professional Tax State', countries: ['IN'] }),
+          F('taxRegime', 'Tax regime', 'select', { optionsParameter: 'Tax Regime', countries: ['IN'] }),
           F('labourWelfareFund', 'Labour welfare fund applicable', 'yn', { countries: ['IN'] }),
           F('tdsApplicable', 'TDS applicable', 'yn', { countries: ['IN'] }),
           F('gratuityApplicable', 'Gratuity applicable', 'yn', { countries: ['IN', 'AE'] }),
@@ -350,13 +365,13 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('establishmentId', 'Establishment ID', 'text', { mono: true, countries: ['AE'] }),
           F('nationalInsuranceNumber', 'National Insurance number', 'text', { sensitive: true, mono: true, countries: ['GB'] }),
           F('taxCode', 'Tax code', 'text', { countries: ['GB'] }),
-          F('studentLoanPlan', 'Student loan plan', 'select', { options: ['None', 'Plan 1', 'Plan 2', 'Plan 4'], countries: ['GB'] }),
-          F('autoEnrolmentPension', 'Auto-enrolment pension', 'select', { options: ['Opted in', 'Opted out'], countries: ['GB'] }),
+          F('studentLoanPlan', 'Student loan plan', 'select', { optionsParameter: 'Student Loan Plan', countries: ['GB'] }),
+          F('autoEnrolmentPension', 'Auto-enrolment pension', 'select', { optionsParameter: 'Pension Auto-Enrolment', countries: ['GB'] }),
           F('statutorySickPayEligible', 'Statutory sick pay eligible', 'yn', { countries: ['GB'] }),
           F('ssn', 'SSN', 'text', { sensitive: true, mono: true, countries: ['US'] }),
-          F('w4FilingStatus', 'W-4 filing status', 'select', { options: ['Single', 'Married', 'Head of Household'], countries: ['US'] }),
-          F('stateWithholding', 'State withholding', 'select', { options: ['None (TX)', 'CA', 'NY'], countries: ['US'] }),
-          F('flsaClassification', 'FLSA classification', 'select', { options: ['Exempt', 'Non-exempt'], countries: ['US'] }),
+          F('w4FilingStatus', 'W-4 filing status', 'select', { optionsParameter: 'W-4 Filing Status', countries: ['US'] }),
+          F('stateWithholding', 'State withholding', 'select', { optionsParameter: 'State Withholding', countries: ['US'] }),
+          F('flsaClassification', 'FLSA classification', 'select', { optionsParameter: 'FLSA Classification', countries: ['US'] }),
           F('k401Contribution', 'Pre-tax 401(k) contribution %', 'text', { countries: ['US'] }),
         ] },
       ],
@@ -379,7 +394,7 @@ function rawSections(country: CountryCode): SectionDef[] {
     },
     {
       key: 'education', title: 'Education & Experience', group: 'Records', hrOnly: false,
-      description: 'Qualifications, skills, certifications and professional experience.',
+      description: 'Qualifications, skills and certifications.',
       groups: [
         { title: 'Qualifications', rows: {
           key: 'education', label: 'Qualification', addLabel: 'Add qualification', max: 10,
@@ -387,13 +402,8 @@ function rawSections(country: CountryCode): SectionDef[] {
         } },
         { title: 'Skills & certifications', rows: {
           key: 'skills', label: 'Skill', addLabel: 'Add skill or certification', max: 30,
-          fields: [F('skill', 'Skill', 'text', { required: true }), F('proficiency', 'Proficiency', 'select', { options: PROFICIENCY }), F('certification', 'Certification'), F('issuingBody', 'Issuing body'), F('issueDate', 'Issue date', 'date'), F('expiryDate', 'Expiry date', 'date')],
+          fields: [F('skill', 'Skill', 'text', { required: true }), F('proficiency', 'Proficiency', 'select', { optionsParameter: 'Skill Proficiency' }), F('certification', 'Certification'), F('issuingBody', 'Issuing body'), F('issueDate', 'Issue date', 'date'), F('expiryDate', 'Expiry date', 'date')],
         } },
-        { title: 'Experience & summary', fields: [
-          F('totalExperience', 'Total experience'),
-          F('professionalSkills', 'Professional skills', 'textarea', { wide: true, maxLength: 2000 }),
-          F('remarks', 'Remarks', 'textarea', { wide: true, maxLength: 2000 }),
-        ] },
       ],
     },
     {
@@ -403,9 +413,9 @@ function rawSections(country: CountryCode): SectionDef[] {
         { title: 'Login & access', fields: [
           F('loginEnabled', 'Login enabled', 'yn'),
           F('username', 'Username', 'text', { mono: true, maxLength: 50 }),
-          F('accessRole', 'Role', 'select', { options: ACCESS_ROLE }),
-          F('loginStatus', 'Login status', 'select', { options: LOGIN_STATUS }),
-          F('twoFactorAuthentication', 'Two-factor authentication', 'select', { options: MFA }),
+          F('accessRole', 'Role', 'select', { optionsParameter: 'Access Role' }),
+          F('loginStatus', 'Login status', 'select', { optionsParameter: 'Login Status' }),
+          F('twoFactorAuthentication', 'Two-factor authentication', 'select', { optionsParameter: 'Two-Factor Authentication' }),
         ] },
       ],
     },
@@ -520,6 +530,7 @@ export function validateSection(section: SectionDef, country: CountryCode, data:
       rowMap.set(g.rows.key, g.rows);
     }
   }
+  const fieldShown = (f: FieldDef) => !f.showWhen || String(data[f.showWhen.key] ?? '') === f.showWhen.equals;
   const showGroup = (g: GroupDef) => !g.showWhen || String(values[g.showWhen.key] ?? data[g.showWhen.key] ?? '') === g.showWhen.equals;
 
   // Address levels are stored as one list per address: presentAddress / permanentAddress.
@@ -545,6 +556,7 @@ export function validateSection(section: SectionDef, country: CountryCode, data:
     // Unknown keys are rejected below; known scalar fields are checked here.
     const f = fieldMap.get(key);
     if (!f) { errors.push({ field: key, message: `Unknown or not applicable field: ${key}` }); continue; }
+    if (!fieldShown(f)) continue; // condition not met: the value is dropped, not stored
     const err = checkValue(f, raw);
     if (err) errors.push({ field: key, message: err }); else values[key] = raw ?? '';
   }
@@ -552,7 +564,7 @@ export function validateSection(section: SectionDef, country: CountryCode, data:
   for (const g of resolved.groups) {
     if (!g.fields || !showGroup(g)) continue;
     for (const f of g.fields) {
-      if (!applies(f, country) || !f.required) continue;
+      if (!applies(f, country) || !f.required || !fieldShown(f)) continue;
       const v = values[f.key] ?? data[f.key];
       if (v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0)) errors.push({ field: f.key, message: `${f.label} is required` });
     }
@@ -685,4 +697,15 @@ export function validateComponentAmounts(
     amounts[code] = value;
   }
   return { amounts, errors };
+}
+
+/** Parameter type names the schema reads dropdown options from (loaded in one query by the service). */
+export function parameterTypesUsed(): string[] {
+  const names = new Set<string>();
+  for (const s of rawSections('IN')) {
+    for (const g of s.groups) {
+      for (const f of [...(g.fields ?? []), ...(g.rows?.fields ?? [])]) if (f.optionsParameter) names.add(f.optionsParameter);
+    }
+  }
+  return [...names];
 }

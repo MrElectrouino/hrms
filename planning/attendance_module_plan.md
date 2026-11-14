@@ -1,149 +1,108 @@
-# HRMS Attendance Module -- Architecture & Implementation Plan
-
-**Project:** Generic Global HRMS\
-**Initial countries:** India and UAE\
-**Backend:** NestJS, Prisma, PostgreSQL\
-**Frontend:** Next.js, Tailwind CSS\
-**Document status:** Architecture plan -- working draft
-
-------------------------------------------------------------------------
+# HRMS Attendance & Leave Architecture Plan
 
 ## 1. Purpose
 
-Design a reusable Attendance module for a global HRMS. The module must
-support different company working arrangements and country-specific
-attendance rules without creating a completely separate attendance
-system for each country.
+Design a configurable attendance and leave foundation for a generic HRMS application built with:
 
-The initial working-hour models are:
+- **Backend:** NestJS
+- **ORM:** Prisma
+- **Database:** PostgreSQL
+- **Frontend:** Next.js and Tailwind CSS
 
-1.  **Fixed Working Hours**
-2.  **Flexible Working Hours**
+The initial country scope includes India and UAE, while the architecture should support additional countries without duplicating the entire attendance engine.
 
-Attendance processing must also consider the employee's roster, holiday
-calendar, shift, site and approved leave.
+The design separates common attendance processing from country-specific rules and company-configurable policies.
 
-## 2. Design principles
+---
 
--   Use one common attendance domain and shared attendance records.
--   Keep working schedules, shifts, rosters, holiday calendars, sites
-    and leave as separate concepts.
--   Keep country-specific rules in country attendance policies, not
-    scattered throughout common attendance code.
--   Use effective-dated assignments so historical attendance can be
-    recalculated using the configuration that applied on that date.
--   Support both manual maintenance and bulk Excel upload where
-    required.
--   Keep configurable values in the database; implement executable
-    business rules in NestJS.
--   Preserve an audit trail for attendance changes, imports, approvals
-    and recalculations.
+## 2. Core Design Principles
 
-## 3. Scope
+1. Keep common attendance processing in one shared service.
+2. Use country-specific policy strategies only for genuine legal, operational, or legacy differences.
+3. Store configurable thresholds and company choices in the database; do not hardcode them.
+4. Use effective-dated employee assignments so historical attendance can be interpreted using the configuration that applied at the time.
+5. Keep Work Schedule, Shift, Roster, Site, Holiday Calendar, Leave Policy, and Attendance Policy as separate concepts.
+6. Preserve calculation inputs, policy versions, and audit history.
+7. Do not mark an employee absent until the system has established that the employee was expected to work on that date.
 
-### 3.1 In scope
+---
 
-  -----------------------------------------------------------------------
-  Area                    Responsibility          Maintenance
-  ----------------------- ----------------------- -----------------------
-  Work Schedule           Defines fixed or        Manual
-                          flexible working-hour   
-                          requirements            
+## 3. Working-Hour Types
 
-  Shift Management        Defines shift timings   Manual
-                          and break details       
+The initial implementation will support two work schedule types.
 
-  Roster Management       Assigns workdays,       Manual + Excel upload
-                          weekly offs and shifts  
-                          by date                 
+### 3.1 Fixed Working Hours
 
-  Holiday Calendar        Defines public/company  Manual + Excel upload
-                          holidays and            
-                          applicability           
+A fixed schedule has a defined start and end time.
 
-  Site Management         Defines employee work   Manual
-                          locations and timezone  
+Example:
 
-  Leave Management        Supplies approved leave Existing Leave module
-  integration             and leave portions to   integration
-                          attendance              
+- Start: 09:00
+- End: 18:00
+- Break: 60 minutes
+- Required working time: 8 hours
+- Grace period: configured through the applicable Attendance Policy
 
-  Attendance              Captures punches,       Manual, device/API and
-                          calculates daily        system processing
-                          attendance and supports 
-                          corrections/approval    
+Late arrival can be calculated against the scheduled start time, subject to grace-period and policy rules.
 
-  Attendance Policy       Defines attendance      Country/company
-                          treatment such as       configuration
-                          grace, late, short      
-                          hours, half-day and     
-                          overtime                
-  -----------------------------------------------------------------------
+### 3.2 Flexible Working Hours
 
-### 3.2 Initial working-hour models
+A flexible schedule has an allowed start window and a required amount of working time.
 
-**Fixed Working Hours**
+Example:
 
-An employee follows a defined start and end time. Example: 09:00 AM to
-06:00 PM, with a 60-minute unpaid break and 8 required working hours.
+- Earliest start: 07:00
+- Latest start: 10:00
+- Required working time: 8 hours
 
-**Flexible Working Hours**
+An employee starting at 09:45 should not automatically be marked late merely because they did not start at 09:00. The calculation should focus on the required working duration and any configured flexible-hours conditions.
 
-An employee can start within an allowed time window, provided the
-required working hours are completed. Example: earliest start 07:00 AM,
-latest start 10:00 AM and 8 required working hours.
+### 3.3 Work Schedule Data
 
-Do not introduce weekly-hours-only schedules or core-hours schedules in
-the initial scope unless the business confirms that they are required.
+Suggested fields:
 
-## 4. Keep the concepts separate
+| Field | Description |
+|---|---|
+| Id | Primary key |
+| OrganizationId | Organization |
+| Name | Schedule name |
+| Code | Unique schedule code within organization |
+| ScheduleType | FIXED or FLEXIBLE |
+| StartTime | Fixed schedule start |
+| EndTime | Fixed schedule end |
+| EarliestStartTime | Earliest permitted flexible start |
+| LatestStartTime | Latest permitted flexible start |
+| RequiredDailyMinutes | Required working minutes |
+| BreakDurationMinutes | Planned break duration, if applicable |
+| IsActive | Active status |
 
-These concepts are related but must not be combined into one table or
-one setting.
+For weekday-specific requirements, add a `WorkScheduleDay` table with the applicable weekday and required minutes. Avoid adding weekly-hours-only or core-hours models until the business requires them.
 
-  -----------------------------------------------------------------------
-  Concept                 What it answers         Example
-  ----------------------- ----------------------- -----------------------
-  Work Schedule           How many hours must the Fixed 09:00--18:00;
-                          employee work, and what Flexible start
-                          start-time model        07:00--10:00
-                          applies?                
+---
 
-  Shift                   Which operational time  General, Morning or
-                          period is assigned?     Night shift
+## 4. Separate the Attendance Concepts
 
-  Roster                  What is the employee    Monday: General shift;
-                          expected to work on a   Tuesday: weekly off
-                          particular date?        
+These concepts are related but must not be represented as one configuration.
 
-  Holiday Calendar        Is the date a public or UAE National Day
-                          company holiday for     
-                          this employee/site?     
+| Concept | Purpose |
+|---|---|
+| Site | Work location and timezone context |
+| Shift | Operational time window, such as morning or night shift |
+| Work Schedule | Required working time and fixed/flexible start model |
+| Roster | Employee's date-specific workday, weekly off, and shift assignment |
+| Holiday Calendar | Public and company holidays applicable to an employee |
+| Leave | Approved leave and partial-day leave |
+| Attendance Policy | Rules for late arrival, short hours, half-day, overtime, and exceptions |
 
-  Site                    Where is the employee   Dubai Office
-                          assigned, and which     
-                          timezone/location       
-                          settings apply?         
+A fixed-hours employee may still work rotating shifts through a roster. A flexible-hours employee may not have a fixed shift start. Do not treat Shift and Work Schedule as interchangeable.
 
-  Leave                   Is approved leave       Annual leave, unpaid
-                          applicable for the date leave, half-day leave
-                          or part of the date?    
+---
 
-  Attendance Policy       How should attendance   Grace period, late,
-                          results be classified   short hours, half-day,
-                          and treated?            overtime
-  -----------------------------------------------------------------------
+## 5. Master Setup
 
-**Important:** A fixed work schedule does not necessarily mean the
-employee has the same shift every day. A roster may assign different
-shifts by date. A flexible work schedule may not need a fixed shift
-start time.
+The following items should be available under Master Setup:
 
-## 5. Master/configuration modules
-
-Recommended navigation under **Master Setup**:
-
-``` text
+```text
 Master Setup
 ├── Site Management
 ├── Shift Management
@@ -154,485 +113,491 @@ Master Setup
 └── Holiday Calendar
 ```
 
-Leave Management remains its own module and integrates with Attendance.
+Leave Types and Leave Policies should be managed in the Leave Management module, with their rules integrated into attendance processing.
 
 ### 5.1 Site Management
 
-Maintain: - Site name and code - Country and address - Timezone -
-Active/inactive status - Optional site-specific calendar or
-attendance-policy association
+A site should support:
 
-A site is a work-location master. Do not assume that a site's country
-alone determines every employee's attendance policy; policy assignment
-should be explicit and effective-dated.
+- Site name and code
+- Address and country
+- Timezone
+- Active status
+- Optional default holiday calendar and attendance policy
+
+Employee-to-site assignments should be effective-dated.
 
 ### 5.2 Shift Management
 
-Maintain: - Shift name and code - Start time and end time - Break
-configuration - Cross-midnight indicator or equivalent handling - Active
-status
+A shift should support:
 
-A shift can be assigned to a date through the roster. Define how
-overnight shifts are attributed to an attendance work date.
+- Name and code
+- Start and end time
+- Break definitions
+- Overnight shift indicator or supported cross-midnight time range
+- Active status
 
-### 5.3 Work Schedule
+Shift definitions describe operational timing. They do not replace the employee's Work Schedule.
 
-Maintain reusable schedule definitions. The employee should be assigned
-a Work Schedule record; do not store only an `IsFlexible` Boolean on the
-employee.
+### 5.3 Roster Management
+
+Roster entries determine the employee's expected work pattern on each date.
+
+A roster entry may identify:
+
+- Employee
+- Work date
+- Working day or weekly off
+- Assigned shift, where applicable
+- Work schedule override, only if the product requires it
+- Source: manual, upload, or generated pattern
+
+Roster management should support both manual entry and Excel upload.
+
+### 5.4 Holiday Calendar
+
+A holiday calendar should support:
+
+- Calendar name and country/region
+- Holiday date
+- Holiday name and type
+- Optional site or employee-group applicability
+- Active status
+
+Holiday calendars should support manual entry and Excel upload.
+
+### 5.5 Manual and Upload Workflows
+
+| Setup | Manual | Excel Upload |
+|---|---:|---:|
+| Site | Yes | Not initially required |
+| Shift | Yes | Not initially required |
+| Work Schedule | Yes | Not initially required |
+| Roster | Yes | Yes |
+| Holiday Calendar | Yes | Yes |
+
+For roster and holiday imports:
+
+1. Download a standard Excel template.
+2. Upload the completed file.
+3. Parse and validate rows.
+4. Show a preview before saving.
+5. Detect duplicate entries and conflicting assignments.
+6. Show row-level validation messages.
+7. Save valid rows according to the chosen import policy (all-or-nothing or partial success).
+8. Keep import history, uploader, timestamp, and results.
+
+---
+
+## 6. Employee Configuration and Effective-Dated Assignments
+
+Employee configuration should allow assignment of:
+
+- Site
+- Work Schedule
+- Attendance Policy
+- Holiday Calendar, or inherited calendar
+- Roster or roster pattern
+
+Assignments should have effective start and end dates. Prevent overlapping active assignments where only one assignment is valid at a time.
+
+Define inheritance clearly. For example, an employee may inherit the holiday calendar from their site unless an employee-level assignment overrides it.
+
+Historical attendance should retain references to the resolved configuration or a configuration snapshot so later master-data changes do not silently rewrite historical calculations.
+
+---
+
+## 7. Attendance Policy
+
+Attendance Policy controls how the system interprets attendance results. It should be separate from Work Schedule.
+
+Possible configurable rules include:
+
+- Late arrival grace minutes
+- Short-hours threshold
+- Half-day threshold
+- Overtime eligibility and calculation
+- Missing punch handling
+- Allowed attendance correction window
+- Special-status handling
+- Country- or employee-group-specific exceptions
+
+Use policy rule records or versioned policy configuration rather than hardcoding company-specific values in the attendance service.
+
+---
+
+## 8. Attendance Data Model
+
+The following is a conceptual model. Final Prisma models and relationships should be refined during implementation.
+
+### 8.1 AttendancePunch
+
+Store individual punch events rather than assuming every employee has only one IN and one OUT.
 
 Suggested fields:
 
-  Field                  Purpose
-  ---------------------- ---------------------------------------
-  Id                     Primary key
-  OrganizationId         Owning organization
-  Name / Code            Schedule identity
-  ScheduleType           `FIXED` or `FLEXIBLE`
-  StartTime              Fixed start time
-  EndTime                Fixed end time
-  EarliestStartTime      Flexible earliest permitted start
-  LatestStartTime        Flexible latest permitted start
-  RequiredDailyMinutes   Required working minutes
-  BreakDurationMinutes   Default break duration, if applicable
-  IsActive               Availability for assignment
+| Field | Description |
+|---|---|
+| Id | Primary key |
+| OrganizationId | Organization |
+| EmployeeId | Employee |
+| PunchDateTimeUtc | Punch timestamp in UTC |
+| PunchType | IN or OUT |
+| Source | Web, mobile, device, import, manual |
+| SiteId | Site, if known |
+| DeviceReference | External device identifier |
+| CreatedAt / CreatedBy | Audit information |
 
-Use only the fields relevant to the selected schedule type. Consider
-schedule-day details if requirements vary by weekday.
+This supports multiple work sessions, for example:
 
-### 5.4 Roster Management
+- 08:30 IN
+- 12:30 OUT
+- 13:30 IN
+- 17:30 OUT
 
-Roster supports both: - Manual entry/editing through the UI - Excel
-template download and bulk upload
+Define handling for duplicate punches, unmatched IN/OUT events, overnight shifts, and manual corrections.
 
-A roster entry should identify the employee, work date,
-working/non-working status and assigned shift where applicable. It
-should also support weekly offs and roster patterns.
+### 8.2 AttendanceDaily
 
-Upload workflow: 1. Download the standard template. 2. Upload the
-completed file. 3. Parse and validate rows. 4. Show a preview before
-saving. 5. Detect duplicates and conflicting assignments. 6. Allow valid
-rows to be imported according to the agreed partial/all-or-nothing
-policy. 7. Provide row-level errors and an import summary. 8. Store
-import history and who performed the import.
+Store the processed daily result.
 
-### 5.5 Holiday Calendar
+Suggested fields:
 
-Holiday Calendar supports: - Manual entry/editing - Excel template
-download and bulk upload - Calendar year and country/site
-applicability - Public holidays and company-specific holidays -
-Duplicate-date validation - Import preview, row-level errors and import
-history
+- Id, OrganizationId, EmployeeId, AttendanceDate
+- SiteId, RosterEntryId, ShiftId, WorkScheduleId
+- AttendancePolicyId and policy version/reference
+- FirstInUtc and LastOutUtc
+- WorkedMinutes and RequiredMinutes
+- LateMinutes, ShortMinutes, OvertimeMinutes
+- AttendanceStatusCode
+- ProcessingStatus
+- IsManuallyAdjusted
+- CalculationVersion
+- CreatedAt, UpdatedAt, and audit user references
 
-Do not automatically apply every country holiday to every employee.
-Define how calendars are assigned to organizations, sites or employees,
-with effective dates.
+Use semantic status codes such as:
 
-## 6. Employee assignments
+- PRESENT
+- ABSENT
+- LATE
+- SHORT_HOURS
+- HALF_DAY
+- HOLIDAY
+- WEEKLY_OFF
+- PAID_LEAVE
+- UNPAID_LEAVE
+- WORKED_ON_HOLIDAY
 
-Configuration records must be linked to employees through assignments
-with effective dates.
+Country-specific or legacy numeric status IDs should be mapped to these semantic statuses rather than becoming the core application meaning.
 
-Recommended assignment concepts:
+### 8.3 Attendance Adjustment and Approval
 
-  -----------------------------------------------------------------------
-  Assignment                          Purpose
-  ----------------------------------- -----------------------------------
-  Employee--Site                      Employee's work location
+Keep manual corrections separate from raw punches and calculated results.
 
-  Employee--Work Schedule             Fixed/flexible schedule
+Suggested entities:
 
-  Employee--Attendance Policy         Applicable attendance rules
+- AttendanceAdjustment
+- AttendanceApproval
+- AttendanceProcessingLog
 
-  Employee--Holiday Calendar          Applicable holiday calendar, if not
-                                      inherited from site/org
+Record the original value, corrected value, reason, requester, approver, and timestamps.
 
-  Employee--Roster                    Date-specific work pattern or
-                                      roster entries
+---
 
-  Roster--Shift                       Shift assigned for a particular
-                                      roster date
-  -----------------------------------------------------------------------
+## 9. Attendance Processing Flow
 
-Where the organization requires inheritance, define and document a
-resolution order. For example, a holiday calendar may be inherited from
-the site and overridden by an explicit employee assignment. Avoid
-silently choosing precedence rules.
+For each employee and work date:
 
-All assignments that affect historical attendance should have
-`EffectiveFrom` and `EffectiveTo` dates. Prevent overlapping active
-assignments where the business rule requires a single applicable
-assignment.
-
-## 7. Attendance data model -- conceptual
-
-The following is a starting point for database design, not final Prisma
-schema.
-
-### 7.1 Core entities
-
-  -------------------------------------------------------------------------
-  Entity                                Purpose
-  ------------------------------------- -----------------------------------
-  `AttendancePolicy`                    Country/company attendance policy
-                                        identity and validity
-
-  `AttendancePolicyRule`                Structured rule settings, such as
-                                        grace minutes or thresholds
-
-  `AttendancePolicyAssignment`          Assigns a policy to an employee or
-                                        supported organizational scope
-
-  `WorkSchedule`                        Fixed/flexible schedule definition
-
-  `WorkScheduleDay`                     Optional weekday-specific hours and
-                                        break requirements
-
-  `WorkScheduleAssignment`              Effective-dated employee schedule
-                                        assignment
-
-  `Shift`                               Shift definitions
-
-  `Site`                                Work locations and timezone
-
-  `Roster` / `RosterEntry`              Roster header and employee/date
-                                        assignments
-
-  `HolidayCalendar` / `Holiday`         Calendar header and holiday dates
-
-  `EmployeeHolidayCalendarAssignment`   Effective-dated calendar
-                                        assignment, if needed
-
-  `AttendancePunch`                     Individual IN/OUT punch events
-
-  `AttendanceDaily`                     Daily attendance summary/result
-
-  `AttendanceAdjustment`                Manual correction and reason
-
-  `AttendanceApproval`                  Approval workflow/history
-
-  `AttendanceImport` /                  Upload tracking and row-level
-  `AttendanceImportRow`                 results
-  -------------------------------------------------------------------------
-
-### 7.2 AttendancePunch
-
-Prefer storing individual punch events rather than only one IN and one
-OUT column. This supports multiple work sessions and breaks.
-
-Suggested fields: - Id - EmployeeId - PunchDateTime (stored
-consistently, preferably UTC) - PunchType (`IN` / `OUT`) - Source
-(manual, device, API, import) - SiteId, if known - Device/reference
-details, if applicable - CreatedBy and CreatedAt
-
-Example:
-
-  Time    Punch
-  ------- -------
-  08:30   IN
-  12:30   OUT
-  13:30   IN
-  17:30   OUT
-
-The daily calculation can total the work intervals and apply the
-relevant break rules. Define handling for unmatched IN/OUT punches,
-duplicate punches and overnight work.
-
-### 7.3 AttendanceDaily
-
-Suggested fields: - Id - EmployeeId - AttendanceDate (the employee's
-attendance work date) - SiteId - WorkScheduleId - ShiftId, nullable
-where no fixed shift applies - RosterEntryId, if applicable -
-AttendancePolicyId - FirstInDateTime - LastOutDateTime - WorkedMinutes -
-RequiredMinutes - LateMinutes - ShortMinutes - OvertimeMinutes -
-AttendanceStatusCode - ProcessingStatus - IsManuallyAdjusted -
-CalculationVersion - CreatedAt / UpdatedAt
-
-Use semantic status codes in the common system, such as `PRESENT`,
-`ABSENT`, `LATE`, `SHORT_HOURS`, `HALF_DAY`, `HOLIDAY`, `WEEKLY_OFF`,
-`ANNUAL_LEAVE` and `UNPAID_LEAVE`. Final status definitions and
-combinations need business approval. Country-specific legacy IDs should
-be mapped rather than reused as universal meanings.
-
-## 8. Attendance processing flow
-
-For each employee and attendance work date:
-
-1.  Resolve the employee's effective site and timezone.
-2.  Resolve the applicable roster entry.
-3.  Determine whether the date is a working day, weekly off or rostered
-    non-working day.
-4.  Resolve the applicable holiday calendar and check for a holiday.
-5.  Retrieve approved leave and determine full-day or partial-day
-    coverage.
-6.  Resolve the assigned shift, if the roster requires one.
-7.  Resolve the employee's fixed/flexible Work Schedule.
-8.  Retrieve and validate punch events.
-9.  Calculate worked minutes from valid IN/OUT intervals.
+1. Resolve the employee's effective site and timezone.
+2. Resolve the roster entry.
+3. Determine whether the date is a working day or weekly off.
+4. Check the applicable holiday calendar.
+5. Retrieve approved leave and partial-day leave.
+6. Resolve the applicable shift, if any.
+7. Resolve the Work Schedule (fixed or flexible).
+8. Retrieve and validate punch events.
+9. Calculate worked minutes.
 10. Resolve the effective Attendance Policy.
-11. Apply policy rules to calculate late, short hours, half-day,
-    overtime and final status.
-12. Save the daily result, calculation inputs/version and audit details.
+11. Calculate late minutes, short hours, half-day, and overtime.
+12. Determine the final semantic attendance status.
+13. Save the result, calculation inputs/version, and audit details.
 
-The exact precedence when a holiday, rostered workday, approved leave
-and punches overlap must be explicitly defined. Do not assume one
-universal precedence without business confirmation.
+The system must first determine whether the employee was expected to work. A missing punch on a weekly off, holiday, or approved leave date must not automatically produce an absence.
 
-**Important:** Do not mark an employee absent merely because no punch
-exists. First establish that the employee was expected to work on that
-date and check holiday, weekly-off, roster and approved-leave
-information.
+---
 
-## 9. Fixed and flexible attendance evaluation
+## 10. Fixed and Flexible Calculations
 
 ### Fixed schedule
 
--   Compare the first valid IN punch with the scheduled start, subject
-    to policy grace rules.
--   Calculate working intervals and total worked minutes.
--   Compare worked minutes with required minutes.
--   Calculate overtime only under the applicable policy and approval
-    rules.
+Compare actual attendance against the scheduled start and required working duration, applying the configured grace period and policy.
 
 ### Flexible schedule
 
--   Validate the first valid IN punch against the allowed start window.
--   Calculate total worked minutes.
--   Compare total worked minutes with required minutes.
--   Do not classify an employee as late merely because they did not
-    arrive at a fixed shift start that does not apply to their schedule.
--   Apply any configured rule for starting outside the allowed window.
+Compare the employee's worked duration with the required working duration and validate the allowed start window if the policy requires it. Do not apply a fixed-start late rule by default.
 
-A completed daily-hours requirement does not automatically mean there
-can never be a policy violation. For example, an employee may start
-outside the permitted window but still complete the required hours. The
-business must decide how that case is classified.
+Break deduction, rounding, overnight handling, and incomplete punch treatment must be explicitly defined in policy/configuration.
 
-## 10. Country-specific attendance policies
+---
 
-Use a common Attendance Service with country policy strategies. Do not
-create separate full attendance engines or duplicate common attendance
-tables for India and UAE.
+## 11. Country-Specific Attendance Policies
+
+Use one shared attendance processing service with country-specific policy strategies for genuine differences.
 
 Suggested NestJS structure:
 
-``` text
+```text
 src/attendance/
-├── attendance.module.ts
-├── attendance.controller.ts
-├── attendance.service.ts
-├── attendance.repository.ts
-├── dto/
-├── policies/
-│   ├── attendance-policy.interface.ts
-│   ├── attendance-policy.factory.ts
-│   ├── india/
-│   │   └── india-attendance.policy.ts
-│   └── uae/
-│       └── uae-attendance.policy.ts
-├── rules/
-│   ├── timestamp.rule.ts
-│   ├── late.rule.ts
-│   ├── short-hours.rule.ts
-│   ├── half-day.rule.ts
-│   ├── overtime.rule.ts
-│   └── validation.rule.ts
-└── calculations/
-    ├── punch-calculator.service.ts
-    └── daily-attendance.service.ts
+  attendance.module.ts
+  attendance.controller.ts
+  attendance.service.ts
+  attendance.repository.ts
+  dto/
+  policies/
+    attendance-policy.interface.ts
+    attendance-policy.factory.ts
+    india/
+      india-attendance.policy.ts
+    uae/
+      uae-attendance.policy.ts
+  rules/
+    timestamp.rule.ts
+    late.rule.ts
+    short-hours.rule.ts
+    half-day.rule.ts
+    overtime.rule.ts
+    validation.rule.ts
+  calculations/
+    punch-calculator.service.ts
+    daily-attendance.service.ts
 ```
 
-Common service responsibilities: - Load effective employee
-configuration. - Resolve schedule, roster, shift, site, holiday and
-leave inputs. - Select the applicable policy. - Orchestrate calculations
-and validations. - Persist results in a Prisma transaction. - Maintain
-audit history and calculation version.
+The shared service should orchestrate data loading, policy resolution, calculation, persistence, and audit. Country-specific strategies should handle country-specific legal rules, timestamp conventions, legacy status mappings, and special cases such as Ramadan where applicable.
 
-Country policy responsibilities: - Country-specific timestamp
-interpretation and restrictions. - Country-specific attendance
-classifications and exceptions. - Country-specific Ramadan or other
-legally/company-required handling, where applicable. - Country-specific
-mapping between legacy statuses and common semantic statuses.
+### 11.1 Existing Legacy Procedure Differences
 
-Keep policy settings such as grace minutes and thresholds in database
-configuration where they are genuinely configurable. Keep executable
-logic in tested NestJS code.
+The existing system has separate India and UAE attendance procedures. During migration:
 
-### Existing legacy context to preserve during migration
+- Identify the actual business rule behind each legacy condition.
+- Move configurable values into policy/configuration.
+- Keep genuine country-specific behavior in the appropriate country strategy.
+- Map legacy status IDs to semantic application statuses.
+- Validate old and new calculations against representative historical cases before cutover.
 
-The existing UAE implementation uses `AddUpdateMuster` and the India
-implementation uses `AddUpdateAttendance`. They have different status
-parameter types and some different business rules. Examples identified
-during the earlier review include UAE Ramadan handling and an 11 AM
-self-marking restriction, while the reviewed India procedure does not
-contain those same rules.
+Do not copy entire legacy stored procedures into separate country-specific NestJS services without first separating common logic from policy differences.
 
-Treat these as migration discovery points, not as a complete or legally
-verified country-rule specification. Before implementation, document and
-obtain business approval for every existing rule, exception, status
-mapping and timestamp behavior.
+---
 
-## 11. API planning
+# 12. Leave Management Integration
 
-Possible API groups (final routes and payloads to be designed with the
-schema):
+Leave Management owns leave applications, leave balances, leave policies, leave types, accrual, and leave-specific calculations.
 
-``` text
+Attendance processing should consume approved leave results. It should not independently invent or recalculate leave entitlement.
+
+## 12.1 Leave Type Configuration
+
+When System Admin creates or edits a Leave Type, provide a Boolean setting:
+
+**Eligible for Sandwich Leave Policy**
+
+Suggested field:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| IsSandwichEligible | BOOLEAN | false | Determines whether this leave type participates in sandwich leave calculation |
+
+Example:
+
+| Leave Type | IsSandwichEligible |
+|---|---:|
+| Annual Leave | true |
+| Casual Leave | true |
+| Sick Leave | false |
+| Maternity Leave | false |
+| Unpaid Leave | false |
+
+These are example settings only. Each organization chooses which leave types are eligible.
+
+## 12.2 Company-Level Sandwich Configuration
+
+Provide an organization-level setting to enable or disable the Sandwich Leave Policy.
+
+The sandwich calculation should run only when:
+
+1. The organization's Sandwich Leave Policy is enabled.
+2. The leave type's `IsSandwichEligible` setting is true.
+3. The applicable policy conditions are satisfied.
+
+If the organization disables the policy, no leave type should trigger sandwich calculation even if its eligibility flag is true.
+
+## 12.3 Sandwich Policy Rules
+
+Keep the actual sandwich calculation rules in Leave Policy configuration, not in the Attendance Policy.
+
+Potential company-level or leave-policy settings include:
+
+- Apply to weekly offs
+- Apply to public holidays
+- Apply only when leave exists on both sides of an intervening non-working day
+- Whether separate leave applications can form one continuous leave period
+- Treatment of partial-day leave
+- Whether the intervening day is debited from leave balance or treated as unpaid
+- Exceptions required by applicable law or employee category
+
+Do not assume every company uses sandwich leave. The organization-level policy should be optional and disabled by default.
+
+### Example
+
+Assume Friday and Monday are working days and Saturday/Sunday are weekly offs.
+
+| Day | Day Type | Sandwich-eligible Annual Leave | Non-eligible Sick Leave |
+|---|---|---:|---:|
+| Friday | Working day with leave | 1 | 1 |
+| Saturday | Weekly off | 1 | 0 |
+| Sunday | Weekly off | 1 | 0 |
+| Monday | Working day with leave | 1 | 1 |
+| **Total** | | **4 days** | **2 days** |
+
+This is an illustrative result only. The actual calculation depends on the organization's settings, leave application continuity, and applicable statutory requirements.
+
+### Important legal consideration
+
+Do not apply a company sandwich rule blindly to every employee or leave category. For India, statutory annual-leave provisions and the coverage of the relevant worker/establishment must be considered. Legal requirements may override the organization's configurable rule. Country-specific legal validation is required before enabling the feature.
+
+---
+
+## 13. API and Frontend Areas
+
+Potential API areas:
+
+```text
 /master/sites
 /master/shifts
 /master/work-schedules
 /master/rosters
-/master/rosters/import
 /master/holiday-calendars
-/master/holiday-calendars/import
 
 /attendance/punches
 /attendance/daily
-/attendance/process
-/attendance/regularizations
+/attendance/adjustments
 /attendance/approvals
-/attendance/reports
+/attendance/process
+
+/leave/types
+/leave/policies
+/leave/policies/{id}/sandwich-rules
+/leave/applications
+/leave/balances
 ```
 
-Use authorization checks for organization, site and employee scope.
-Validate effective dates, duplicate assignments and conflicting roster
-entries at the API/service layer and enforce appropriate database
-constraints as well.
+Frontend screens should include:
 
-## 12. Frontend planning
+- Site Management
+- Shift Management
+- Work Schedule Management
+- Roster Calendar and Roster Upload
+- Holiday Calendar and Holiday Upload
+- Attendance Daily View
+- Attendance Corrections and Approvals
+- Leave Type Create/Edit, including Sandwich Eligibility
+- Leave Policy Configuration, including organization-level Sandwich Policy settings
+- Leave Application and Leave Balance views
 
-Recommended screens:
+The Leave Type form should expose the `IsSandwichEligible` toggle to authorized System Admin users. The organization-level sandwich enable/disable control should be managed separately in system/organization configuration.
 
-### Master Setup
+---
 
--   Site list, create/edit and timezone configuration
--   Shift list and shift form
--   Work Schedule list and form
--   Roster calendar, manual assignment and upload wizard
--   Holiday Calendar list/calendar, manual entry and upload wizard
+## 14. Validation, Audit, and Operational Requirements
 
-### Attendance
+- Validate effective-date overlaps for employee assignments.
+- Validate roster conflicts and duplicate employee/date entries.
+- Validate holiday duplicates within a calendar.
+- Keep raw punches immutable where possible; corrections should be auditable adjustments.
+- Record who changed schedules, rosters, policies, leave-type eligibility, and organization-level sandwich settings.
+- Preserve the policy/configuration version used for each processed attendance or leave calculation.
+- Support recalculation with a controlled process and retain before/after results.
+- Make timezone conversion explicit, especially for sites in different countries.
+- Define overnight shift and daylight-saving behavior where relevant.
 
--   Daily attendance view with employee/date filters
--   Employee attendance detail and punch timeline
--   Missing or unmatched punch exception list
--   Attendance regularization form
--   Approval queue
--   Processing/reprocessing history
--   Attendance reports and export
+---
 
-### Upload experience
+## 15. Suggested Implementation Phases
 
-For both Roster and Holiday Calendar: - Template download - File
-selection - Validation/preview - Confirm import - Import result with
-successful, rejected and duplicate rows - Downloadable error report
+### Phase 1 — Master Setup
 
-## 13. Validation and edge cases
+- Site Management
+- Shift Management
+- Fixed and Flexible Work Schedules
+- Holiday Calendar
+- Roster Management and Excel import
 
-Plan tests for:
+### Phase 2 — Employee Assignments
 
--   Fixed and flexible schedules
--   Different required hours by weekday
--   Break handling and multiple punch intervals
--   Missing IN or OUT punch
--   Duplicate or out-of-order punches
--   Overnight shifts and attendance-date attribution
--   Site timezone and daylight-saving changes where relevant
--   Employee transfer between sites
--   Schedule, shift, roster or policy changes effective mid-period
--   Holiday on a rostered working day
--   Leave on a holiday or weekly off
--   Half-day and partial-day leave
--   Work performed on a holiday or weekly off
--   Manual corrections and approval/rejection
--   Reprocessing after configuration changes
--   Duplicate and conflicting upload rows
--   Country policy differences between India and UAE
+- Effective-dated site assignment
+- Work Schedule assignment
+- Attendance Policy assignment
+- Holiday Calendar assignment/inheritance
+- Roster assignment
 
-## 14. Security, audit and reliability
+### Phase 3 — Attendance Foundation
 
--   Restrict master setup and policy administration to authorized roles.
--   Keep upload files/import summaries and row-level errors for audit.
--   Record who created, changed, approved or imported each relevant
-    record.
--   Preserve original punch events; corrections should be traceable
-    rather than silently overwriting source events.
--   Use transactions for daily processing and import commits.
--   Make processing idempotent for the same employee/date/configuration
-    version.
--   Record the policy/configuration version used for each calculation.
--   Define locking/reopening rules for attendance periods before payroll
-    integration.
+- Punch capture and validation
+- Daily attendance calculation
+- Fixed and flexible schedule calculations
+- Attendance adjustments and approvals
+- Attendance processing logs
 
-## 15. Suggested implementation phases
+### Phase 4 — Country Policies
 
-  -----------------------------------------------------------------------
-  Phase                               Deliverable
-  ----------------------------------- -----------------------------------
-  1\. Rule discovery                  Document India/UAE legacy rules,
-                                      statuses, exceptions and expected
-                                      outputs
+- India policy strategy
+- UAE policy strategy
+- Country-specific validation and status mapping
+- Legacy comparison and migration testing
 
-  2\. Domain and schema               Finalize relationships, effective
-                                      dates, constraints and Prisma
-                                      models
+### Phase 5 — Leave Integration
 
-  3\. Master setup                    Sites, shifts, work schedules,
-                                      holiday calendars and roster
+- Leave Type and Leave Policy configuration
+- Approved leave integration with attendance
+- Organization-level Sandwich Leave Policy enable/disable
+- Leave Type `IsSandwichEligible` setting
+- Sandwich calculation and audit details
+- Statutory/legal overrides and validation
 
-  4\. Assignments                     Employee assignments and
-                                      effective-date resolution
+### Phase 6 — Reporting and Optimization
 
-  5\. Punch capture                   Manual/device/API punch ingestion
-                                      and validation
+- Attendance reports
+- Missing punch reports
+- Late and short-hours reports
+- Roster and holiday import reports
+- Leave balance and sandwich calculation audit reports
+- Performance testing and processing optimization
 
-  6\. Calculation engine              Common calculations plus India and
-                                      UAE policy strategies
+---
 
-  7\. Attendance UI                   Daily view, exceptions,
-                                      regularization and approvals
+## 16. Decisions to Confirm Before Implementation
 
-  8\. Upload workflows                Roster and holiday Excel import
-                                      with validation and audit
+1. Whether flexible schedules require an allowed start window or only required daily minutes.
+2. How breaks are represented and deducted.
+3. How overnight shifts and unmatched punches are handled.
+4. Whether roster patterns repeat automatically.
+5. Whether holiday calendars are inherited from site, country, or organization by default.
+6. Whether roster imports allow partial success or require all rows to be valid.
+7. Which employee groups are covered by each attendance and leave policy.
+8. How leave applications on either side of weekly offs/holidays are considered continuous for sandwich calculation.
+9. Which statutory rules and employee categories override company sandwich settings.
+10. Whether sandwich deductions are debited from leave balance, treated as unpaid, or handled through another configured method.
 
-  9\. Payroll integration             Approved attendance results and
-                                      period locking
+---
 
-  10\. Migration and UAT              Compare old and new outputs for
-                                      representative employees/dates
-  -----------------------------------------------------------------------
+## 17. Final Architecture Recommendation
 
-## 16. Decisions still requiring confirmation
+Build a shared Attendance Engine that resolves Site, Roster, Shift, Work Schedule, Holiday Calendar, Leave, and Attendance Policy for each employee/date.
 
-1.  Can a flexible employee have a roster-assigned shift, or should
-    flexible schedules always operate without fixed shift timings?
-2.  Are required hours and break durations configurable per weekday?
-3.  Can an employee be assigned different sites, schedules or policies
-    during the same payroll period?
-4.  What is the precedence when rostered work, public holiday, approved
-    leave and actual punches overlap?
-5.  Does a flexible employee who starts outside the allowed window but
-    completes required hours count as late, a policy violation or
-    present?
-6.  Should roster and holiday imports reject the entire file on any
-    invalid row, or import valid rows and report invalid ones?
-7.  What are the rules for overnight shifts and cross-midnight punches?
-8.  Which existing India/UAE attendance rules must be preserved exactly,
-    and which can be redesigned?
+Keep country-specific behavior in policy strategies and configurable company choices in the database.
 
-## 17. Recommended next design deliverable
+Keep sandwich leave within Leave Management. Use:
+- An organization-level switch to enable or disable the Sandwich Leave Policy.
+- `LeaveType.IsSandwichEligible` to decide which leave types participate.
+- Leave Policy rules to define how weekly offs, holidays, and continuous leave periods are treated.
 
-Before writing Prisma models or implementation code, prepare a detailed
-database schema and relationship diagram covering:
-
--   Organization, country, site and employee
--   Work Schedule and effective-dated assignment
--   Shift and roster entries
--   Holiday Calendar and assignments
--   Attendance Policy, rules and assignments
--   Attendance Punch and Attendance Daily
--   Leave integration
--   Regularization, approval and audit history
-
-Then validate the schema against representative India and UAE scenarios
-and compare the calculated results with the existing HRMS.
+This supports organizations that use sandwich leave, organizations that do not use it, and organizations that apply it only to selected leave types.

@@ -3,13 +3,6 @@ import * as bcrypt from 'bcrypt';
 import { AuthService, INVALID_LOGIN_MESSAGE } from './auth.service';
 import { sha256 } from '../common/utils/crypto.util';
 
-// Legacy DES decryption is mocked: the tests cover the migration logic (D-014), not the cipher.
-jest.mock('../common/utils/crypto.util', () => {
-  const actual = jest.requireActual('../common/utils/crypto.util');
-  return { ...actual, desDecrypt: jest.fn() };
-});
-import { desDecrypt } from '../common/utils/crypto.util';
-
 const NOW = new Date('2026-11-03T08:00:00Z');
 const PAST = new Date('2026-11-03T07:00:00Z');
 const FUTURE = new Date('2026-11-03T09:00:00Z');
@@ -81,7 +74,6 @@ function activeUser(passwordHash: string, extra: Record<string, unknown> = {}) {
     username: 'asha',
     userTypeId: 4,
     passwordHash,
-    legacyPasswordEnc: null,
     mustChangePassword: false,
     isActive: true,
     profile: { isSiteAccess: true, name: 'Asha', email: 'asha@example.test' },
@@ -97,7 +89,6 @@ describe('AuthService.login', () => {
   });
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(NOW);
-    (desDecrypt as jest.Mock).mockReset();
   });
   afterEach(() => jest.useRealTimers());
 
@@ -179,20 +170,6 @@ describe('AuthService.login', () => {
         update: expect.objectContaining({ failedLoginAttempts: 1, isLocked: false, lockedUntil: null }),
       }),
     );
-  });
-
-  it('accepts a legacy DES password once and forces a password change (D-014)', async () => {
-    const { service, prisma, sessions } = makeService();
-    prisma.user.findUnique.mockResolvedValue(
-      activeUser(null as unknown as string, { passwordHash: null, legacyPasswordEnc: 'legacy-blob' }),
-    );
-    (desDecrypt as jest.Mock).mockReturnValue('Legacy#Pass1');
-
-    const result = await service.login({ username: 'asha', password: 'Legacy#Pass1' });
-
-    expect(result.mustChangePassword).toBe(true);
-    expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: 7 }, data: { mustChangePassword: true } });
-    expect(sessions.issue).toHaveBeenCalled();
   });
 });
 
@@ -315,9 +292,8 @@ describe('AuthService password changes', () => {
       data: { revokedAt: NOW, revokedReason: 'password_changed' },
     });
     expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(3);
-    const { passwordHash, legacyPasswordEnc, mustChangePassword } = prisma.user.update.mock.calls[0][0].data;
+    const { passwordHash, mustChangePassword } = prisma.user.update.mock.calls[0][0].data;
     expect(await bcrypt.compare('Brand#New2', passwordHash)).toBe(true);
-    expect(legacyPasswordEnc).toBeNull();
     expect(mustChangePassword).toBe(false);
   });
 });

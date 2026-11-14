@@ -3,6 +3,9 @@ import {
   IsNotEmpty,
   IsOptional,
   IsInt,
+  IsBoolean,
+  IsArray,
+  ArrayUnique,
   MinLength,
   MaxLength,
   Matches,
@@ -33,4 +36,15 @@ export class CreateUserDto {
   @IsOptional()
   @IsInt()
   profileId?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  allBranches?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Type(() => Number)
+  branchIds?: number[];
 }

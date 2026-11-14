@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
+import { brandLogoSrc, useBranding } from '../lib/branding';
+import BranchSwitcher from './BranchSwitcher';
 import { getMyMenu, MenuNode } from '../lib/api';
 import { UserType } from '../lib/user-types';
 
@@ -25,20 +27,27 @@ const GearIcon = (p: IconProps) => (
     <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
   </Svg>
 );
+const SlidersIcon = (p: IconProps) => <Svg {...p}><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" /><circle cx="15" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="17" cy="18" r="2" /></Svg>;
 const HelpIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M9.5 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1 1-1.1 1.7v.5M12 17h.01" /></Svg>;
 const LogoutIcon = (p: IconProps) => <Svg {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></Svg>;
 const ChevronRight = (p: IconProps) => <Svg {...p}><path d="M9 6l6 6-6 6" /></Svg>;
 const ChevronDown = (p: IconProps) => <Svg {...p}><path d="M6 9l6 6 6-6" /></Svg>;
 const ChevronLeft = (p: IconProps) => <Svg {...p}><path d="M15 6l-6 6 6 6" /></Svg>;
-const SearchIcon = (p: IconProps) => <Svg {...p}><circle cx="10.8" cy="10.8" r="7.3" /><path d="m16.2 16.2 5 5" /></Svg>;
 const BellIcon = (p: IconProps) => <Svg {...p}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></Svg>;
 const GlobeIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" /></Svg>;
 const MenuIcon = (p: IconProps) => <Svg {...p}><path d="M3 6h18M3 12h18M3 18h18" /></Svg>;
 
-const BrandLogo = ({ className }: IconProps) => (
-  <div className={`flex items-center justify-center rounded-md ${className ?? ''}`} title="HRMS">
+const BrandLogo = ({ className }: IconProps) => {
+  const { branding } = useBranding();
+  if (branding.hasLogo) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={brandLogoSrc(branding)} alt={branding.appName} title={branding.appName} className={`rounded-md object-contain ${className ?? ''}`} />;
+  }
+  return (
+  <div className={`flex items-center justify-center rounded-md ${className ?? ''}`} title={branding.appName}>
   <svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="auto" height="auto" x="0" y="0" viewBox="0 0 509.421 509.421" xmlSpace="preserve"><g><path d="M409.421 251.348V123.073c-35.366 0-64.139 28.772-64.139 64.138s28.773 64.137 64.139 64.137"  fill="#9bc9ff" data-original="#9bc9ff"></path><path d="M473.56 187.211c0-35.366-28.772-64.138-64.139-64.138v128.275c35.367 0 64.139-28.772 64.139-64.137"  fill="#57a4ff" data-original="#57a4ff"></path><path d="M509.421 366.348c0-55.14-44.859-100-100-100-28.619 0-55.206 12.071-73.879 32.602 26.098 21.11 43.814 52.191 47.288 87.398h126.591zM173.879 298.95c-18.673-20.53-45.26-32.602-73.879-32.602-55.14 0-100 44.86-100 100v20h126.59c3.475-35.207 21.191-66.288 47.289-87.398M100 251.348V123.073c-35.366 0-64.138 28.772-64.138 64.138S64.634 251.348 100 251.348"  fill="#9bc9ff" data-original="#9bc9ff"></path><path d="M164.138 187.211c0-35.366-28.772-64.138-64.138-64.138v128.275c35.366 0 64.138-28.772 64.138-64.137"  fill="#57a4ff" data-original="#57a4ff"></path><path d="M335.542 298.95c-22.114-17.888-50.242-28.619-80.832-28.619v148.76h128.75v-20c0-4.3-.216-8.55-.63-12.742-3.474-35.208-21.19-66.289-47.288-87.399M334.71 170.331c0-44.11-35.89-80-80-80v160c44.11 0 80-35.88 80-80"  fill="#003f8a" data-original="#003f8a"></path><path d="M173.879 298.95c-26.098 21.11-43.814 52.191-47.289 87.398-.414 4.193-.63 8.443-.63 12.742v20h128.75V270.33c-30.589.001-58.717 10.732-80.831 28.62M254.71 250.331v-160c-44.11 0-80 35.89-80 80 0 44.12 35.89 80 80 80"  fill="#005ece" data-original="#005ece"></path></g></svg></div>
-);
+  );
+};
 
 /* ------------------------------------------------------------------ navigation model */
 
@@ -67,16 +76,23 @@ const ROLE_LABEL: Record<number, string> = {
 };
 
 const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
+  { href: '/attendance-setup', label: 'Attendance setup', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/masters', label: 'Masters', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/users', label: 'Users', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/rights', label: 'Rights', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/menus', label: 'Menus', roles: [UserType.SystemAdmin] },
-  { href: '/custom-fields', label: 'Custom fields', roles: [UserType.SystemAdmin] },
+  { href: '/access-control', label: 'Menus & rights', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/salary-templates', label: 'Salary templates', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/system-settings', label: 'System settings', roles: [UserType.SystemAdmin] },
-  { href: '/countries', label: 'Countries', roles: [UserType.SystemAdmin] },
-  { href: '/branding', label: 'Branding', roles: [UserType.SystemAdmin] },
   { href: '/modules', label: 'Modules', roles: [UserType.SystemAdmin] },
+];
+
+/** Own top-level menu, System Admin only. */
+const SYSTEM_SETTINGS_LINKS: Array<NavChild & { roles: UserType[] }> = [
+  { href: '/system-settings', label: 'General settings', roles: [UserType.SystemAdmin] },
+  { href: '/branding', label: 'Branding', roles: [UserType.SystemAdmin] },
+  { href: '/custom-fields', label: 'Custom fields', roles: [UserType.SystemAdmin] },
+  { href: '/profile-rules', label: 'Profile rules', roles: [UserType.SystemAdmin] },
+  { href: '/attendance-config', label: 'Attendance configuration', roles: [UserType.SystemAdmin] },
+  { href: '/leave-config', label: 'Leave configuration', roles: [UserType.SystemAdmin] },
+  { href: '/countries', label: 'Countries', roles: [UserType.SystemAdmin] },
 ];
 
 /** Menu items granted through RBAC (GET /rbac/my-menu), flattened to links. */
@@ -95,14 +111,13 @@ function initialsOf(name?: string | null) {
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
+  const { branding } = useBranding();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [menu, setMenu] = useState<MenuNode[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [profileOpen, setProfileOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const mustChangePassword = !!user?.mustChangePassword;
 
@@ -138,17 +153,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // ⌘K / Ctrl+K focuses the search box.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   // Close menus on navigation.
   useEffect(() => {
@@ -177,13 +181,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Administration = role-based admin screens + anything RBAC grants that is not listed elsewhere.
   const adminChildren: NavChild[] = ADMIN_LINKS.filter((l) => userType && l.roles.includes(userType)).map(({ href, label }) => ({ href, label }));
-  const reserved = new Set(['/', '/employees', '/documents', '/account', ...adminChildren.map((c) => c.href)]);
+  const systemChildren: NavChild[] = SYSTEM_SETTINGS_LINKS.filter((l) => userType && l.roles.includes(userType)).map(({ href, label }) => ({ href, label }));
+  const reserved = new Set(['/', '/employees', '/documents', '/account', ...adminChildren.map((c) => c.href), ...SYSTEM_SETTINGS_LINKS.map((l) => l.href)]);
   for (const link of flattenMenu(menu)) {
     if (!reserved.has(link.href)) {
       adminChildren.push(link);
       reserved.add(link.href);
     }
   }
+
+  const attendanceChildren: NavChild[] = [
+    { href: '/attendance/mark', label: 'Mark attendance' },
+    { href: '/attendance/my', label: 'My attendance' },
+    ...(userType === UserType.Manager || userType === UserType.HRAdmin || userType === UserType.SystemAdmin
+      ? [
+          { href: '/attendance/team', label: 'Team attendance' },
+          { href: '/attendance/corrections', label: 'Correction requests' },
+          { href: '/attendance/reports', label: 'Reports' },
+        ]
+      : []),
+  ];
+
+  const leaveChildren: NavChild[] = [
+    { href: '/leave/my', label: 'My leave' },
+    ...(userType === UserType.Manager || userType === UserType.HRAdmin || userType === UserType.SystemAdmin ? [{ href: '/leave/team', label: 'Team leave' }] : []),
+    ...(userType === UserType.HRAdmin || userType === UserType.SystemAdmin ? [{ href: '/leave/balances', label: 'Balances' }] : []),
+  ];
 
   const entries: NavEntry[] = [
     { key: 'dashboard', label: 'Dashboard', icon: HomeIcon, href: '/' },
@@ -196,11 +219,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         { href: '/documents', label: 'Documents' },
       ],
     },
-    { key: 'attendance', label: 'Time & Attendance', icon: ClockIcon, soon: true, chevron: true },
-    { key: 'leave', label: 'Leave Management', icon: CalendarIcon, soon: true, chevron: true },
+    { key: 'attendance', label: 'Time & Attendance', icon: ClockIcon, children: attendanceChildren },
+    { key: 'leave', label: 'Leave Management', icon: CalendarIcon, children: leaveChildren },
     { key: 'payroll', label: 'Payroll', icon: WalletIcon, soon: true },
     { key: 'reports', label: 'Reports', icon: BarsIcon, soon: true, chevron: true },
     ...(adminChildren.length ? [{ key: 'admin', label: 'Administration', icon: GearIcon, children: adminChildren } as NavEntry] : []),
+    ...(systemChildren.length ? [{ key: 'system', label: 'System Settings', icon: SlidersIcon, children: systemChildren } as NavEntry] : []),
   ];
 
   const pathMatches = (href: string) =>
@@ -212,11 +236,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const doLogout = () => logout().then(() => router.push('/login'));
 
-  const onSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = search.trim();
-    router.push(q ? { pathname: '/employees', query: { search: q } } : '/employees');
-  };
 
   /* ---------------- sidebar row (link or disabled "soon" item) ---------------- */
   const rowBase = 'group relative flex h-10 items-center rounded-lg text-sm font-medium transition-colors';
@@ -352,7 +371,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <div className={`relative z-10 flex items-center gap-2.5 px-2 pb-6 ${collapsed ? 'lg:flex-col lg:gap-3 lg:px-0 lg:pb-5' : ''}`}>
           <BrandLogo className={`h-[40px] w-[42px] shrink-0 ${collapsed ? 'lg:h-[30px] lg:w-[34px]' : ''}`} />
           <div className={`${collapsed ? 'lg:hidden' : ''} min-w-0`}>
-            <p className="text-xl font-bold leading-none tracking-tight text-white">HRMS</p>
+            <p className="text-xl font-bold leading-none tracking-tight text-white">{branding.appName}</p>
             <p className="mt-1 whitespace-nowrap text-[11px] text-slate-400">Smart HR. Better Tomorrow.</p>
           </div>
           <button
@@ -406,20 +425,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <MenuIcon className="h-5 w-5" />
             </button>
 
-            <form onSubmit={onSearch} className="flex h-10 min-w-0 max-w-[560px] flex-1 items-center gap-2.5 rounded-lg border border-gray-300 bg-white px-3 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/30">
-              <SearchIcon className="h-[18px] w-[18px] shrink-0 text-gray-400" />
-              <input
-                ref={searchRef}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search employee, department, or module..."
-                className="min-w-0 flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
-                aria-label="Search"
-              />
-              <kbd className="hidden rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 font-sans text-[11px] text-gray-500 sm:inline">⌘ K</kbd>
-            </form>
-
             <div className="ml-auto flex items-center gap-3 text-sm font-medium text-gray-700 lg:gap-[18px]">
+              {/* Branch */}
+              <BranchSwitcher />
+
               {/* Notifications */}
               <div className="relative">
                 <button
@@ -477,6 +486,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           {children}
         </main>
+        {branding.footerText && (
+          <footer className="px-4 pb-6 text-center text-xs text-gray-400 sm:px-6 lg:px-7">{branding.footerText}</footer>
+        )}
       </div>
     </div>
   );

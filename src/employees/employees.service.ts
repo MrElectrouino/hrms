@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { PiiService } from '../common/services/pii.service';
+import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { FileStorageService, UploadedFileLike } from '../common/services/file-storage.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
@@ -41,7 +42,7 @@ export class EmployeesService {
     private readonly storage: FileStorageService,
   ) {}
 
-  async findAll(query: ListEmployeesQueryDto): Promise<PaginatedEmployees> {
+  async findAll(query: ListEmployeesQueryDto, user?: CurrentUserPayload): Promise<PaginatedEmployees> {
     const page = Math.max(1, query.page ?? 1);
     const pageSize = [25, 50, 100].includes(query.pageSize ?? 25)
       ? query.pageSize ?? 25
@@ -53,6 +54,8 @@ export class EmployeesService {
     const sortOrder = query.sortOrder === 'desc' ? 'desc' : 'asc';
 
     const where: any = {};
+    // Branch scope from the header switcher, clamped to what the account may access.
+    if (user?.activeBranchIds) where.branchId = { in: user.activeBranchIds };
     if (query.isActive !== undefined) {
       where.isActive = query.isActive;
     }
@@ -62,9 +65,9 @@ export class EmployeesService {
     if (query.employeeTypeId) {
       where.employeeTypeId = query.employeeTypeId;
     }
-    if (query.departmentId) {
-      where.profile = {
-        departments: { some: { departmentId: query.departmentId } },
+    if (query.department) {
+      where.profileSections = {
+        some: { sectionKey: 'organization', data: { path: ['department'], equals: query.department } },
       };
     }
     if (query.search) {
@@ -98,12 +101,16 @@ export class EmployeesService {
           },
           site: { select: { id: true, name: true } },
           shift: { select: { id: true, name: true } },
+          branch: { select: { id: true, text: true } },
         },
       }),
     ]);
 
     return {
-      items: items.map((e) => this.sanitizeEmployee(e, true)),
+      items: items.map((e) => ({
+        ...this.sanitizeEmployee(e, true),
+        branch: e.branch ? { id: e.branch.id, name: e.branch.text } : null,
+      })),
       pagination: {
         page,
         pageSize,
@@ -117,13 +124,7 @@ export class EmployeesService {
     const employee = await this.prisma.employee.findUnique({
       where: { id },
       include: {
-        profile: {
-          include: {
-            departments: {
-              include: { department: { select: { id: true, name: true } } },
-            },
-          },
-        },
+        profile: true,
         site: { select: { id: true, name: true } },
         shift: { select: { id: true, name: true } },
         reportingTo: {
@@ -143,12 +144,52 @@ export class EmployeesService {
     return this.sanitizeEmployee(employee, false);
   }
 
-  async create(dto: CreateEmployeeDto, actorProfileId?: number, ip?: string) {
-    const codeExists = await this.prisma.employee.findUnique({
-      where: { employeeCode: dto.employeeCode.trim() },
+  /**
+   * Next code for an employee type: the type's code plus a running number (PRM-0001).
+   * The counter row is updated atomically, and numbers already used by a hand-typed code are skipped.
+   */
+  private async nextEmployeeCode(tx: Prisma.TransactionClient, employmentType: string) {
+    const type = await tx.parameter.findFirst({
+      where: { parameterType: { name: 'Employee Type' }, text: { equals: employmentType, mode: 'insensitive' } },
+      select: { id: true, text: true, code: true },
     });
-    if (codeExists) {
-      throw new ConflictException('Employee code already exists');
+    if (!type) throw new BadRequestException(`Unknown employee type "${employmentType}"`);
+    const prefix = type.code?.trim().toUpperCase();
+    if (!prefix) throw new BadRequestException(`Set a code for the employee type "${type.text}" in Masters first`);
+
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const seq = await tx.employeeCodeSequence.upsert({
+        where: { parameterId: type.id },
+        create: { parameterId: type.id, lastNumber: 1 },
+        update: { lastNumber: { increment: 1 } },
+      });
+      const code = `${prefix}-${String(seq.lastNumber).padStart(4, '0')}`;
+      if (!(await tx.employee.findUnique({ where: { employeeCode: code }, select: { id: true } }))) {
+        return { code, parameterId: type.id };
+      }
+    }
+    throw new ConflictException('Could not allocate a unique employee code, please try again');
+  }
+
+  async create(dto: CreateEmployeeDto, actorProfileId?: number, ip?: string, user?: CurrentUserPayload) {
+    // A branch-restricted account must say which branch the new employee joins (the header switcher).
+    let branchId: number | null = null;
+    if (user?.branchAccess) {
+      if (!user.activeBranchIds || user.activeBranchIds.length !== 1) {
+        throw new BadRequestException('Choose a branch in the header before adding an employee');
+      }
+      branchId = user.activeBranchIds[0];
+    } else if (user?.activeBranchIds?.length === 1) {
+      branchId = user.activeBranchIds[0];
+    }
+    const manualCode = dto.employeeCode?.trim() || undefined;
+    if (manualCode) {
+      const codeExists = await this.prisma.employee.findUnique({ where: { employeeCode: manualCode } });
+      if (codeExists) {
+        throw new ConflictException('Employee code already exists');
+      }
+    } else if (!dto.employmentType?.trim()) {
+      throw new BadRequestException('Choose an employment type so the employee code can be generated');
     }
 
     if (dto.email) {
@@ -187,17 +228,18 @@ export class EmployeesService {
 
     const employee = await this.prisma.$transaction(async (tx) => {
       const profile = await tx.profile.create({ data: profileData });
+      const generated = manualCode ? null : await this.nextEmployeeCode(tx, dto.employmentType!.trim());
 
       const emp = await tx.employee.create({
         data: {
-          employeeCode: dto.employeeCode.trim(),
+          employeeCode: manualCode ?? generated!.code,
           profileId: profile.id,
           reportingToId: dto.reportingToId ?? null,
           sourceOfHireId: dto.sourceOfHireId ?? null,
           locationId: dto.locationId ?? null,
           siteId: dto.siteId ?? null,
           employeeStatusId: dto.employeeStatusId ?? null,
-          employeeTypeId: dto.employeeTypeId ?? null,
+          employeeTypeId: dto.employeeTypeId ?? generated?.parameterId ?? null,
           contractTypeId: dto.contractTypeId ?? null,
           workPhone: dto.workPhone ?? null,
           extension: dto.extension ?? null,
@@ -208,30 +250,15 @@ export class EmployeesService {
           personIdNumberHash,
           designation: dto.designation ?? null,
           shiftId: dto.shiftId ?? null,
+          branchId,
           isActive: true,
         } as Prisma.EmployeeUncheckedCreateInput,
         include: {
-          profile: {
-            include: {
-              departments: {
-                include: { department: { select: { id: true, name: true } } },
-              },
-            },
-          },
+          profile: true,
           site: { select: { id: true, name: true } },
           shift: { select: { id: true, name: true } },
         },
       });
-
-      if (dto.departmentIds?.length) {
-        await tx.profileDepartment.createMany({
-          data: dto.departmentIds.map((departmentId) => ({
-            profileId: profile.id,
-            departmentId,
-          })),
-          skipDuplicates: true,
-        });
-      }
 
       return emp;
     }, INTERACTIVE_TX_OPTIONS);
@@ -331,32 +358,11 @@ export class EmployeesService {
         data: profileUpdate,
       });
 
-      if (dto.departmentIds !== undefined) {
-        await tx.profileDepartment.deleteMany({
-          where: { profileId: existing.profileId },
-        });
-        if (dto.departmentIds.length) {
-          await tx.profileDepartment.createMany({
-            data: dto.departmentIds.map((departmentId) => ({
-              profileId: existing.profileId,
-              departmentId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
       return tx.employee.update({
         where: { id },
         data: employeeUpdate as Prisma.EmployeeUncheckedUpdateInput,
         include: {
-          profile: {
-            include: {
-              departments: {
-                include: { department: { select: { id: true, name: true } } },
-              },
-            },
-          },
+          profile: true,
           site: { select: { id: true, name: true } },
           shift: { select: { id: true, name: true } },
         },

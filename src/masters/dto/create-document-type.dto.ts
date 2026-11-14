@@ -9,4 +9,9 @@ export class CreateDocumentTypeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** Documents of this type must carry issue and expiry dates. */
+  @IsOptional()
+  @IsBoolean()
+  hasExpiry?: boolean;
 }

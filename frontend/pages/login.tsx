@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { forgotPassword } from '../lib/api';
+import { brandLogoSrc, useBranding } from '../lib/branding';
 
 const EyeIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -21,13 +22,14 @@ const inputClass =
   'w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30';
 
 export default function LoginPage() {
+  const { branding } = useBranding();
   const router = useRouter();
   const { login, isAuthenticated } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   // Dev convenience only: default the password field unmasked in development so you can
   // see what you typed without clicking the eye icon every time. Never on in production.
-  const [showPassword, setShowPassword] = useState(process.env.NODE_ENV === 'development');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -78,11 +80,16 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="mb-8 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-lg font-bold text-white shadow-sm">
-            H
-          </div>
-          <h1 className="mt-4 text-xl font-semibold text-gray-900">HRMS</h1>
-          <p className="mt-1 text-sm text-gray-500">Sign in to continue</p>
+          {branding.hasLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brandLogoSrc(branding)} alt={branding.appName} className="h-14 w-auto max-w-[200px] object-contain" />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-lg font-bold text-white shadow-sm">
+              {branding.appName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <h1 className="mt-4 text-xl font-semibold text-gray-900">{branding.appName}</h1>
+          <p className="mt-1 text-sm text-gray-500">{branding.loginBrandingText || 'Sign in to continue'}</p>
         </div>
 
         {/* Card */}
@@ -131,7 +138,6 @@ export default function LoginPage() {
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

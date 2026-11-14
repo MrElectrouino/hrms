@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { EmailService } from '../common/services/email.service';
 import { SecurityConfigService } from '../common/services/security-config.service';
-import { generateSecureToken, sha256, desDecrypt } from '../common/utils/crypto.util';
+import { generateSecureToken, sha256 } from '../common/utils/crypto.util';
 import { LoginDto } from './dto/login.dto';
 import { SessionService } from './session.service';
 
@@ -55,13 +55,9 @@ export interface TokenPair {
   expiresIn: number;
 }
 
-type VerifyResult = { valid: boolean; legacy: boolean };
-
 @Injectable()
 export class AuthService {
   private readonly bcryptRounds: number;
-  private readonly legacyDesKey?: string;
-  private readonly legacyDesIv?: string;
   private dummyHash?: Promise<string>;
 
   constructor(
@@ -73,8 +69,6 @@ export class AuthService {
     private readonly securityConfig: SecurityConfigService,
   ) {
     this.bcryptRounds = this.config.get<number>('app.security.bcryptRounds', 12);
-    this.legacyDesKey = this.config.get<string>('LEGACY_DES_KEY');
-    this.legacyDesIv = this.config.get<string>('LEGACY_DES_IV');
   }
 
   // ---------------------------------------------------------------------------
@@ -97,7 +91,7 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_LOGIN_MESSAGE);
     }
 
-    const verified = await this.verifyPassword(dto.password, user.passwordHash, user.legacyPasswordEnc);
+    const passwordValid = await this.verifyPassword(dto.password, user.passwordHash);
 
     const refusal = this.loginRefusal(user, now);
     if (refusal) {
@@ -105,14 +99,13 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_LOGIN_MESSAGE);
     }
 
-    if (!verified.valid) {
+    if (!passwordValid) {
       await this.recordFailedLogin(user.id, now, ip);
       await this.auditLoginFailed(user.id, user.profileId, ip, { reason: 'invalid_password' });
       throw new UnauthorizedException(INVALID_LOGIN_MESSAGE);
     }
 
-    // A legacy DES password is accepted once, but the user must replace it (D-014 step 2).
-    const mustChangePassword = user.mustChangePassword || verified.legacy;
+    const mustChangePassword = user.mustChangePassword;
     await this.prisma.$transaction([
       this.prisma.userActivity.upsert({
         where: { userId: user.id },
@@ -126,9 +119,6 @@ export class AuthService {
           lockedUntil: null,
         },
       }),
-      ...(verified.legacy && !user.mustChangePassword
-        ? [this.prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } })]
-        : []),
     ]);
 
     const session = await this.sessions.issue({
@@ -145,7 +135,7 @@ export class AuthService {
       entityType: 'User',
       entityId: String(user.id),
       ipAddress: ip,
-      metadata: { sessionId: session.sessionId.toString(), legacyPassword: verified.legacy, mustChangePassword },
+      metadata: { sessionId: session.sessionId.toString(), mustChangePassword },
     });
 
     return {
@@ -332,7 +322,7 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash, legacyPasswordEnc: null, mustChangePassword: false },
+        data: { passwordHash, mustChangePassword: false },
       }),
       this.prisma.passwordResetToken.updateMany({
         where: { userId: user.id, usedAt: null },
@@ -380,8 +370,8 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const current = await this.verifyPassword(currentPassword, user.passwordHash, user.legacyPasswordEnc);
-    if (!current.valid) {
+    const currentValid = await this.verifyPassword(currentPassword, user.passwordHash);
+    if (!currentValid) {
       await this.audit.log({
         actorProfileId: user.profileId,
         action: 'CHANGE_PASSWORD_FAILED',
@@ -402,7 +392,7 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: user.id },
-        data: { passwordHash, legacyPasswordEnc: null, mustChangePassword: false },
+        data: { passwordHash, mustChangePassword: false },
       }),
       this.prisma.userActivity.upsert({
         where: { userId: user.id },
@@ -421,7 +411,6 @@ export class AuthService {
       entityType: 'User',
       entityId: String(user.id),
       ipAddress: ip,
-      metadata: { legacyPassword: current.legacy },
     });
   }
 
@@ -453,19 +442,8 @@ export class AuthService {
     return activity.lockedUntil === null || activity.lockedUntil > now;
   }
 
-  private async verifyPassword(
-    plain: string,
-    passwordHash: string | null,
-    legacyPasswordEnc: string | null,
-  ): Promise<VerifyResult> {
-    if (passwordHash) {
-      return { valid: await bcrypt.compare(plain, passwordHash), legacy: false };
-    }
-    if (legacyPasswordEnc) {
-      const decrypted = desDecrypt(legacyPasswordEnc, this.legacyDesKey, this.legacyDesIv);
-      return { valid: decrypted !== null && decrypted === plain, legacy: true };
-    }
-    return { valid: false, legacy: false };
+  private async verifyPassword(plain: string, passwordHash: string | null): Promise<boolean> {
+    return passwordHash ? bcrypt.compare(plain, passwordHash) : false;
   }
 
   private dummyVerify(plain: string): Promise<boolean> {

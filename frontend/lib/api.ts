@@ -45,6 +45,8 @@ export interface User {
   userTypeId: number;
   profileId: number;
   isActive: boolean;
+  allBranches?: boolean;
+  branches?: { branchId: number }[];
   userType: { id: number; name: string };
   profile: {
     id: number;
@@ -61,11 +63,15 @@ export interface CreateUserPayload {
   password: string;
   userTypeId: number;
   profileId?: number;
+  allBranches?: boolean;
+  branchIds?: number[];
 }
 
 export interface UpdateUserPayload {
   userTypeId?: number;
   isActive?: boolean;
+  allBranches?: boolean;
+  branchIds?: number[];
 }
 
 export interface Dependant {
@@ -107,6 +113,7 @@ export interface Employee {
   id: number;
   employeeCode: string;
   profileId: number;
+  branch?: { id: number; name: string } | null;
   reportingToId?: number;
   sourceOfHireId?: number;
   locationId?: number;
@@ -144,7 +151,6 @@ export interface Employee {
     dateOfExit?: string;
     exitReasonCode?: number;
     isSiteAccess: boolean;
-    departments?: { departmentId: number; department: { id: number; name: string } }[];
   };
   site?: { id: number; name: string };
   shift?: { id: number; name: string };
@@ -190,7 +196,6 @@ export interface CreateEmployeePayload {
   personIdNumber?: string;
   designation?: string;
   shiftId?: number;
-  departmentIds?: number[];
   isSiteAccess?: boolean;
 }
 
@@ -270,6 +275,27 @@ async function refreshTokens(): Promise<string> {
   return refreshPromise;
 }
 
+const BRANCH_KEY = 'hrms.branchId';
+
+/** Branch chosen in the header switcher (null = all). Sent with every request as X-Branch-Id. */
+export function getSelectedBranchId(): number | null {
+  try {
+    const v = Number(localStorage.getItem(BRANCH_KEY));
+    return Number.isInteger(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSelectedBranchId(id: number | null) {
+  try {
+    if (id === null) localStorage.removeItem(BRANCH_KEY);
+    else localStorage.setItem(BRANCH_KEY, String(id));
+  } catch {
+    // storage unavailable: the choice just won't persist
+  }
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -286,6 +312,8 @@ export async function request<T>(
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  const branchId = typeof window !== 'undefined' ? getSelectedBranchId() : null;
+  if (branchId !== null) headers['X-Branch-Id'] = String(branchId);
 
   const response = await fetch(url, { ...options, headers });
   const json = await response.json().catch(() => ({}));
@@ -436,6 +464,10 @@ export interface MasterItem {
   isActive: boolean;
 }
 
+export interface DocumentTypeItem extends MasterItem {
+  hasExpiry: boolean;
+}
+
 export interface ShiftItem extends MasterItem {
   startTime: string;
   endTime: string;
@@ -464,19 +496,6 @@ export interface ShiftPayload {
 function mastersQuery(params?: Record<string, string | number | boolean>) {
   const merged = { pageSize: 100, ...params };
   return '?' + new URLSearchParams(Object.entries(merged).map(([k, v]) => [k, String(v)])).toString();
-}
-
-export async function getDepartments(params?: Record<string, string | number | boolean>) {
-  return request<MasterItem[]>(`/masters/departments${mastersQuery(params)}`);
-}
-export async function createDepartment(payload: MasterItemPayload) {
-  return request<MasterItem>('/masters/departments', { method: 'POST', body: JSON.stringify(payload) });
-}
-export async function updateDepartment(id: number, payload: Partial<MasterItemPayload>) {
-  return request<MasterItem>(`/masters/departments/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-}
-export async function deactivateDepartment(id: number) {
-  return request<MasterItem>(`/masters/departments/${id}`, { method: 'DELETE' });
 }
 
 export async function getSites(params?: Record<string, string | number | boolean>) {
@@ -519,13 +538,13 @@ export async function deactivateShift(id: number) {
 }
 
 export async function getDocumentTypes(params?: Record<string, string | number | boolean>) {
-  return request<MasterItem[]>(`/masters/document-types${mastersQuery(params)}`);
+  return request<DocumentTypeItem[]>(`/masters/document-types${mastersQuery(params)}`);
 }
-export async function createDocumentType(payload: MasterItemPayload) {
-  return request<MasterItem>('/masters/document-types', { method: 'POST', body: JSON.stringify(payload) });
+export async function createDocumentType(payload: MasterItemPayload & { hasExpiry?: boolean }) {
+  return request<DocumentTypeItem>('/masters/document-types', { method: 'POST', body: JSON.stringify(payload) });
 }
-export async function updateDocumentType(id: number, payload: Partial<MasterItemPayload>) {
-  return request<MasterItem>(`/masters/document-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+export async function updateDocumentType(id: number, payload: Partial<MasterItemPayload> & { hasExpiry?: boolean }) {
+  return request<DocumentTypeItem>(`/masters/document-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
 export async function deactivateDocumentType(id: number) {
   return request<MasterItem>(`/masters/document-types/${id}`, { method: 'DELETE' });
@@ -636,6 +655,8 @@ export interface ProfileFieldDef {
   hint?: string;
   maxLength?: number;
   display?: "checkbox";
+  /** Only shown when another field in the same section equals this value. */
+  showWhen?: { key: string; equals: string };
   /** Value/label pairs (e.g. employee id → name) when the stored value is not the label. */
   optionItems?: { value: string; label: string }[];
 }
@@ -696,7 +717,6 @@ export interface EmployeeProfileResponse {
     country: string;
     currency: string;
     addressLevels: string[];
-    legalEntities: string[];
   };
   canEdit: boolean;
   sections: ProfileSectionDef[];
@@ -962,4 +982,74 @@ export async function updateModuleConfiguration(moduleKey: string, isEnabled: bo
     method: 'PATCH',
     body: JSON.stringify({ isEnabled }),
   });
+}
+
+export async function deactivateDocument(id: number) {
+  return request<Document>(`/documents/${id}`, { method: 'DELETE' });
+}
+
+/* -------------------------------------------------------------- profile field rules (System Admin only) */
+
+export interface ProfileRule {
+  sectionKey: string;
+  groupTitle: string;
+  fieldKey: string;
+  isVisible: boolean | null;
+  isRequired: boolean | null;
+}
+
+export interface ProfileRuleCatalog {
+  country: string;
+  countries: string[];
+  sections: {
+    key: string;
+    title: string;
+    locked: boolean;
+    groups: { title: string; fields: { key: string; label: string; defaultVisible: boolean; defaultRequired: boolean; locked: boolean }[] }[];
+  }[];
+  rules: ProfileRule[];
+}
+
+export async function getProfileRules(country: string) {
+  return request<ProfileRuleCatalog>(`/profile-rules/${encodeURIComponent(country)}`);
+}
+
+export async function saveProfileRules(country: string, rules: ProfileRule[]) {
+  return request<ProfileRuleCatalog>(`/profile-rules/${encodeURIComponent(country)}`, { method: 'PUT', body: JSON.stringify({ rules }) });
+}
+
+export async function resetProfileRules(country: string) {
+  return request<ProfileRuleCatalog>(`/profile-rules/${encodeURIComponent(country)}`, { method: 'DELETE' });
+}
+
+/* -------------------------------------------------------------- branches */
+
+export interface BranchOption {
+  id: number;
+  code: string;
+  name: string;
+  countryCode: string | null;
+}
+
+/** Every active branch (parameter type "Branch"), for giving an account branch access. */
+export async function getBranches() {
+  return request<BranchOption[]>('/branches');
+}
+export async function getMyBranches() {
+  return request<{ restricted: boolean; branches: BranchOption[] }>('/branches/mine');
+}
+
+/* -------------------------------------------------------------- parameters (dropdown options) */
+
+export async function getParameterTypes() {
+  return request<{ id: number; name: string }[]>('/masters/parameter-types');
+}
+export async function listParameters(parameterTypeId: number) {
+  return request<(Parameter & { displayOrder: number; isVisible: boolean })[]>(`/masters/parameters?parameterTypeId=${parameterTypeId}&pageSize=100`);
+}
+export async function createParameter(payload: { parameterTypeId: number; text: string; code?: string }) {
+  return request<Parameter>('/masters/parameters', { method: 'POST', body: JSON.stringify(payload) });
+}
+export async function updateParameter(id: number, payload: { text?: string; code?: string; isVisible?: boolean; displayOrder?: number }) {
+  return request<Parameter>(`/masters/parameters/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }

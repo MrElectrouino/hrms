@@ -17,8 +17,6 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { MasterListQueryDto } from './dto/master-list-query.dto';
 import { ParameterListQueryDto } from './dto/parameter-list-query.dto';
-import { CreateDepartmentDto } from './dto/create-department.dto';
-import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
 import { CreateLanguageDto } from './dto/create-language.dto';
@@ -27,6 +25,10 @@ import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { CreateDocumentTypeDto } from './dto/create-document-type.dto';
 import { UpdateDocumentTypeDto } from './dto/update-document-type.dto';
+import { CreateParameterDto, UpdateParameterDto } from './dto/parameter.dto';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserType } from '../common/constants/user-types';
 
 @ApiTags('Masters')
 @ApiBearerAuth()
@@ -37,50 +39,6 @@ export class MastersController {
 
   private okEnvelope(data: any, text: string, pagination?: any) {
     return { data, message: { code: 'OK', text }, pagination };
-  }
-
-  // ==================== Departments ====================
-  @Get('departments')
-  async departments(@Query() query: MasterListQueryDto) {
-    const result = await this.mastersService.findAllDepartments(query);
-    return this.okEnvelope(result.items, 'Departments retrieved', result.pagination);
-  }
-
-  @Post('departments')
-  async createDepartment(
-    @Body() dto: CreateDepartmentDto,
-    @CurrentUser() user: CurrentUserPayload,
-    @Ip() ip: string,
-  ) {
-    const created = await this.mastersService.createDepartment(dto, user.profileId, ip);
-    return this.okEnvelope(created, 'Department created');
-  }
-
-  @Get('departments/:id')
-  async department(@Param('id', ParseIntPipe) id: number) {
-    const item = await this.mastersService.findOneDepartment(id);
-    return this.okEnvelope(item, 'Department retrieved');
-  }
-
-  @Patch('departments/:id')
-  async updateDepartment(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateDepartmentDto,
-    @CurrentUser() user: CurrentUserPayload,
-    @Ip() ip: string,
-  ) {
-    const updated = await this.mastersService.updateDepartment(id, dto, user.profileId, ip);
-    return this.okEnvelope(updated, 'Department updated');
-  }
-
-  @Delete('departments/:id')
-  async removeDepartment(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: CurrentUserPayload,
-    @Ip() ip: string,
-  ) {
-    const updated = await this.mastersService.removeDepartment(id, user.profileId, ip);
-    return this.okEnvelope(updated, 'Department deactivated');
   }
 
   // ==================== Sites ====================
@@ -264,6 +222,25 @@ export class MastersController {
   async parameterTypes() {
     const items = await this.mastersService.findAllParameterTypes();
     return this.okEnvelope(items, 'Parameter types retrieved');
+  }
+
+  @Post('parameters')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.SystemAdmin, UserType.HRAdmin)
+  async createParameter(@Body() dto: CreateParameterDto, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    return this.okEnvelope(await this.mastersService.createParameter(dto, user.profileId, ip), 'Parameter created');
+  }
+
+  @Patch('parameters/:id')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.SystemAdmin, UserType.HRAdmin)
+  async updateParameter(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateParameterDto,
+    @CurrentUser() user: CurrentUserPayload,
+    @Ip() ip: string,
+  ) {
+    return this.okEnvelope(await this.mastersService.updateParameter(id, dto, user.profileId, ip), 'Parameter updated');
   }
 
   @Get('parameters')

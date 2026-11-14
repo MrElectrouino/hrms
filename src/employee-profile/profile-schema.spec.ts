@@ -10,14 +10,34 @@ import {
   SectionDef,
 } from './profile-schema';
 
-const LOOKUPS = { nationalities: ['Indian', 'Emirati'], employees: [{ value: '2', label: 'Neha Kulkarni (IN-00002)' }] };
+const LOOKUPS = { nationalities: ['Indian', 'Emirati'], departments: ['Sales', 'HR'], employeeTypes: ['Permanent', 'On Contract'], relationships: ['Parent', 'Spouse'],
+  parameters: {
+    Gender: ['Male', 'Female', 'Other'],
+    'Marital Status': ['Single', 'Married'],
+    BloodGroup: ['A+', 'O+'],
+    Roster: ['Fixed', 'Rotational'],
+    'Employee Category': ['Staff'],
+    'Employment Status': ['Active', 'On Notice', 'Inactive'],
+    'Probation Period': ['3 months'],
+    'Notice Period': ['1 month', '2 months'],
+    Grade: ['G3'],
+    'Attendance Processing': ['Automatic'],
+    'Weekly Off': ['Saturday, Sunday'],
+    'OT Configuration': ['None'],
+    'Skill Proficiency': ['Beginner'],
+    'Access Role': ['Employee'],
+    'Login Status': ['Active'],
+    'Two-Factor Authentication': ['Enabled'],
+    'Tax Regime': ['Old Regime', 'New Regime'],
+  },
+  shifts: [{ value: '1', label: 'General' }], employees: [{ value: '2', label: 'Neha Kulkarni (IN-00002)' }] };
 const section = (country: 'IN' | 'AE' | 'GB' | 'US', key: string): SectionDef =>
   buildSections(country, LOOKUPS).find((s) => s.key === key) as SectionDef;
 
 describe('profile schema: sections', () => {
-  it('builds the nine tabs from the layout workbook, in order', () => {
+  it('builds the eight tabs from the layout workbook, in order', () => {
     const keys = buildSections('IN').map((s) => s.key);
-    expect(keys).toEqual(['personal', 'employment', 'organization', 'attendance', 'compensation', 'bank', 'documents', 'education', 'access']);
+    expect(keys).toEqual(['personal', 'employment', 'organization', 'attendance', 'bank', 'documents', 'education', 'access']);
   });
 
   it('marks System Access as HR-only', () => {
@@ -173,7 +193,7 @@ describe('Dropdowns from master data', () => {
     const f = fields('organization').find((x) => x.key === 'reportingManager')!;
     expect(f.type).toBe('select');
     expect(f.optionItems).toEqual([{ value: '2', label: 'Neha Kulkarni (IN-00002)' }]);
-    const org = { legalEntityCountry: 'IN', legalEntity: 'Meridian Systems India Pvt Ltd', department: 'Engineering', designation: 'Associate' };
+    const org = { legalEntityCountry: 'IN', department: 'Sales', designation: 'Associate' };
     expect(validateSection(section('IN', 'organization'), 'IN', { ...org, reportingManager: '2' }).errors).toEqual([]);
     expect(validateSection(section('IN', 'organization'), 'IN', { ...org, reportingManager: '99' }).errors[0].field).toBe('reportingManager');
   });
@@ -196,10 +216,82 @@ describe('Salary template amounts (D-024)', () => {
     const r = validateComponentAmounts(components, { BASIC: -1, HOUSING: 10.555, BONUS: 5 });
     expect(r.errors.map((e) => e.field)).toEqual(['componentAmounts.BASIC', 'componentAmounts.HOUSING', 'componentAmounts.BONUS']);
   });
+});
 
-  it('lets the salary keys through the section validator for the service to check', () => {
-    const r = validateSection(section('IN', 'compensation'), 'IN', { salaryTemplateId: 3, componentAmounts: { BASIC: 1 } });
-    expect(r.errors).toEqual([]);
-    expect(r.values.salaryTemplateId).toBe(3);
+describe('country filtering and admin rules', () => {
+  const keysOf = (country: 'IN' | 'AE' | 'GB' | 'US', rules: Parameters<typeof buildSections>[2] = []) =>
+    (buildSections(country, LOOKUPS, rules).find((s) => s.key === 'bank') as SectionDef).groups.flatMap((g) => (g.fields ?? []).map((f) => f.key));
+
+  it('shows only the statutory fields of the employee country', () => {
+    expect(keysOf('IN')).toContain('pan');
+    expect(keysOf('IN')).not.toContain('ssn');
+    expect(keysOf('US')).toContain('ssn');
+    expect(keysOf('US')).not.toContain('pan');
+    expect(keysOf('AE')).toContain('emiratesIdNumber');
+  });
+
+  it('a rule can hide a field, a group, or a whole tab', () => {
+    expect(keysOf('IN', [{ sectionKey: 'bank', groupTitle: 'Statutory & tax', fieldKey: 'pan', isVisible: false, isRequired: null }])).not.toContain('pan');
+    const noStatutory = buildSections('IN', LOOKUPS, [{ sectionKey: 'bank', groupTitle: 'Statutory & tax', fieldKey: '', isVisible: false, isRequired: null }]);
+    expect((noStatutory.find((s) => s.key === 'bank') as SectionDef).groups.map((g) => g.title)).not.toContain('Statutory & tax');
+    const noBank = buildSections('IN', LOOKUPS, [{ sectionKey: 'bank', groupTitle: '', fieldKey: '', isVisible: false, isRequired: null }]);
+    expect(noBank.find((s) => s.key === 'bank')).toBeUndefined();
+  });
+
+  it('a rule can show a field the country does not have by default, and change required', () => {
+    const rules = [{ sectionKey: 'bank', groupTitle: 'Statutory & tax', fieldKey: 'ssn', isVisible: true, isRequired: true }];
+    expect(keysOf('IN', rules)).toContain('ssn');
+    const f = (buildSections('IN', LOOKUPS, rules).find((s) => s.key === 'bank') as SectionDef).groups.flatMap((g) => g.fields ?? []).find((x) => x.key === 'ssn')!;
+    expect(f.required).toBe(true);
+    const sec = buildSections('IN', LOOKUPS, rules).find((s) => s.key === 'bank') as SectionDef;
+    expect(validateSection(sec, 'IN', {}).errors.map((e) => e.field)).toContain('ssn');
+  });
+
+  it('cannot hide Personal, Organization or the fields needed to create an employee', () => {
+    const rules = [
+      { sectionKey: 'personal', groupTitle: '', fieldKey: '', isVisible: false, isRequired: null },
+      { sectionKey: 'personal', groupTitle: 'Name', fieldKey: 'firstName', isVisible: false, isRequired: null },
+    ];
+    const personal = buildSections('IN', LOOKUPS, rules).find((s) => s.key === 'personal') as SectionDef;
+    expect(personal.groups.flatMap((g) => g.fields ?? []).map((f) => f.key)).toContain('firstName');
+  });
+});
+
+describe('conditional fields', () => {
+  const employment = () => buildSections('IN', LOOKUPS).find((s) => s.key === 'employment') as SectionDef;
+  const base = { employmentType: 'Permanent', employmentStatus: 'Active', dateOfJoining: '2026-01-01' };
+
+  it('contract dates are only accepted for the On Contract employment type', () => {
+    const full = validateSection(employment(), 'IN', { ...base, contractStartDate: '2026-01-01', contractEndDate: '2026-12-31' });
+    expect(full.errors).toEqual([]);
+    expect(full.values.contractStartDate).toBeUndefined();
+    const contract = validateSection(employment(), 'IN', { ...base, employmentType: 'On Contract', contractStartDate: '2026-01-01', contractEndDate: '2026-12-31' });
+    expect(contract.values.contractStartDate).toBe('2026-01-01');
+    expect(contract.values.contractEndDate).toBe('2026-12-31');
+  });
+});
+
+describe('notice fields', () => {
+  const lookups = { ...LOOKUPS, noticeReasons: ['Resignation', 'Termination'] };
+  const employment = () => buildSections('IN', lookups).find((s) => s.key === 'employment') as SectionDef;
+  const base = { employmentType: 'Permanent', dateOfJoining: '2026-01-01' };
+
+  it('no longer has an Employment end date', () => {
+    expect(employment().groups.flatMap((g) => g.fields ?? []).map((f) => f.key)).not.toContain('employmentEndDate');
+  });
+
+  it('notice period, last working date and reason apply only when On Notice', () => {
+    const onNotice = validateSection(employment(), 'IN', { ...base, employmentStatus: 'On Notice', noticePeriod: '1 month', lastWorkingDate: '2026-06-30', noticeReason: 'Resignation' });
+    expect(onNotice.errors).toEqual([]);
+    expect(onNotice.values.noticeReason).toBe('Resignation');
+    const active = validateSection(employment(), 'IN', { ...base, employmentStatus: 'Active', noticePeriod: '1 month', lastWorkingDate: '2026-06-30', noticeReason: 'Resignation' });
+    expect(active.errors).toEqual([]);
+    expect(active.values.noticePeriod).toBeUndefined();
+    expect(active.values.noticeReason).toBeUndefined();
+  });
+
+  it('the reason must be one of the Notice Reason parameters', () => {
+    const r = validateSection(employment(), 'IN', { ...base, employmentStatus: 'On Notice', noticeReason: 'Bored' });
+    expect(r.errors.map((e) => e.field)).toContain('noticeReason');
   });
 });

@@ -1,14 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../lib/auth';
 import EmployeePhoto from '../../components/EmployeePhoto';
+import EmployeeDocuments from '../../components/EmployeeDocuments';
+import EmployeeDependants from '../../components/EmployeeDependants';
 import {
   EmployeeProfileResponse,
   FieldErrorItem,
   ProfileFieldDef,
   ProfileGroupDef,
   ProfileSectionDef,
-  SalaryTemplate,
   createEmployee,
   getBlankProfile,
   getEmployeeProfile,
@@ -259,7 +260,6 @@ export default function EmployeeProfilePage() {
   const [savedAt, setSavedAt] = useState<Record<string, string>>({});
   // Add Employee mode
   const [newCountry, setNewCountry] = useState('IN');
-  const [employeeCode, setEmployeeCode] = useState('');
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
   const [sectionErrors, setSectionErrors] = useState<Record<string, FieldErrorItem[]>>({});
   const [creating, setCreating] = useState(false);
@@ -271,7 +271,7 @@ export default function EmployeeProfilePage() {
       .then((res) => {
         const b = res.data;
         setData({
-          employee: { id: 0, employeeCode: '', name: '', isActive: true, hasPhoto: false, country: b.country, currency: b.currency, addressLevels: b.addressLevels, legalEntities: [] },
+          employee: { id: 0, employeeCode: '', name: '', isActive: true, hasPhoto: false, country: b.country, currency: b.currency, addressLevels: b.addressLevels },
           canEdit: true,
           sections: b.sections,
           values: {},
@@ -309,7 +309,13 @@ export default function EmployeeProfilePage() {
       .catch((err) => setLoadError(err.message || 'Failed to load profile'));
   }, [isAuthenticated, empId]);
 
-  const sections: ProfileSectionDef[] = data?.sections ?? [];
+  // Dependents live outside the schema-driven sections (own endpoints, saved inline), so add it here.
+  const sections: ProfileSectionDef[] = [
+    ...(data?.sections ?? []),
+    ...(data && !isNew
+      ? [{ key: 'dependents', title: 'Dependents', group: 'Records', hrOnly: false, description: 'Spouse, children and other family members.', groups: [] } as ProfileSectionDef]
+      : []),
+  ];
   const current = sections.find((s) => s.key === section) ?? sections[0];
   const canEdit = !!data?.canEdit;
 
@@ -369,9 +375,9 @@ export default function EmployeeProfilePage() {
     setNotice('');
     const personal = values.personal ?? {};
     const employment = values.employment ?? {};
-    if (!employeeCode.trim()) {
-      setErrors([{ field: 'employeeCode', message: 'Employee code is required' } as FieldErrorItem]);
-      setNotice('Enter an employee code in the header first.');
+    if (!String(employment.employmentType ?? '').trim()) {
+      setNotice('Choose an employment type in the Employment section: the employee code is generated from it.');
+      setSection('employment');
       return;
     }
     const payload: Record<string, { data: Values; custom: Values }> = {};
@@ -402,7 +408,7 @@ export default function EmployeeProfilePage() {
         middleName: personal.middleName || undefined,
         lastName: personal.lastName || undefined,
         email: personal.personalEmail || undefined,
-        employeeCode: employeeCode.trim(),
+        employmentType: String(employment.employmentType),
         dateOfJoining: employment.dateOfJoining || undefined,
         designation: values.organization?.designation || undefined,
         workEmail: personal.officialEmail || undefined,
@@ -511,99 +517,6 @@ export default function EmployeeProfilePage() {
     );
   };
 
-  /** Salary template picker plus one monthly amount per template component (D-024). */
-  const renderSalary = (sec: string) => {
-    const v = values[sec] ?? {};
-    const templates: SalaryTemplate[] = data?.salaryTemplates ?? [];
-    const chosen = templates.find((t) => t.id === Number(v.salaryTemplateId));
-    const amounts: Values = v.componentAmounts ?? {};
-    const currency = data?.employee.currency ?? '';
-    const total = Object.values(amounts).reduce((sum: number, x) => sum + (Number(x) || 0), 0);
-    const setAmount = (code: string, val: any) =>
-      setValues((prev) => ({
-        ...prev,
-        [sec]: { ...(prev[sec] ?? {}), componentAmounts: { ...((prev[sec] ?? {}).componentAmounts ?? {}), [code]: val } },
-      }));
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FieldBox label="Salary template" error={fieldError('salaryTemplateId')} hint={templates.length ? 'Components come from the template' : undefined}>
-            <select
-              id={`${sec}-salaryTemplateId`}
-              className={`w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${fieldError('salaryTemplateId') ? 'border-red-400' : 'border-gray-300'} ${!canEdit ? 'bg-gray-50 text-gray-600' : 'bg-white text-gray-900'}`}
-              disabled={!canEdit || templates.length === 0}
-              value={chosen ? String(chosen.id) : ''}
-              onChange={(e) => {
-                const id = e.target.value ? Number(e.target.value) : '';
-                const t = templates.find((x) => x.id === id);
-                // Keep amounts for components that also exist in the newly chosen template.
-                const kept = t
-                  ? Object.fromEntries(t.components.filter((c) => amounts[c.code] !== undefined).map((c) => [c.code, amounts[c.code]]))
-                  : {};
-                setValues((prev) => ({ ...prev, [sec]: { ...(prev[sec] ?? {}), salaryTemplateId: id, componentAmounts: kept } }));
-              }}
-            >
-              <option value="">{templates.length ? 'Select a template' : 'No templates yet'}</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.isActive ? '' : ' (inactive)'}
-                </option>
-              ))}
-            </select>
-          </FieldBox>
-        </div>
-        {templates.length === 0 && (
-          <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
-            No salary templates for {data?.employee.country} yet. An admin can create one under Administration → Salary templates.
-          </p>
-        )}
-        {chosen && (
-          <div className="overflow-hidden rounded-lg border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="px-4 py-2.5">Component</th>
-                  <th className="w-60 px-4 py-2.5 text-right">Monthly amount ({currency})</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {chosen.components.map((c) => {
-                  const err = fieldError(`componentAmounts.${c.code}`);
-                  return (
-                    <tr key={c.code}>
-                      <td className="px-4 py-2 text-gray-700">{c.label}</td>
-                      <td className="px-4 py-2">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          inputMode="decimal"
-                          aria-label={`${c.label} amount`}
-                          disabled={!canEdit}
-                          value={amounts[c.code] ?? ''}
-                          onChange={(e) => setAmount(c.code, e.target.value === '' ? '' : Number(e.target.value))}
-                          className={`w-full rounded-lg border px-3 py-1.5 text-right font-mono text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${err ? 'border-red-400' : 'border-gray-300'} ${!canEdit ? 'bg-gray-50 text-gray-600' : 'bg-white text-gray-900'}`}
-                        />
-                        {err && <p className="mt-1 text-right text-xs text-red-600">{err}</p>}
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr className="bg-gray-50">
-                  <td className="px-4 py-2.5 font-semibold text-gray-900">Gross salary</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-900">
-                    {currency} {total.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const gridCols = (n?: number) =>
     n === 2 ? 'md:grid-cols-2' : n === 4 ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-2 xl:grid-cols-3';
 
@@ -612,7 +525,6 @@ export default function EmployeeProfilePage() {
     if (g.showWhen && v[g.showWhen.key] !== g.showWhen.equals) return null;
 
     if (g.addressLevels) return <div key={gi}>{renderAddressCard(sec, g)}</div>;
-    if (g.salaryComponents) return <div key={gi}>{renderSalary(sec)}</div>;
 
     if (g.rows) {
       const rows: Values[] = Array.isArray(v[g.rows.key]) ? v[g.rows.key] : [];
@@ -667,17 +579,10 @@ export default function EmployeeProfilePage() {
 
     return (
       <div key={gi} className={`grid grid-cols-1 gap-4 ${gridCols(g.columns)}`}>
-        {(g.fields ?? []).map((f) => renderField(sec, f, v[f.key], (val) => setField(sec, f.key, val), f.key))}
+        {(g.fields ?? []).filter((f) => !f.showWhen || String(v[f.showWhen.key] ?? '') === f.showWhen.equals).map((f) => renderField(sec, f, v[f.key], (val) => setField(sec, f.key, val), f.key))}
       </div>
     );
   };
-
-  const payTotals = useMemo(() => {
-    const v = values.compensation ?? {};
-    const amounts: Values = v.componentAmounts ?? {};
-    const gross = Object.values(amounts).reduce((s: number, x) => s + (Number(x) || 0), 0);
-    return { gross, hourly: (gross * 12) / 2080, daily: (gross * 12) / 260 };
-  }, [values.compensation]);
 
   if (loadError) return <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{loadError}</div>;
   if (!data || !current) return <div className="text-sm text-gray-500">Loading employee profile…</div>;
@@ -691,6 +596,8 @@ export default function EmployeeProfilePage() {
   const managerField = sections.flatMap((s) => s.groups.flatMap((g) => g.fields ?? [])).find((f) => f.key === 'reportingManager');
   const managerLabel =
     managerField?.optionItems?.find((o) => o.value === String(orgv.reportingManager ?? ''))?.label ?? (orgv.reportingManager || '');
+  const branchField = sections.flatMap((s) => s.groups.flatMap((g) => g.fields ?? [])).find((f) => f.key === 'branch');
+  const branchLabel = branchField?.optionItems?.find((o) => o.value === String(orgv.branch ?? ''))?.label ?? '';
   const groupsByName = sections.reduce<Record<string, ProfileSectionDef[]>>((acc, s) => {
     (acc[s.group] = acc[s.group] || []).push(s);
     return acc;
@@ -726,18 +633,12 @@ export default function EmployeeProfilePage() {
             <h2 className="text-xl font-semibold text-gray-900">{displayName}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
               {isNew ? (
-                <label className="inline-flex items-center gap-2">
-                  <span className="text-xs font-medium text-gray-600">
-                    Employee code<span className="ml-0.5 text-red-600">*</span>
+                <span className="inline-flex items-center gap-2 text-xs text-gray-600">
+                  Employee code
+                  <span className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-2 py-1 font-mono text-[12px] text-gray-500">
+                    Generated on save from the employment type
                   </span>
-                  <input
-                    value={employeeCode}
-                    onChange={(e) => setEmployeeCode(e.target.value)}
-                    placeholder="e.g. IN-00419"
-                    maxLength={30}
-                    className={`w-40 rounded-lg border bg-white px-2.5 py-1.5 font-mono text-[13px] text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${errors.some((e) => e.field === 'employeeCode') ? 'border-red-400' : 'border-gray-300'}`}
-                  />
-                </label>
+                </span>
               ) : (
                 <span className="font-mono">{emp.employeeCode}</span>
               )}
@@ -749,7 +650,7 @@ export default function EmployeeProfilePage() {
           </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 md:grid-cols-5">
-          <div><p className="text-xs text-gray-500">Branch</p><p className="text-sm font-medium text-gray-900">{orgv.branch || '—'}</p></div>
+          <div><p className="text-xs text-gray-500">Branch</p><p className="text-sm font-medium text-gray-900">{branchLabel || '—'}</p></div>
           <div><p className="text-xs text-gray-500">Employment type</p><p className="text-sm font-medium text-gray-900">{values.employment?.employmentType || '—'}</p></div>
           <div><p className="text-xs text-gray-500">Joining date</p><p className="text-sm font-medium text-gray-900">{values.employment?.dateOfJoining || '—'}</p></div>
           <div><p className="text-xs text-gray-500">Reporting manager</p><p className="text-sm font-medium text-gray-900">{managerLabel || '—'}</p></div>
@@ -818,7 +719,15 @@ export default function EmployeeProfilePage() {
           )}
 
           <div className="space-y-8">
-            {current.groups.map((g, gi) => {
+            {current.key === 'documents' && (
+              isNew ? (
+                <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">Save the employee first, then add documents and upload files from this section.</p>
+              ) : (
+                <EmployeeDocuments employeeId={empId} canEdit={canEdit} />
+              )
+            )}
+            {current.key === 'dependents' && !isNew && <EmployeeDependants employeeId={empId} canEdit={canEdit} />}
+            {current.key !== 'documents' && current.key !== 'dependents' && current.groups.map((g, gi) => {
               // Hide conditional groups before rendering their heading.
               if (g.showWhen && (values[current.key] ?? {})[g.showWhen.key] !== g.showWhen.equals) return null;
               const headingClass =
@@ -847,14 +756,6 @@ export default function EmployeeProfilePage() {
                 </div>
               );
             })}
-
-            {current.key === 'compensation' && (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3"><p className="text-xs text-gray-500">Gross salary (monthly)</p><p className="mt-1 text-sm font-medium text-gray-900">{emp.currency} {payTotals.gross.toLocaleString('en-US', { maximumFractionDigits: 2 })}</p></div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3"><p className="text-xs text-gray-500">Hourly rate (derived)</p><p className="mt-1 font-mono text-sm text-gray-900">{emp.currency} {payTotals.hourly.toFixed(2)}</p></div>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3"><p className="text-xs text-gray-500">Daily rate (derived)</p><p className="mt-1 font-mono text-sm text-gray-900">{emp.currency} {payTotals.daily.toFixed(2)}</p></div>
-              </div>
-            )}
 
             {sectionCustom(current.key).length > 0 && (
               <div className="border-t border-gray-100 pt-5">
@@ -895,7 +796,7 @@ export default function EmployeeProfilePage() {
               </div>
             </div>
           )}
-          {canEdit && !isNew && (
+          {canEdit && !isNew && current.key !== 'documents' && current.key !== 'dependents' && (
             <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-gray-200 pt-5">
               <p className="text-sm text-gray-500">{isDirty(current.key) ? 'You have changes in this section. Save to keep them.' : 'No unsaved changes.'}</p>
               <div className="ml-auto flex gap-2">

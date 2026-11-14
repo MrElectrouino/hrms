@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { getDocuments, createDocument, attachDocumentFile, getDocumentTypes, Document } from '../lib/api';
+import { getDocuments, createDocument, attachDocumentFile, getDocumentTypes, getEmployees, Document, DocumentTypeItem, Employee } from '../lib/api';
 
 export default function DocumentsPage() {
   const { isAuthenticated } = useAuth();
@@ -10,7 +10,9 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [documentTypes, setDocumentTypes] = useState<{ id: number; name: string }[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<DocumentTypeItem[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [form, setForm] = useState<any>({
@@ -27,8 +29,22 @@ export default function DocumentsPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     loadDocuments();
-    getDocumentTypes().then((r) => setDocumentTypes(r.data));
+    getDocumentTypes({ pageSize: 100 }).then((r) => setDocumentTypes(r.data.filter((x) => x.isActive)));
   }, [isAuthenticated, page]);
+
+  // Employee choices for the Add Document form; typing narrows the list.
+  useEffect(() => {
+    if (!isAuthenticated || !showCreate) return;
+    const timer = setTimeout(() => {
+      getEmployees({ pageSize: 25, isActive: true, ...(employeeSearch.trim() ? { search: employeeSearch.trim() } : {}) })
+        .then((r) => setEmployees(r.data))
+        .catch(() => setEmployees([]));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, showCreate, employeeSearch]);
+
+  const selectedType = documentTypes.find((dt) => String(dt.id) === String(form.documentTypeId));
+  const needsDates = !!selectedType?.hasExpiry;
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -46,12 +62,26 @@ export default function DocumentsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.profileId) {
+      setError('Choose an employee');
+      return;
+    }
+    if (needsDates) {
+      if (!form.issueDate || !form.expiryDate) {
+        setError(`${selectedType!.name} requires both an issue date and an expiry date`);
+        return;
+      }
+      if (form.expiryDate < form.issueDate) {
+        setError('Expiry date cannot be before the issue date');
+        return;
+      }
+    }
+    setError('');
     try {
       const payload = {
         profileId: parseInt(form.profileId, 10),
         documentTypeId: parseInt(form.documentTypeId, 10),
-        issueDate: form.issueDate || undefined,
-        expiryDate: form.expiryDate || undefined,
+        ...(needsDates ? { issueDate: form.issueDate, expiryDate: form.expiryDate } : {}),
         identityNo: form.identityNo || undefined,
         documentTitle: form.documentTitle || undefined,
         remarks: form.remarks || undefined,
@@ -64,6 +94,7 @@ export default function DocumentsPage() {
       }
 
       setShowCreate(false);
+      setEmployeeSearch('');
       setSelectedFile(null);
       setForm({ profileId: '', documentTypeId: '', issueDate: '', expiryDate: '', identityNo: '', documentTitle: '', remarks: '', isSelf: true });
       loadDocuments();
@@ -143,17 +174,35 @@ export default function DocumentsPage() {
             <h3 className="text-xl font-bold text-gray-900 mb-4">Create Document</h3>
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <input required type="number" placeholder="Profile ID" value={form.profileId} onChange={(e) => setForm({ ...form, profileId: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                <select required value={form.documentTypeId} onChange={(e) => setForm({ ...form, documentTypeId: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                <div className="space-y-1.5">
+                  <input type="search" placeholder="Search employee…" value={employeeSearch} onChange={(e) => setEmployeeSearch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                  <select required aria-label="Employee" value={form.profileId} onChange={(e) => setForm({ ...form, profileId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select employee…</option>
+                    {employees.map((emp) => (
+                      <option key={emp.id} value={emp.profileId}>
+                        {[emp.profile?.name, emp.profile?.lastName].filter(Boolean).join(' ')} ({emp.employeeCode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <select required aria-label="Document type" value={form.documentTypeId} onChange={(e) => setForm({ ...form, documentTypeId: e.target.value })} className="self-end px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Document Type</option>
-                  {documentTypes.map((dt) => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
+                  {documentTypes.map((dt) => <option key={dt.id} value={dt.id}>{dt.name}{dt.hasExpiry ? ' (expires)' : ''}</option>)}
                 </select>
               </div>
               <input placeholder="Document Title" value={form.documentTitle} onChange={(e) => setForm({ ...form, documentTitle: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-              <div className="grid grid-cols-2 gap-4">
-                <input type="date" placeholder="Issue Date" value={form.issueDate} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                <input type="date" placeholder="Expiry Date" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} className="px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
+              {needsDates && (
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Issue date <span className="text-red-500">*</span>
+                    <input required type="date" value={form.issueDate} max={form.expiryDate || undefined} onChange={(e) => setForm({ ...form, issueDate: e.target.value })} className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  </label>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Expiry date <span className="text-red-500">*</span>
+                    <input required type="date" value={form.expiryDate} min={form.issueDate || undefined} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                  </label>
+                </div>
+              )}
               <input placeholder="Identity No" value={form.identityNo} onChange={(e) => setForm({ ...form, identityNo: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
               <textarea placeholder="Remarks" value={form.remarks} onChange={(e) => setForm({ ...form, remarks: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" rows={3} />
 

@@ -146,6 +146,22 @@ export class SystemAdminService {
     });
   }
 
+  /** Public (no auth): only the cosmetic fields the app shell and login page need. */
+  async getPublicBranding() {
+    const b = await this.getBranding();
+    return {
+      appName: b.appName,
+      primaryColor: b.primaryColor,
+      secondaryColor: b.secondaryColor,
+      accentColor: b.accentColor,
+      loginBrandingText: b.loginBrandingText,
+      footerText: b.footerText,
+      hasLogo: !!b.logoFileId,
+      hasFavicon: !!b.faviconFileId,
+      version: b.updatedAt.getTime().toString(),
+    };
+  }
+
   async updateBranding(dto: UpdateBrandingDto, user: CurrentUserPayload, ip: string) {
     await this.getBranding(); // ensure the singleton row exists
     const updated = await this.prisma.applicationBranding.update({

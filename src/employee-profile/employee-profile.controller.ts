@@ -7,6 +7,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserType } from '../common/constants/user-types';
 import { EmployeeProfileService } from './employee-profile.service';
+import { EmployeeBranchGuard } from '../common/guards/branch-access.guard';
 import { SaveProfileSectionDto, ValidateNewProfileDto } from './dto/save-profile-section.dto';
 import { CreateCustomFieldDto, UpdateCustomFieldDto } from './dto/custom-field.dto';
 
@@ -23,12 +24,14 @@ export class EmployeeProfileController {
 
   /** Any signed-in user may read their own profile; HR/System Admin may read any (service enforces). */
   @Get('employees/:id/profile')
+  @UseGuards(EmployeeBranchGuard)
   async getProfile(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload) {
     return this.ok(await this.service.getProfile(id, user), 'Employee profile retrieved');
   }
 
   /** Saving a section is HR and System Admin only. */
   @Put('employees/:id/profile/:section')
+  @UseGuards(EmployeeBranchGuard)
   @Roles(UserType.SystemAdmin, UserType.HRAdmin)
   async saveSection(
     @Param('id', ParseIntPipe) id: number,

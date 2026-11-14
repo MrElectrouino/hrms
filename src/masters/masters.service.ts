@@ -8,8 +8,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { MasterListQueryDto } from './dto/master-list-query.dto';
 import { ParameterListQueryDto } from './dto/parameter-list-query.dto';
-import { CreateDepartmentDto } from './dto/create-department.dto';
-import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateSiteDto } from './dto/create-site.dto';
 import { UpdateSiteDto } from './dto/update-site.dto';
 import { CreateLanguageDto } from './dto/create-language.dto';
@@ -18,6 +16,7 @@ import { CreateShiftDto } from './dto/create-shift.dto';
 import { UpdateShiftDto } from './dto/update-shift.dto';
 import { CreateDocumentTypeDto } from './dto/create-document-type.dto';
 import { UpdateDocumentTypeDto } from './dto/update-document-type.dto';
+import { CreateParameterDto, UpdateParameterDto } from './dto/parameter.dto';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -35,56 +34,6 @@ export class MastersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
   ) {}
-
-  // ==================== Departments ====================
-  async findAllDepartments(query: MasterListQueryDto): Promise<PaginatedResult<any>> {
-    return this.findAllGeneric('department', query);
-  }
-
-  async createDepartment(dto: CreateDepartmentDto, actorProfileId?: number, ip?: string) {
-    const created = await this.prisma.department.create({
-      data: {
-        name: dto.name.trim(),
-        isActive: dto.isActive ?? true,
-      },
-    });
-    await this.auditMaster('DEPARTMENT_CREATED', created.id, actorProfileId, ip, { name: created.name });
-    return created;
-  }
-
-  async updateDepartment(
-    id: number,
-    dto: UpdateDepartmentDto,
-    actorProfileId?: number,
-    ip?: string,
-  ) {
-    await this.ensureExists('department', id);
-    const updated = await this.prisma.department.update({
-      where: { id },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name.trim() }),
-        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
-      },
-    });
-    await this.auditMaster('DEPARTMENT_UPDATED', id, actorProfileId, ip, { changes: { ...dto } });
-    return updated;
-  }
-
-  async removeDepartment(id: number, actorProfileId?: number, ip?: string) {
-    await this.ensureExists('department', id);
-    const updated = await this.prisma.department.update({
-      where: { id },
-      data: { isActive: false },
-    });
-    await this.auditMaster('DEPARTMENT_DEACTIVATED', id, actorProfileId, ip);
-    return updated;
-  }
-
-  async findOneDepartment(id: number) {
-    const item = await this.prisma.department.findUnique({ where: { id } });
-    if (!item) throw new NotFoundException('Department not found');
-    return item;
-  }
 
   // ==================== Sites ====================
   async findAllSites(query: MasterListQueryDto): Promise<PaginatedResult<any>> {
@@ -213,10 +162,11 @@ export class MastersService {
     ip?: string,
   ) {
     const created = await this.prisma.documentType.create({
-      data: { name: dto.name.trim(), isActive: dto.isActive ?? true },
+      data: { name: dto.name.trim(), isActive: dto.isActive ?? true, hasExpiry: dto.hasExpiry ?? false },
     });
     await this.auditMaster('DOCUMENT_TYPE_CREATED', created.id, actorProfileId, ip, {
       name: created.name,
+      hasExpiry: created.hasExpiry,
     });
     return created;
   }
@@ -233,6 +183,7 @@ export class MastersService {
       data: {
         ...(dto.name !== undefined && { name: dto.name.trim() }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+        ...(dto.hasExpiry !== undefined && { hasExpiry: dto.hasExpiry }),
       },
     });
     await this.auditMaster('DOCUMENT_TYPE_UPDATED', id, actorProfileId, ip, { changes: { ...dto } });
@@ -295,6 +246,49 @@ export class MastersService {
     };
   }
 
+  async createParameter(dto: CreateParameterDto, actorProfileId?: number, ip?: string) {
+    const type = await this.prisma.parameterType.findUnique({ where: { id: dto.parameterTypeId } });
+    if (!type) throw new NotFoundException('Parameter type not found');
+    const text = dto.text.trim();
+    if (await this.prisma.parameter.findUnique({ where: { parameterTypeId_text: { parameterTypeId: type.id, text } } })) {
+      throw new ConflictException(`"${text}" already exists in ${type.name}`);
+    }
+    const last = await this.prisma.parameter.aggregate({ where: { parameterTypeId: type.id }, _max: { displayOrder: true } });
+    const created = await this.prisma.parameter.create({
+      data: {
+        parameterTypeId: type.id,
+        text,
+        code: dto.code?.trim().toUpperCase() || null,
+        displayOrder: dto.displayOrder ?? (last._max.displayOrder ?? 0) + 1,
+        isVisible: dto.isVisible ?? true,
+      },
+      include: { parameterType: { select: { id: true, name: true } } },
+    });
+    await this.auditMaster('PARAMETER_CREATED', created.id, actorProfileId, ip, { type: type.name, text });
+    return created;
+  }
+
+  async updateParameter(id: number, dto: UpdateParameterDto, actorProfileId?: number, ip?: string) {
+    const existing = await this.prisma.parameter.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Parameter not found');
+    if (dto.text !== undefined && dto.text.trim() !== existing.text) {
+      const clash = await this.prisma.parameter.findUnique({ where: { parameterTypeId_text: { parameterTypeId: existing.parameterTypeId, text: dto.text.trim() } } });
+      if (clash) throw new ConflictException(`"${dto.text.trim()}" already exists`);
+    }
+    const updated = await this.prisma.parameter.update({
+      where: { id },
+      data: {
+        ...(dto.text !== undefined && { text: dto.text.trim() }),
+        ...(dto.code !== undefined && { code: dto.code.trim().toUpperCase() || null }),
+        ...(dto.displayOrder !== undefined && { displayOrder: dto.displayOrder }),
+        ...(dto.isVisible !== undefined && { isVisible: dto.isVisible }),
+      },
+      include: { parameterType: { select: { id: true, name: true } } },
+    });
+    await this.auditMaster('PARAMETER_UPDATED', id, actorProfileId, ip, { changes: { ...dto } });
+    return updated;
+  }
+
   // ==================== Metadata definitions ====================
   async findAllFormDefinitions() {
     return this.prisma.formEntity.findMany({
@@ -334,7 +328,7 @@ export class MastersService {
 
   // ==================== Helpers ====================
   private async findAllGeneric(
-    model: 'department' | 'site' | 'language' | 'shift' | 'documentType',
+    model: 'site' | 'language' | 'shift' | 'documentType',
     query: MasterListQueryDto,
   ): Promise<PaginatedResult<any>> {
     const page = Math.max(1, query.page ?? 1);
@@ -372,7 +366,7 @@ export class MastersService {
   }
 
   private async ensureExists(
-    model: 'department' | 'site' | 'language' | 'shift' | 'documentType',
+    model: 'site' | 'language' | 'shift' | 'documentType',
     id: number,
   ) {
     const item = await (this.prisma[model] as any).findUnique({ where: { id } });

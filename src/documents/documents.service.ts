@@ -8,6 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { PiiService } from '../common/services/pii.service';
+import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import {
   FileStorageService,
   UploadedFileLike,
@@ -40,7 +41,7 @@ export class DocumentsService {
     await this.runExpiryAlerts();
   }
 
-  async findAll(query: ListDocumentsQueryDto): Promise<PaginatedDocuments> {
+  async findAll(query: ListDocumentsQueryDto, user?: CurrentUserPayload): Promise<PaginatedDocuments> {
     const page = Math.max(1, query.page ?? 1);
     const pageSize = [25, 50, 100].includes(query.pageSize ?? 25)
       ? query.pageSize ?? 25
@@ -52,6 +53,8 @@ export class DocumentsService {
     const sortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
 
     const where: any = {};
+    // Branch scope: documents of employees in the active branches only.
+    if (user?.activeBranchIds) where.profile = { employee: { branchId: { in: user.activeBranchIds } } };
     if (query.profileId) where.profileId = query.profileId;
     if (query.documentTypeId) where.documentTypeId = query.documentTypeId;
     if (query.isActive !== undefined) where.isActive = query.isActive;
@@ -137,7 +140,34 @@ export class DocumentsService {
     return this.sanitizeDocument(item, false);
   }
 
+  /**
+   * Types flagged hasExpiry require both dates (expiry not before issue).
+   * Types without expiry never store dates, so scheduler scans stay clean.
+   */
+  private async resolveDates(
+    documentTypeId: number,
+    issueDate?: string | null,
+    expiryDate?: string | null,
+  ): Promise<{ issueDate: Date | null; expiryDate: Date | null }> {
+    const type = await this.prisma.documentType.findUnique({
+      where: { id: documentTypeId },
+      select: { name: true, hasExpiry: true },
+    });
+    if (!type) throw new BadRequestException('Unknown document type');
+    if (!type.hasExpiry) return { issueDate: null, expiryDate: null };
+    if (!issueDate || !expiryDate) {
+      throw new BadRequestException(`${type.name} requires both an issue date and an expiry date`);
+    }
+    const issue = new Date(issueDate);
+    const expiry = new Date(expiryDate);
+    if (expiry < issue) {
+      throw new BadRequestException('Expiry date cannot be before the issue date');
+    }
+    return { issueDate: issue, expiryDate: expiry };
+  }
+
   async create(dto: CreateDocumentDto, actorProfileId?: number, ip?: string) {
+    const dates = await this.resolveDates(dto.documentTypeId, dto.issueDate, dto.expiryDate);
     const identityNoEnc = this.pii.encrypt(dto.identityNo);
     const identityNoHash = this.pii.hash(dto.identityNo);
 
@@ -145,8 +175,8 @@ export class DocumentsService {
       data: {
         profileId: dto.profileId,
         documentTypeId: dto.documentTypeId,
-        issueDate: dto.issueDate ? new Date(dto.issueDate) : null,
-        expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
+        issueDate: dates.issueDate,
+        expiryDate: dates.expiryDate,
         identityNoEnc,
         identityNoHash,
         documentTitle: dto.documentTitle ?? null,
@@ -185,8 +215,16 @@ export class DocumentsService {
 
     const data: Prisma.DocumentUncheckedUpdateInput = {};
     if (dto.documentTypeId !== undefined) data.documentTypeId = dto.documentTypeId;
-    if (dto.issueDate !== undefined) data.issueDate = dto.issueDate ? new Date(dto.issueDate) : null;
-    if (dto.expiryDate !== undefined) data.expiryDate = dto.expiryDate ? new Date(dto.expiryDate) : null;
+    if (dto.documentTypeId !== undefined || dto.issueDate !== undefined || dto.expiryDate !== undefined) {
+      const fmt = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+      const dates = await this.resolveDates(
+        dto.documentTypeId ?? existing.documentTypeId,
+        dto.issueDate !== undefined ? dto.issueDate : fmt(existing.issueDate),
+        dto.expiryDate !== undefined ? dto.expiryDate : fmt(existing.expiryDate),
+      );
+      data.issueDate = dates.issueDate;
+      data.expiryDate = dates.expiryDate;
+    }
     if (dto.identityNo !== undefined) {
       data.identityNoEnc = this.pii.encrypt(dto.identityNo);
       data.identityNoHash = this.pii.hash(dto.identityNo);
@@ -229,6 +267,16 @@ export class DocumentsService {
     const docId = typeof documentId === 'number' ? BigInt(documentId) : documentId;
     const document = await this.prisma.document.findUnique({ where: { id: docId } });
     if (!document) throw new NotFoundException('Document not found');
+
+    // AGENTS.md §7: jpg/jpeg/png/pdf, max 10 MB.
+    const ext = (file.originalname.split('.').pop() ?? '').toLowerCase();
+    if (!['jpg', 'jpeg', 'png', 'pdf'].includes(ext) ||
+        !['image/jpeg', 'image/png', 'application/pdf'].includes(file.mimetype)) {
+      throw new BadRequestException('Only JPG, PNG or PDF files are allowed');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new BadRequestException('File must be 10 MB or smaller');
+    }
 
     const stored = await this.storage.saveFile(file);
 
@@ -326,7 +374,7 @@ export class DocumentsService {
     });
   }
 
-  async findExpiring(days: number) {
+  async findExpiring(days: number, user?: CurrentUserPayload) {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date();
@@ -337,6 +385,7 @@ export class DocumentsService {
       where: {
         isActive: true,
         expiryDate: { gte: start, lte: end },
+        ...(user?.activeBranchIds ? { profile: { employee: { branchId: { in: user.activeBranchIds } } } } : {}),
       },
       include: {
         documentType: { select: { id: true, name: true } },
@@ -346,13 +395,14 @@ export class DocumentsService {
     });
   }
 
-  async findExpired() {
+  async findExpired(user?: CurrentUserPayload) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return this.prisma.document.findMany({
       where: {
         isActive: true,
         expiryDate: { lt: today },
+        ...(user?.activeBranchIds ? { profile: { employee: { branchId: { in: user.activeBranchIds } } } } : {}),
       },
       include: {
         documentType: { select: { id: true, name: true } },

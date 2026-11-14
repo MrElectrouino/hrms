@@ -1,4 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Request } from 'express';
+import { UserType } from '../constants/user-types';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -29,17 +31,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: config.getOrThrow<string>('app.jwt.secret'),
+      passReqToCallback: true,
     });
   }
 
-  async validate(payload: JwtPayload): Promise<CurrentUserPayload> {
+  async validate(req: Request, payload: JwtPayload): Promise<CurrentUserPayload> {
     if (!payload.sub || !payload.sid) {
       throw new UnauthorizedException();
     }
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { profile: { select: { isSiteAccess: true } }, activity: true },
+      include: { profile: { select: { isSiteAccess: true } }, activity: true, branches: { select: { branchId: true } } },
     });
     if (!user || !user.isActive || !user.profile.isSiteAccess) {
       throw new UnauthorizedException();
@@ -53,12 +56,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
+    // Branch scope: System Admins and unrestricted accounts see every branch.
+    const branchAccess = user.userTypeId === UserType.SystemAdmin || user.allBranches ? null : user.branches.map((b) => b.branchId);
+    // The header switcher can only narrow, never widen, what the account may access.
+    const requested = Number(req.headers['x-branch-id']);
+    const activeBranchIds =
+      Number.isInteger(requested) && requested > 0 && (branchAccess === null || branchAccess.includes(requested))
+        ? [requested]
+        : branchAccess;
+
     return {
       userId: user.id,
       profileId: user.profileId,
       userTypeId: user.userTypeId,
       sessionId: payload.sid,
       mustChangePassword: user.mustChangePassword,
+      branchAccess,
+      activeBranchIds,
     };
   }
 }

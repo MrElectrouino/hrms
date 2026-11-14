@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../lib/auth';
+import { useBranding } from '../lib/branding';
 import {
   BrandingItem,
   brandingFaviconUrl,
@@ -12,6 +13,7 @@ import {
 
 export default function BrandingPage() {
   const { isAuthenticated, user } = useAuth();
+  const { reload: reloadBranding } = useBranding();
   const [branding, setBranding] = useState<BrandingItem | null>(null);
   const [form, setForm] = useState({ appName: '', primaryColor: '#2563eb', secondaryColor: '#1e40af', accentColor: '#f97316', loginBrandingText: '', footerText: '' });
   const [message, setMessage] = useState('');
@@ -57,6 +59,7 @@ export default function BrandingPage() {
       const res = await updateBranding(form);
       setBranding(res.data);
       setMessage('Branding updated.');
+      reloadBranding();
     } catch (err: any) {
       setError(err.message || 'Could not update branding');
     } finally {
@@ -71,6 +74,7 @@ export default function BrandingPage() {
       const res = await uploadBrandingLogo(file);
       setBranding(res.data);
       setMessage('Logo uploaded.');
+      reloadBranding();
     } catch (err: any) {
       setError(err.message || 'Could not upload logo');
     }
@@ -83,6 +87,7 @@ export default function BrandingPage() {
       const res = await uploadBrandingFavicon(file);
       setBranding(res.data);
       setMessage('Favicon uploaded.');
+      reloadBranding();
     } catch (err: any) {
       setError(err.message || 'Could not upload favicon');
     }

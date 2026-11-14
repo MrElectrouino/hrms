@@ -34,6 +34,8 @@ const userSelect = {
   profileId: true,
   isActive: true,
   mustChangePassword: true,
+  allBranches: true,
+  branches: { select: { branchId: true } },
   createdAt: true,
   updatedAt: true,
   profile: {
@@ -146,6 +148,7 @@ export class UsersService {
       profileId = profile.id;
     }
 
+    const branchChange = await this.checkBranchAccess(dto, actor, true);
     const passwordHash = await bcrypt.hash(dto.password, this.bcryptRounds);
 
     let user;
@@ -159,6 +162,10 @@ export class UsersService {
           // An admin-set password is temporary: the user must choose their own at first sign-in.
           mustChangePassword: true,
           isActive: true,
+          ...(branchChange && {
+            allBranches: branchChange.allBranches,
+            branches: { create: branchChange.branchIds.map((branchId) => ({ branchId })) },
+          }),
         },
         select: userSelect,
       });
@@ -209,11 +216,15 @@ export class UsersService {
       await this.assertAnotherActiveAdminExists(target.id);
     }
 
+    const branchChange = await this.checkBranchAccess(dto, actor, target.allBranches);
     const data: Prisma.UserUncheckedUpdateInput = {};
+    if (branchChange) data.allBranches = branchChange.allBranches;
     if (changesType) data.userTypeId = dto.userTypeId;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
 
-    const [updated] = await this.prisma.$transaction([
+    const [, , updated] = await this.prisma.$transaction([
+      this.prisma.userBranch.deleteMany({ where: { userId: id, ...(branchChange ? {} : { userId: -1 }) } }),
+      this.prisma.userBranch.createMany({ data: (branchChange?.branchIds ?? []).map((branchId) => ({ userId: id, branchId })) }),
       this.prisma.user.update({ where: { id }, data, select: userSelect }),
       ...(deactivates
         ? [
@@ -234,6 +245,7 @@ export class UsersService {
       metadata: {
         ...(changesType ? { userTypeId: { from: target.userTypeId, to: dto.userTypeId } } : {}),
         ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+        ...(branchChange ? { allBranches: branchChange.allBranches, branchIds: branchChange.branchIds } : {}),
       },
     });
 
@@ -262,7 +274,7 @@ export class UsersService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id },
-        data: { passwordHash, legacyPasswordEnc: null, mustChangePassword: true },
+        data: { passwordHash, mustChangePassword: true },
       }),
       this.prisma.userActivity.upsert({
         where: { userId: id },
@@ -338,6 +350,26 @@ export class UsersService {
     if (actor.userTypeId !== UserType.SystemAdmin) {
       throw new ForbiddenException('Only a System Administrator can manage System Administrator accounts');
     }
+  }
+
+  /** Validates a branch-access change; only System Admins may grant branch access. */
+  private async checkBranchAccess(
+    dto: { allBranches?: boolean; branchIds?: number[] },
+    actor: CurrentUserPayload,
+    currentAll: boolean,
+  ): Promise<{ allBranches: boolean; branchIds: number[] } | null> {
+    if (dto.allBranches === undefined && dto.branchIds === undefined) return null;
+    if (actor.userTypeId !== UserType.SystemAdmin) {
+      throw new ForbiddenException('Only a System Admin can change branch access');
+    }
+    const allBranches = dto.allBranches ?? currentAll;
+    const branchIds = allBranches ? [] : dto.branchIds ?? [];
+    if (!allBranches) {
+      if (branchIds.length === 0) throw new BadRequestException('Choose at least one branch, or allow all branches');
+      const found = await this.prisma.parameter.count({ where: { id: { in: branchIds }, isVisible: true, parameterType: { name: 'Branch' } } });
+      if (found !== branchIds.length) throw new BadRequestException('One or more branches do not exist or are inactive');
+    }
+    return { allBranches, branchIds };
   }
 
   private async assertUserTypeExists(userTypeId: number) {

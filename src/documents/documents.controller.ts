@@ -21,6 +21,7 @@ import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { Response } from 'express';
 import { DocumentsService } from './documents.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { DocumentBranchGuard } from '../common/guards/branch-access.guard';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -29,7 +30,7 @@ import { UploadedFileLike } from '../common/services/file-storage.service';
 
 @ApiTags('Documents')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, DocumentBranchGuard)
 @Controller('documents')
 export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
@@ -39,8 +40,8 @@ export class DocumentsController {
   }
 
   @Get()
-  async findAll(@Query() query: ListDocumentsQueryDto) {
-    const result = await this.documentsService.findAll(query);
+  async findAll(@Query() query: ListDocumentsQueryDto, @CurrentUser() user: CurrentUserPayload) {
+    const result = await this.documentsService.findAll(query, user);
     return this.okEnvelope(result.items, 'Documents retrieved', result.pagination);
   }
 
@@ -127,15 +128,15 @@ export class DocumentsController {
   }
 
   @Get('expiring')
-  async expiring(@Query('days') days: string) {
+  async expiring(@Query('days') days: string, @CurrentUser() user: CurrentUserPayload) {
     const daysNum = parseInt(days ?? '30', 10);
-    const items = await this.documentsService.findExpiring(daysNum);
+    const items = await this.documentsService.findExpiring(daysNum, user);
     return this.okEnvelope(items, 'Expiring documents retrieved');
   }
 
   @Get('expired')
-  async expired() {
-    const items = await this.documentsService.findExpired();
+  async expired(@CurrentUser() user: CurrentUserPayload) {
+    const items = await this.documentsService.findExpired(user);
     return this.okEnvelope(items, 'Expired documents retrieved');
   }
 

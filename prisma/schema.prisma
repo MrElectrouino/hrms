@@ -123,15 +123,6 @@ model Profile {
   exitReasonCode     Int?
   exitRemarks        String?   @db.Text
   dateOfRejoining    DateTime? @db.Timestamptz(3)
-  // ---- PII identity numbers (ENCRYPTED — see model docblock) ----
-  passportNoEnc      String?
-  passportNoHash     String?
-  emiratesIdEnc      String?
-  emiratesIdHash     String?
-  molNoEnc           String?
-  molNoHash          String?
-  visaNoEnc          String?
-  visaNoHash         String?
 
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   /// legacy: CreatedBy/CreatedDate mapped to createdById/createdAt.
@@ -142,7 +133,6 @@ model Profile {
   employee        Employee?
   photoFile       StoredFile?            @relation("ProfilePhoto", fields: [photoFileId], references: [id])
   uploadedFiles   StoredFile[]           @relation("UploadedFiles")
-  departments     ProfileDepartment[]
   dependantsOwned Dependant[]            @relation("DependantProfile")
   dependantsOf    Dependant[]            @relation("EmployeeProfile")
   documents       Document[]
@@ -153,10 +143,6 @@ model Profile {
   // business meaning found); column_id 7 was dropped in legacy (schema drift).
 
   @@index([statusId])
-  @@index([passportNoHash])
-  @@index([emiratesIdHash])
-  @@index([molNoHash])
-  @@index([visaNoHash])
   @@map("profiles")
 }
 
@@ -171,21 +157,18 @@ model User {
   /// is created. Case-insensitive match: store lowercase (app normalizes) or
   /// add `citext` extension in the initial migration (comment either way).
   username           String   @unique
-  /// NEW (D-014): bcrypt/argon2 hash. Legacy stored DES-encrypted values; the
-  /// legacy ciphertext lives in `legacyPasswordEnc` (below), never here.
+  /// bcrypt hash of the password.
   passwordHash       String?
-  /// NEW (D-014): backward-compat column holding the legacy DES-encrypted
-  /// password during the migration window ONLY. Login flow: if passwordHash
-  /// is null and this is set -> decrypt server-side, verify, set
-  /// mustChangePassword=true. Cleared when the user sets a new password.
-  /// DROP THIS COLUMN after the migration window (documented in D-014).
-  legacyPasswordEnc  String?
-  /// NEW (D-014): forces the change-password prompt on first legacy login.
+  /// Forces the change-password prompt (e.g. after an admin reset).
   mustChangePassword Boolean  @default(false)
+  /// NEW: true = may work in every branch; false = only the branches in `branches`.
+  /// System Admins are never restricted.
+  allBranches        Boolean  @default(true)
   isActive           Boolean  @default(true)
   createdAt          DateTime @default(now()) @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
+  branches            UserBranch[]
   profile             Profile              @relation(fields: [profileId], references: [id])
   userType            UserType             @relation(fields: [userTypeId], references: [id])
   sessions            Session[]            @relation("UserSessions")
@@ -472,6 +455,16 @@ model Parameter {
   code            String?
 
   parameterType ParameterType @relation(fields: [parameterTypeId], references: [id])
+  codeSequence  EmployeeCodeSequence?
+  /// Employees whose branch this is (parameter type "Branch").
+  branchEmployees Employee[]   @relation("EmployeeBranch")
+  /// Accounts allowed to work in this branch.
+  branchUsers     UserBranch[] @relation("UserBranchParameter")
+  /// Holiday calendars that belong to this branch.
+  holidayCalendars HolidayCalendar[] @relation("HolidayCalendarBranch")
+  /// Timezone override for this branch (parameter type "Branch").
+  timezone        BranchTimezone?
+  policyAssignments AttendancePolicyAssignment[] @relation("PolicyAssignmentBranch")
 
   @@unique([parameterTypeId, text])
   @@index([parameterTypeId])
@@ -481,18 +474,6 @@ model Parameter {
 // ============================================================================
 // MODULE 2 — SETUP / MASTER DATA
 // ============================================================================
-
-/// legacy: master.Department (8 rows, UQ DepartmentName in legacy too)
-model Department {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-
-  profiles ProfileDepartment[]
-
-  @@map("departments")
-}
 
 /// legacy: master.Site (4 rows: Dubai Head Office, Abudhabi, Nepal, India)
 /// No unique constraint existed in legacy; name unique is NEW (FIX, D-016 spirit).
@@ -537,6 +518,8 @@ model Shift {
   updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
 
   employees Employee[]
+  patternDays RosterPatternDay[]
+  rosterEntries RosterEntry[]
 
   @@map("shifts")
 }
@@ -715,6 +698,8 @@ model Employee {
   companyLandNo          String?
   payrollSiteId          Int?
   isAllowedAdvanceLeave  Boolean?
+  /// NEW: branch the employee belongs to; drives branch-scoped access (Administration > Branches).
+  branchId               Int?
 
   profile     Profile    @relation(fields: [profileId], references: [id])
   /// NEW (D-023): profile sections 01–09 (Personal … System Access).
@@ -724,26 +709,24 @@ model Employee {
   reports     Employee[] @relation("ReportingTree")
   site        Site?      @relation(fields: [siteId], references: [id])
   shift       Shift?     @relation(fields: [shiftId], references: [id])
+  branch      Parameter? @relation("EmployeeBranch", fields: [branchId], references: [id])
+  workSchedules   EmployeeWorkSchedule[]
+  rosterPatterns  EmployeeRosterPattern[]
+  rosterEntries   RosterEntry[]
+  holidayCalendars EmployeeHolidayCalendar[]
+  attendance      Attendance[]
+  regularizations AttendanceRegularization[]
+  leaveApplications LeaveApplication[]
+  leaveCredits    LeaveCredit[]
+  leaveTransactions LeaveTransaction[]
+  moodLogs        MoodLog[]
+  policyAssignments AttendancePolicyAssignment[]
 
   @@index([siteId])
+  @@index([branchId])
   @@index([reportingToId])
   @@index([personIdNumberHash])
   @@map("employees")
-}
-
-/// legacy: usr.ProfileDepartment — M2M junction.
-/// FIX (BR-MD-17): legacy's AddUpdateProfile treated the department list as a
-/// SINGLE value even though the table is M2M. Target writes one row per
-/// department properly; the legacy single-value quirk is NOT reproduced.
-model ProfileDepartment {
-  profileId    Int
-  departmentId Int
-
-  profile    Profile    @relation(fields: [profileId], references: [id])
-  department Department @relation(fields: [departmentId], references: [id])
-
-  @@id([profileId, departmentId])
-  @@map("profile_departments")
 }
 
 /// legacy: usr.Dependant — dependant documents live on the dependant's OWN
@@ -796,6 +779,9 @@ model DocumentType {
   id       Int     @id @default(autoincrement())
   name     String  @unique
   isActive Boolean @default(true)
+  /// NEW: when true, documents of this type must carry issue and expiry dates
+  /// (and feed the expiry scheduler). When false, dates are not collected.
+  hasExpiry Boolean @default(false)
 
   documents   Document[]
   formFields  FormField[]
@@ -1099,4 +1085,615 @@ model ModuleConfiguration {
   updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("module_configurations")
+}
+
+/// NEW — System Admin > Profile field rules. Per-country overrides on top of the
+/// code-defined employee profile layout (src/employee-profile/profile-schema.ts).
+/// Scope: sectionKey only = whole tab; + groupTitle = group; + fieldKey = field.
+/// isVisible / isRequired null = inherit the code default.
+model ProfileFieldRule {
+  id                 Int      @id @default(autoincrement())
+  countryCode        String
+  sectionKey         String
+  groupTitle         String   @default("")
+  fieldKey           String   @default("")
+  isVisible          Boolean?
+  isRequired         Boolean?
+  updatedByProfileId Int?
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([countryCode, sectionKey, groupTitle, fieldKey], map: "profile_field_rules_scope_key")
+  @@index([countryCode])
+  @@map("profile_field_rules")
+}
+
+
+/// NEW — branches (parameters of type "Branch") an account may access when User.allBranches is false.
+model UserBranch {
+  userId   Int
+  branchId Int
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Parameter @relation("UserBranchParameter", fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([userId, branchId])
+  @@index([branchId])
+  @@map("user_branches")
+}
+
+/// NEW — running number behind auto-generated employee codes. One row per Employee Type
+/// parameter; its `code` is the prefix (e.g. PRM -> PRM-0001).
+model EmployeeCodeSequence {
+  parameterId Int @id
+  lastNumber  Int @default(0)
+
+  parameter Parameter @relation(fields: [parameterId], references: [id], onDelete: Cascade)
+
+  @@map("employee_code_sequences")
+}
+
+// ============================================================================
+// TIME & ATTENDANCE SETUP — work schedules, holiday calendars, rosters, assignments
+// ============================================================================
+
+/// Required working time and start model. Times are "HH:mm" text (no timezone surprises).
+model WorkSchedule {
+  id                   Int      @id @default(autoincrement())
+  code                 String   @unique
+  name                 String   @unique
+  /// FIXED (start/end) or FLEXIBLE (required minutes, optional start window).
+  scheduleType         String
+  startTime            String?
+  endTime              String?
+  /// Flexible only. Both empty = no start window.
+  earliestStartTime    String?
+  latestStartTime      String?
+  requiredDailyMinutes Int
+  /// Automatic break deduction: minus breakMinutes when worked at least breakAfterMinutes.
+  breakMinutes         Int      @default(0)
+  breakAfterMinutes    Int      @default(0)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  assignments EmployeeWorkSchedule[]
+
+  @@map("work_schedules")
+}
+
+/// Effective-dated work schedule of an employee. effectiveTo null = open ended.
+model EmployeeWorkSchedule {
+  id             Int       @id @default(autoincrement())
+  employeeId     Int
+  workScheduleId Int
+  effectiveFrom  DateTime  @db.Date
+  effectiveTo    DateTime? @db.Date
+
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  workSchedule WorkSchedule @relation(fields: [workScheduleId], references: [id])
+
+  @@index([employeeId, effectiveFrom])
+  @@map("employee_work_schedules")
+}
+
+/// A named holiday list. scope COMPANY | COUNTRY (countryCode) | BRANCH (branchId).
+model HolidayCalendar {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  scope       String
+  countryCode String?
+  branchId    Int?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  branch      Parameter?                @relation("HolidayCalendarBranch", fields: [branchId], references: [id])
+  holidays    Holiday[]
+  assignments EmployeeHolidayCalendar[]
+
+  @@map("holiday_calendars")
+}
+
+model Holiday {
+  id          Int      @id @default(autoincrement())
+  calendarId  Int
+  date        DateTime @db.Date
+  name        String
+  holidayType String   @default("PUBLIC")
+
+  calendar HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+
+  @@unique([calendarId, date])
+  @@map("holidays")
+}
+
+/// Employee-level holiday calendar (the "EMPLOYEE" level of the inheritance order).
+model EmployeeHolidayCalendar {
+  id            Int       @id @default(autoincrement())
+  employeeId    Int
+  calendarId    Int
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  employee Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  calendar HolidayCalendar @relation(fields: [calendarId], references: [id])
+
+  @@index([employeeId, effectiveFrom])
+  @@map("employee_holiday_calendars")
+}
+
+/// A repeating roster cycle (7, 14, 21 or 28 days). Each day is a shift or a weekly off.
+model RosterPattern {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  cycleDays Int
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  days        RosterPatternDay[]
+  assignments EmployeeRosterPattern[]
+
+  @@map("roster_patterns")
+}
+
+model RosterPatternDay {
+  id          Int     @id @default(autoincrement())
+  patternId   Int
+  /// 0-based position in the cycle.
+  dayIndex    Int
+  shiftId     Int?
+  isWeeklyOff Boolean @default(false)
+
+  pattern RosterPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+  shift   Shift?        @relation(fields: [shiftId], references: [id])
+
+  @@unique([patternId, dayIndex])
+  @@map("roster_pattern_days")
+}
+
+/// Employee follows a pattern from effectiveFrom; anchorDate is the date where cycle day 0 falls.
+model EmployeeRosterPattern {
+  id            Int       @id @default(autoincrement())
+  employeeId    Int
+  patternId     Int
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  anchorDate    DateTime  @db.Date
+
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  pattern  RosterPattern @relation(fields: [patternId], references: [id])
+
+  @@index([employeeId, effectiveFrom])
+  @@map("employee_roster_patterns")
+}
+
+/// A single-day roster entry (manual or imported). Overrides the employee's pattern for that date.
+model RosterEntry {
+  id          Int      @id @default(autoincrement())
+  employeeId  Int
+  date        DateTime @db.Date
+  shiftId     Int?
+  isWeeklyOff Boolean  @default(false)
+  /// MANUAL | IMPORT
+  source      String   @default("MANUAL")
+  createdById Int?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift    Shift?   @relation(fields: [shiftId], references: [id])
+
+  @@unique([employeeId, date])
+  @@map("roster_entries")
+}
+
+/// History of Excel imports (roster and holidays).
+model AttendanceImportLog {
+  id           Int      @id @default(autoincrement())
+  kind         String
+  fileName     String
+  totalRows    Int
+  importedRows Int
+  failedRows   Int
+  errors       Json     @default("[]")
+  createdById  Int?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("attendance_import_logs")
+}
+
+// ============================================================================
+// ATTENDANCE MARKING — statuses, policies, daily records, punches, mood
+// ============================================================================
+
+/// One status list for every country. Legacy per-country ids only live in AttendanceStatusMapping.
+model AttendanceStatus {
+  code            String  @id
+  name            String
+  color           String  @default("#6b7280")
+  sortOrder       Int     @default(0)
+  /// WORK | ABSENCE | OFF | LEAVE
+  category        String
+  /// The late / half-day rule never changes a day that already has this status.
+  skipsLateRule   Boolean @default(false)
+  /// The day carries no punches and counts as not present (e.g. comp off availed).
+  clearsPunches   Boolean @default(false)
+  /// The only status(es) a manager may edit. Approving moves the day off it.
+  managerEditable Boolean @default(false)
+  isActive        Boolean @default(true)
+
+  records  Attendance[]
+  mappings AttendanceStatusMapping[]
+
+  @@map("attendance_statuses")
+}
+
+/// Old ids per country, used only when migrating data and when comparing with the stored procedures.
+model AttendanceStatusMapping {
+  id           Int    @id @default(autoincrement())
+  countryCode  String
+  statusCode   String
+  legacyId     Int
+  legacyName   String
+
+  status AttendanceStatus @relation(fields: [statusCode], references: [code])
+
+  @@unique([countryCode, legacyId])
+  @@map("attendance_status_mappings")
+}
+
+/// Settings that change a value, not the logic. Thresholds (late, half-day, Ramadan start) stay on the Shift.
+model AttendancePolicy {
+  id                         Int      @id @default(autoincrement())
+  code                       String   @unique
+  name                       String
+  isActive                   Boolean  @default(true)
+  /// Bumped on every change; stored on each processed day so history stays explainable.
+  version                    Int      @default(1)
+  lateEnabled                Boolean  @default(true)
+  halfDayEnabled             Boolean  @default(true)
+  allowPastDateSelfMarking   Boolean  @default(false)
+  applyLateRulesToPastDates  Boolean  @default(false)
+  /// Local time "HH:mm"; self-marking today after this is refused. Empty = no limit.
+  selfMarkCutoffTime         String?
+  /// HR may mark or correct after the cutoff.
+  cutoffExemptHr             Boolean  @default(true)
+  managerEditsOnlyUnapproved Boolean  @default(true)
+  /// A self-marked day stays NOT_APPROVED (or LATE / HALF_DAY) until a manager or HR approves it.
+  requiresApproval           Boolean  @default(true)
+  useRamadanShiftStart       Boolean  @default(false)
+  /// A day whose worked time is below the required time (after the grace) is marked SHORT_HOURS.
+  shortHoursEnabled          Boolean  @default(true)
+  shortHoursGraceMinutes     Int      @default(0)
+  /// Worked time beyond the required time, after this many minutes, counts as overtime.
+  overtimeEnabled            Boolean  @default(false)
+  overtimeAfterMinutes       Int      @default(0)
+  createdAt                  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime @updatedAt @db.Timestamptz(3)
+
+  assignments AttendancePolicyAssignment[]
+
+  @@map("attendance_policies")
+}
+
+/// scope EMPLOYEE | BRANCH | COUNTRY. The most specific active assignment wins.
+model AttendancePolicyAssignment {
+  id            Int       @id @default(autoincrement())
+  policyId      Int
+  scope         String
+  countryCode   String?
+  branchId      Int?
+  employeeId    Int?
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  policy   AttendancePolicy @relation(fields: [policyId], references: [id])
+  branch   Parameter?       @relation("PolicyAssignmentBranch", fields: [branchId], references: [id])
+  employee Employee?        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([scope, countryCode])
+  @@index([branchId])
+  @@index([employeeId])
+  @@map("attendance_policy_assignments")
+}
+
+model RamadanPeriod {
+  id          Int      @id @default(autoincrement())
+  countryCode String
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+
+  @@index([countryCode, startDate])
+  @@map("ramadan_periods")
+}
+
+model BranchTimezone {
+  branchId Int    @id
+  /// IANA name, e.g. Asia/Dubai
+  timezone String
+
+  branch Parameter @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@map("branch_timezones")
+}
+
+/// Singleton (id 1): settings that apply to every employee.
+model AttendanceSettings {
+  id                 Int      @id @default(1)
+  moodEnabled        Boolean  @default(true)
+  /// OFF | OPTIONAL | REQUIRED
+  gpsRequirement     String   @default("OPTIONAL")
+  addressRequirement String   @default("OPTIONAL")
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("attendance_settings")
+}
+
+/// One row per employee per date, for every country. Times are UTC.
+model Attendance {
+  id             BigInt    @id @default(autoincrement())
+  employeeId     Int
+  date           DateTime  @db.Date
+  shiftId        Int?
+  policyId       Int?
+  policyVersion  Int?
+  statusCode     String
+  isPresent      Boolean   @default(false)
+  firstInAt      DateTime? @db.Timestamptz(3)
+  lastOutAt      DateTime? @db.Timestamptz(3)
+  lateMinutes    Int       @default(0)
+  workedMinutes  Int?
+  /// Required time from the work schedule (or the shift) and the gap / excess against the worked time.
+  requiredMinutes Int?
+  shortMinutes   Int       @default(0)
+  overtimeMinutes Int      @default(0)
+  /// Created by the daily job rather than by a person.
+  isAutoGenerated Boolean  @default(false)
+  leaveApplicationId Int?
+  inIp           String?
+  inCoordinates  String?
+  inAddress      String?
+  outIp          String?
+  outCoordinates String?
+  outAddress     String?
+  /// SELF | MANAGER | HR
+  source         String    @default("SELF")
+  markedById     Int?
+  markedAt       DateTime? @db.Timestamptz(3)
+  approvedById   Int?
+  approvedAt     DateTime? @db.Timestamptz(3)
+  modifiedById   Int?
+  modifiedAt     DateTime  @default(now()) @db.Timestamptz(3)
+  remarks        String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+
+  employee Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  status   AttendanceStatus @relation(fields: [statusCode], references: [code])
+  leaveApplication LeaveApplication? @relation(fields: [leaveApplicationId], references: [id], onDelete: SetNull)
+  punches  AttendancePunch[]
+
+  @@unique([employeeId, date])
+  @@index([date])
+  @@map("attendance")
+}
+
+/// Every IN / OUT event. The day's first IN and last OUT are copied onto Attendance.
+model AttendancePunch {
+  id           BigInt   @id @default(autoincrement())
+  attendanceId BigInt
+  /// IN | OUT
+  punchType    String
+  at           DateTime @db.Timestamptz(3)
+  ip           String?
+  coordinates  String?
+  address      String?
+  /// SELF | MANAGER | HR
+  source       String   @default("SELF")
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  attendance Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+
+  @@index([attendanceId, at])
+  @@map("attendance_punches")
+}
+
+/// One mood per employee per day, taken when they press IN. Options: parameter type "Mood".
+model MoodLog {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  date       DateTime @db.Date
+  mood       String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@map("mood_logs")
+}
+
+/// A request to correct a day (forgot to punch, wrong time). Approving it applies the corrected times.
+model AttendanceRegularization {
+  id           Int       @id @default(autoincrement())
+  employeeId   Int
+  date         DateTime  @db.Date
+  /// Local times (HH:mm) in the employee's timezone.
+  requestedIn  String?
+  requestedOut String?
+  reason       String
+  /// PENDING | APPROVED | REJECTED | CANCELLED
+  status       String    @default("PENDING")
+  decidedById  Int?
+  decidedAt    DateTime? @db.Timestamptz(3)
+  decisionNote String?
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, date])
+  @@index([status])
+  @@map("attendance_regularizations")
+}
+
+/// One run of the daily job (nightly or by hand).
+model AttendanceProcessingRun {
+  id           Int       @id @default(autoincrement())
+  fromDate     DateTime  @db.Date
+  toDate       DateTime  @db.Date
+  /// CRON | MANUAL
+  trigger      String
+  createdDays  Int       @default(0)
+  updatedDays  Int       @default(0)
+  skippedDays  Int       @default(0)
+  errors       Json      @default("[]")
+  startedAt    DateTime  @default(now()) @db.Timestamptz(3)
+  finishedAt   DateTime? @db.Timestamptz(3)
+  createdById  Int?
+
+  @@map("attendance_processing_runs")
+}
+
+// ============================================================================
+// LEAVE MANAGEMENT
+// ============================================================================
+
+model LeaveType {
+  id               Int      @id @default(autoincrement())
+  code             String   @unique
+  name             String   @unique
+  isPaid           Boolean  @default(true)
+  /// false = usage is recorded but no balance is kept (for example loss of pay).
+  balanceTracking  Boolean  @default(true)
+  /// NONE | ANNUAL (credited at the start of the leave year) | MONTHLY (annualDays / 12 each month)
+  accrual          String   @default("NONE")
+  annualDays       Decimal  @default(0) @db.Decimal(6, 2)
+  allowHalfDay     Boolean  @default(true)
+  allowNegative    Boolean  @default(false)
+  requiresDocument Boolean  @default(false)
+  /// Document is only needed when the leave is longer than this many days (0 = always).
+  documentAfterDays Int     @default(0)
+  maxDaysPerRequest Int?
+  /// Whether this type takes part in sandwich leave (also needs the organization switch).
+  isSandwichEligible Boolean @default(false)
+  /// Earned through comp off credits instead of accrual.
+  isCompOff        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  sortOrder        Int      @default(0)
+
+  applications LeaveApplication[]
+  credits      LeaveCredit[]
+  transactions LeaveTransaction[]
+
+  @@map("leave_types")
+}
+
+/// Singleton (id 1): organization-wide leave settings.
+model LeaveSettings {
+  id                     Int      @id @default(1)
+  sandwichEnabled        Boolean  @default(false)
+  sandwichWeeklyOffs     Boolean  @default(true)
+  sandwichHolidays       Boolean  @default(true)
+  /// false = leave on either side of the off days triggers it; true = leave must be on both sides.
+  sandwichRequireBothSides Boolean @default(false)
+  /// Month the leave year starts (1 = January, 4 = April).
+  leaveYearStartMonth    Int      @default(1)
+  compOffEnabled         Boolean  @default(false)
+  compOffCreditDays      Decimal  @default(1) @db.Decimal(4, 2)
+  compOffExpiryDays      Int?     @default(90)
+  compOffMinWorkedMinutes Int     @default(240)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("leave_settings")
+}
+
+/// A bucket of balance with its own expiry. Leave is taken from the earliest-expiring bucket first.
+model LeaveCredit {
+  id          Int       @id @default(autoincrement())
+  employeeId  Int
+  leaveTypeId Int
+  quantity    Decimal   @db.Decimal(6, 2)
+  remaining   Decimal   @db.Decimal(6, 2)
+  creditedOn  DateTime  @db.Date
+  expiresOn   DateTime? @db.Date
+  /// ACCRUAL | MANUAL | COMP_OFF | OPENING
+  source      String
+  /// Makes automatic credits safe to run twice (for example "2026-12" or "2026").
+  sourceRef   String?
+  note        String?
+  createdById Int?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+  allocations LeaveAllocation[]
+
+  @@unique([employeeId, leaveTypeId, source, sourceRef])
+  @@index([employeeId, leaveTypeId])
+  @@map("leave_credits")
+}
+
+/// Which credits an approved application used, so a cancellation can give the days back.
+model LeaveAllocation {
+  id            Int     @id @default(autoincrement())
+  applicationId Int
+  creditId      Int
+  days          Decimal @db.Decimal(6, 2)
+
+  application LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  credit      LeaveCredit      @relation(fields: [creditId], references: [id])
+
+  @@index([applicationId])
+  @@map("leave_allocations")
+}
+
+/// Every change to a balance, for audit. days is positive for credits and negative for usage.
+model LeaveTransaction {
+  id            Int      @id @default(autoincrement())
+  employeeId    Int
+  leaveTypeId   Int
+  /// CREDIT | DEBIT | REVERSAL | EXPIRY | ADJUSTMENT
+  kind          String
+  days          Decimal  @db.Decimal(6, 2)
+  applicationId Int?
+  note          String?
+  createdById   Int?
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  @@index([employeeId, leaveTypeId])
+  @@map("leave_transactions")
+}
+
+model LeaveApplication {
+  id            Int       @id @default(autoincrement())
+  employeeId    Int
+  leaveTypeId   Int
+  fromDate      DateTime  @db.Date
+  toDate        DateTime  @db.Date
+  /// FIRST | SECOND, only for a single half day
+  halfDayPart   String?
+  /// Days asked for, extra days counted by the sandwich rule, and the total taken from the balance.
+  requestedDays Decimal   @db.Decimal(6, 2)
+  sandwichDays  Decimal   @default(0) @db.Decimal(6, 2)
+  totalDays     Decimal   @db.Decimal(6, 2)
+  /// PENDING | APPROVED | REJECTED | CANCELLED
+  status        String    @default("PENDING")
+  reason        String?
+  /// Every day with why it was counted (working, off day, sandwiched), kept as the audit of the calculation.
+  calculation   Json      @default("[]")
+  decidedById   Int?
+  decidedAt     DateTime? @db.Timestamptz(3)
+  decisionNote  String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  employee    Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType   LeaveType  @relation(fields: [leaveTypeId], references: [id])
+  allocations LeaveAllocation[]
+  attendance  Attendance[]
+
+  @@index([employeeId, fromDate])
+  @@index([status])
+  @@map("leave_applications")
 }

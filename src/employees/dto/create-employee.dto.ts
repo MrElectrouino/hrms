@@ -90,10 +90,16 @@ export class CreateEmployeeDto {
 
   // Employee fields
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MinLength(1)
   @MaxLength(20)
-  employeeCode: string;
+  employeeCode?: string;
+
+  /** Employee type (parameter text). When employeeCode is omitted, the code is generated from this type. */
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  employmentType?: string;
 
   @Type(() => Number)
   @IsOptional()
@@ -186,8 +192,4 @@ export class CreateEmployeeDto {
   )
   isSiteAccess?: boolean;
 
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @IsOptional()
-  departmentIds?: number[];
 }

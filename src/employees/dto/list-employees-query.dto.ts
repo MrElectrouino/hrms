@@ -6,10 +6,10 @@ export class ListEmployeesQueryDto {
   @IsString()
   search?: string;
 
-  @Type(() => Number)
+  /** Department name (parameter type "Department"), as stored in the Organization section. */
   @IsOptional()
-  @IsInt()
-  departmentId?: number;
+  @IsString()
+  department?: string;
 
   @Type(() => Number)
   @IsOptional()

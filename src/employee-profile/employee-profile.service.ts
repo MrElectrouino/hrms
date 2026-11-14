@@ -18,7 +18,6 @@ import {
   CountryCode,
   CustomFieldDefLike,
   CUSTOM_FIELD_OPTIONS_REQUIRED,
-  LEGAL_ENTITIES,
   Lookups,
   SalaryComponentDef,
   componentCode,
@@ -26,6 +25,7 @@ import {
   SECTION_KEYS,
   SectionDef,
   buildSections,
+  parameterTypesUsed,
   checkCustomValue,
   codeFromLabel,
   fieldsFor,
@@ -33,6 +33,7 @@ import {
   validateSection,
 } from './profile-schema';
 import { CreateCustomFieldDto, UpdateCustomFieldDto } from './dto/custom-field.dto';
+import { ProfileRulesService } from './profile-rules.service';
 
 const HR_ROLES = [UserType.SystemAdmin, UserType.HRAdmin];
 
@@ -44,6 +45,7 @@ export class EmployeeProfileService {
     private readonly prisma: PrismaService,
     private readonly pii: PiiService,
     private readonly audit: AuditService,
+    private readonly rules: ProfileRulesService,
   ) {}
 
   private isHr(user: CurrentUserPayload): boolean {
@@ -90,13 +92,42 @@ export class EmployeeProfileService {
    * Option lists from master data: Languages master, the Nationality parameter catalog,
    * and active employees for manager pickers (excluding the employee being edited).
    */
-  private async lookups(excludeEmployeeId?: number): Promise<Lookups> {
-    const [languages, nationalities, employees] = await Promise.all([
+  private async lookups(excludeEmployeeId?: number, branchAccess?: number[] | null, country?: CountryCode): Promise<Lookups> {
+    const [languages, nationalities, noticeReasons, departments, employeeTypes, relationships, branches, employees, shifts, genericParams] = await Promise.all([
       this.prisma.language.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
       this.prisma.parameter.findMany({
         where: { isVisible: true, parameterType: { name: 'Nationality' } },
         orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
         select: { text: true },
+      }),
+      this.prisma.parameter.findMany({
+        where: { isVisible: true, parameterType: { name: 'Notice Reason' } },
+        orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
+        select: { text: true },
+      }),
+      this.prisma.parameter.findMany({
+        where: { isVisible: true, parameterType: { name: 'Department' } },
+        orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
+        select: { text: true },
+      }),
+      this.prisma.parameter.findMany({
+        where: { isVisible: true, parameterType: { name: 'Employee Type' } },
+        orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
+        select: { text: true },
+      }),
+      this.prisma.parameter.findMany({
+        where: { isVisible: true, parameterType: { name: 'Emergency Relationship' } },
+        orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
+        select: { text: true },
+      }),
+      this.prisma.parameter.findMany({
+        where: {
+          isVisible: true,
+          parameterType: { name: 'Branch' },
+          ...(branchAccess ? { id: { in: branchAccess } } : {}),
+        },
+        orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
+        select: { id: true, text: true },
       }),
       this.prisma.employee.findMany({
         where: { isActive: true, ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}) },
@@ -104,10 +135,25 @@ export class EmployeeProfileService {
         orderBy: { profile: { name: 'asc' } },
         take: 1000,
       }),
+      this.prisma.shift.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+      this.prisma.parameter.findMany({
+        where: { isVisible: true, parameterType: { name: { in: parameterTypesUsed() } } },
+        orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
+        select: { text: true, parameterType: { select: { name: true } } },
+      }),
     ]);
+    const parameters: Record<string, string[]> = {};
+    for (const p of genericParams) (parameters[p.parameterType.name] ??= []).push(p.text);
     return {
       languages: languages.map((l) => l.name),
       nationalities: nationalities.map((n) => n.text),
+      noticeReasons: noticeReasons.map((n) => n.text),
+      departments: departments.map((d) => d.text),
+      employeeTypes: employeeTypes.map((d) => d.text),
+      relationships: relationships.map((d) => d.text),
+      parameters,
+      shifts: shifts.map((s) => ({ value: String(s.id), label: s.name })),
+      branches: branches.map((b) => ({ value: String(b.id), label: b.text })),
       employees: employees.map((e) => ({
         value: String(e.id),
         label: `${[e.profile.name, e.profile.lastName].filter(Boolean).join(' ')} (${e.employeeCode})`,
@@ -129,8 +175,9 @@ export class EmployeeProfileService {
     return rows.map((t) => ({ id: t.id, name: t.name, countryCode: t.countryCode, isActive: t.isActive, components: t.components as unknown as SalaryComponentDef[] }));
   }
 
-  private visibleSections(user: CurrentUserPayload, country: CountryCode, lookups: Lookups): SectionDef[] {
-    return buildSections(country, lookups).filter((s) => !s.hrOnly || this.isHr(user));
+  private async visibleSections(user: CurrentUserPayload, country: CountryCode, lookups: Lookups): Promise<SectionDef[]> {
+    const rules = await this.rules.rulesFor(country);
+    return buildSections(country, lookups, rules).filter((s) => !s.hrOnly || this.isHr(user));
   }
 
   /* -------------------------------------------------------------- read */
@@ -141,7 +188,7 @@ export class EmployeeProfileService {
     if (!this.isHr(user) && !isSelf) throw new ForbiddenException('You can only view your own profile');
 
     const country = await this.countryOf(employeeId);
-    const sections = this.visibleSections(user, country, await this.lookups(employeeId));
+    const sections = await this.visibleSections(user, country, await this.lookups(employeeId, user.branchAccess, country));
     const stored = await this.prisma.employeeProfileSection.findMany({ where: { employeeId } });
     const byKey = new Map(stored.map((s) => [s.sectionKey, (s.data ?? {}) as SectionData]));
 
@@ -175,7 +222,6 @@ export class EmployeeProfileService {
         country,
         currency: CURRENCY[country],
         addressLevels: ADDRESS_LEVELS[country],
-        legalEntities: LEGAL_ENTITIES[country],
       },
       canEdit: this.isHr(user),
       sections: sections.map((s) => resolveSection(s, country)),
@@ -217,7 +263,8 @@ export class EmployeeProfileService {
         ? (submittedCountry as CountryCode)
         : current;
 
-    const section = buildSections(country, await this.lookups(employeeId)).find((s) => s.key === sectionKey) as SectionDef;
+    const section = buildSections(country, await this.lookups(employeeId, user.branchAccess, country), await this.rules.rulesFor(country)).find((s) => s.key === sectionKey);
+    if (!section) throw new NotFoundException('This section is not used for the employee\'s country');
     const existingRow = await this.prisma.employeeProfileSection.findUnique({
       where: { employeeId_sectionKey: { employeeId, sectionKey } },
     });
@@ -263,6 +310,18 @@ export class EmployeeProfileService {
       create: { employeeId, sectionKey, data: toStore as Prisma.InputJsonValue, updatedByProfileId: user.profileId },
       update: { data: toStore as Prisma.InputJsonValue, updatedByProfileId: user.profileId },
     });
+
+    // Keep the employee's branch in step with the Organization section (drives branch-scoped access).
+    if (sectionKey === 'organization' && 'branch' in result.values) {
+      const raw = result.values.branch;
+      await this.prisma.employee.update({ where: { id: employeeId }, data: { branchId: raw ? Number(raw) : null } });
+    }
+
+    // Keep the employee's shift column in step with the Attendance section.
+    if (sectionKey === 'attendance' && 'shift' in result.values) {
+      const raw = result.values.shift;
+      await this.prisma.employee.update({ where: { id: employeeId }, data: { shiftId: raw ? Number(raw) : null } });
+    }
 
     // 4) Custom values (encrypted when the definition is sensitive)
     for (const [code, value] of Object.entries(customInput)) {
@@ -437,8 +496,8 @@ export class EmployeeProfileService {
     const orgCountry = sections.organization?.data?.legalEntityCountry;
     const pick = (typeof orgCountry === 'string' ? orgCountry : countryInput) ?? 'IN';
     const country: CountryCode = (COUNTRIES as readonly string[]).includes(pick) ? (pick as CountryCode) : 'IN';
-    const defs = await this.lookups();
-    const all = buildSections(country, defs);
+    const defs = await this.lookups(undefined, user.branchAccess, country);
+    const all = buildSections(country, defs, await this.rules.rulesFor(country));
     const customDefs = (await this.prisma.customFieldDefinition.findMany({ where: { isActive: true } }))
       .filter((d) => d.countryCode === 'ALL' || d.countryCode === country);
     const errors: Record<string, { field: string; message: string }[]> = {};
@@ -471,7 +530,7 @@ export class EmployeeProfileService {
       country,
       currency: CURRENCY[country],
       addressLevels: ADDRESS_LEVELS[country],
-      sections: this.visibleSections(user, country, await this.lookups()).map((s) => resolveSection(s, country)),
+      sections: (await this.visibleSections(user, country, await this.lookups(undefined, user.branchAccess, country))).map((s) => resolveSection(s, country)),
       salaryTemplates: await this.salaryTemplatesFor(country),
       customFields: defs.map((d) => ({
         code: d.code, label: d.label, tabKey: d.tabKey, sectionName: d.sectionName, fieldType: d.fieldType,

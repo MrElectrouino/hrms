@@ -8,10 +8,16 @@ import {
   resetUserPassword,
   User,
   getUserTypes,
+  getBranches,
+  BranchOption,
 } from '../lib/api';
+import BranchAccessPicker from '../components/BranchAccessPicker';
+import { UserType } from '../lib/user-types';
 
 export default function UsersPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user: me } = useAuth();
+  const isSystemAdmin = me?.userTypeId === UserType.SystemAdmin;
+  const [branchOptions, setBranchOptions] = useState<BranchOption[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [search, setSearch] = useState('');
@@ -27,19 +33,24 @@ export default function UsersPage() {
     username: '',
     password: '',
     userTypeId: '',
+    allBranches: true,
+    branchIds: [] as number[],
   });
 
   // Edit form state
   const [editForm, setEditForm] = useState({
     userTypeId: '',
     isActive: true,
+    allBranches: true,
+    branchIds: [] as number[],
   });
 
   useEffect(() => {
     if (!isAuthenticated) return;
     loadUsers();
     getUserTypes().then((res) => setUserTypes(res.data));
-  }, [isAuthenticated, page, search]);
+    if (isSystemAdmin) getBranches().then((res) => setBranchOptions(res.data)).catch(() => {});
+  }, [isAuthenticated, isSystemAdmin, page, search]);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -62,6 +73,8 @@ export default function UsersPage() {
     setEditForm({
       userTypeId: String(u.userTypeId || ''),
       isActive: u.isActive,
+      allBranches: u.allBranches ?? true,
+      branchIds: (u.branches ?? []).map((b) => b.branchId),
     });
   };
 
@@ -72,9 +85,10 @@ export default function UsersPage() {
         username: form.username,
         password: form.password,
         userTypeId: parseInt(form.userTypeId, 10),
+        ...(isSystemAdmin && parseInt(form.userTypeId, 10) !== UserType.SystemAdmin ? { allBranches: form.allBranches, branchIds: form.branchIds } : {}),
       });
       setShowCreate(false);
-      setForm({ username: '', password: '', userTypeId: '' });
+      setForm({ username: '', password: '', userTypeId: '', allBranches: true, branchIds: [] });
       loadUsers();
     } catch (err: any) {
       setError(err.message || 'Failed to create user');
@@ -88,6 +102,7 @@ export default function UsersPage() {
       await updateUser(editingUser.id, {
         userTypeId: editForm.userTypeId ? parseInt(editForm.userTypeId, 10) : undefined,
         isActive: editForm.isActive,
+        ...(isSystemAdmin && editingUser.userTypeId !== UserType.SystemAdmin ? { allBranches: editForm.allBranches, branchIds: editForm.branchIds } : {}),
       });
       setEditingUser(null);
       loadUsers();
@@ -287,6 +302,10 @@ export default function UsersPage() {
                 </select>
               </div>
 
+              {isSystemAdmin && form.userTypeId !== String(UserType.SystemAdmin) && (
+                <BranchAccessPicker branches={branchOptions} allBranches={form.allBranches} branchIds={form.branchIds} onChange={(v) => setForm({ ...form, ...v })} />
+              )}
+
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
@@ -343,6 +362,10 @@ export default function UsersPage() {
                 />
                 Active
               </label>
+
+              {isSystemAdmin && editingUser.userTypeId !== UserType.SystemAdmin && (
+                <BranchAccessPicker branches={branchOptions} allBranches={editForm.allBranches} branchIds={editForm.branchIds} onChange={(v) => setEditForm({ ...editForm, ...v })} />
+              )}
 
               <div className="flex justify-end gap-3 pt-4">
                 <button

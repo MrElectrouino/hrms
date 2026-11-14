@@ -8,6 +8,8 @@ const actor = (userId: number, userTypeId: number) => ({
   userTypeId,
   sessionId: '1',
   mustChangePassword: false,
+  branchAccess: null,
+  activeBranchIds: null,
 });
 
 function makeService(target: Record<string, unknown> | null, opts: { otherAdmins?: number } = {}) {
@@ -130,7 +132,7 @@ describe('UsersService.resetPassword', () => {
     await service.resetPassword(20, 'Temp#Pass1', actor(5, UserType.HRAdmin));
 
     expect(prisma.user.update.mock.calls[0][0].data).toEqual(
-      expect.objectContaining({ legacyPasswordEnc: null, mustChangePassword: true }),
+      expect.objectContaining({ mustChangePassword: true }),
     );
     expect(prisma.session.updateMany).toHaveBeenCalledWith({
       where: { userId: 20, revokedAt: null },

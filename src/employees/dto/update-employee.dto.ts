@@ -194,8 +194,4 @@ export class UpdateEmployeeDto {
   )
   isSiteAccess?: boolean;
 
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @IsOptional()
-  departmentIds?: number[];
 }
