@@ -9,6 +9,8 @@ import { RosterService } from '../attendance-setup/roster.service';
 import { parseIsoDate, toIsoDate } from '../attendance-setup/attendance-logic';
 import { AttendanceProcessingService } from '../attendance/attendance-processing.service';
 import { AdjustBalanceDto, LeaveRequestDto } from './dto/leave.dto';
+import { EntitlementService } from './entitlement.service';
+import { addMonthsIso } from './entitlement-rules';
 import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLeaveDays, isoAdd, leaveYear, monthlyCredit } from './leave-rules';
 
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
@@ -30,6 +32,7 @@ export class LeaveService {
     private readonly audit: AuditService,
     private readonly roster: RosterService,
     private readonly processing: AttendanceProcessingService,
+    private readonly entitlement: EntitlementService,
   ) {}
 
   /* ------------------------------------------------------------------ who is asking */
@@ -304,31 +307,61 @@ export class LeaveService {
 
   /* ------------------------------------------------------------------ accrual, expiry, adjustments, comp off */
 
-  /** Credits the leave year (annual types) or the month (monthly types). Running it twice credits nothing more. */
+  /** One credit with its ledger row. Returns false when the same credit already exists (so running twice adds nothing). */
+  private async creditOnce(e: { employeeId: number; leaveTypeId: number }, days: number, creditedOn: string, expiresOn: string, ref: string, note: string, userId?: number) {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.leaveCredit.create({ data: { ...e, quantity: days, remaining: days, creditedOn: parseIsoDate(creditedOn)!, expiresOn: parseIsoDate(expiresOn), source: 'ACCRUAL', sourceRef: ref, createdById: userId } });
+        await tx.leaveTransaction.create({ data: { ...e, kind: 'CREDIT', days, note, createdById: userId } });
+      });
+      return true;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return false;
+      throw err;
+    }
+  }
+
+  /**
+   * Credits the leave year (annual types) or each month so far (monthly types). Employees covered by a leave policy get
+   * what the policy works out (proration, service slabs, rounding); the rest use the leave type's own setting.
+   * Running it twice credits nothing more.
+   */
   async runAccrual(user: CurrentUserPayload | null, asOf = today()) {
     const settings = await this.prisma.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
     const year = leaveYear(asOf, settings.leaveYearStartMonth);
-    const types = await this.prisma.leaveType.findMany({ where: { isActive: true, accrual: { in: ['ANNUAL', 'MONTHLY'] }, balanceTracking: true } });
-    const employees = await this.prisma.employee.findMany({ where: { isActive: true, dateOfJoining: { lte: parseIsoDate(asOf)! } }, select: { id: true } });
+    const types = await this.prisma.leaveType.findMany({ where: { isActive: true, balanceTracking: true, isCompOff: false } });
+    const facts = await this.entitlement.facts();
+    const monthIndex = (Number(asOf.slice(0, 4)) - Number(year.start.slice(0, 4))) * 12 + Number(asOf.slice(5, 7)) - Number(year.start.slice(5, 7));
     let credited = 0;
     let skipped = 0;
+    const count = (ok: boolean) => (ok ? credited++ : skipped++);
     for (const t of types) {
-      const monthly = t.accrual === 'MONTHLY';
-      const days = monthly ? monthlyCredit(num(t.annualDays)) : num(t.annualDays);
-      if (days <= 0) continue;
-      const ref = monthly ? asOf.slice(0, 7) : year.label;
-      const creditedOn = monthly ? `${asOf.slice(0, 7)}-01` : year.start;
-      for (const e of employees) {
-        try {
-          await this.prisma.$transaction(async (tx) => {
-            await tx.leaveCredit.create({ data: { employeeId: e.id, leaveTypeId: t.id, quantity: days, remaining: days, creditedOn: parseIsoDate(creditedOn)!, expiresOn: parseIsoDate(year.end), source: 'ACCRUAL', sourceRef: ref, createdById: user?.profileId } });
-            await tx.leaveTransaction.create({ data: { employeeId: e.id, leaveTypeId: t.id, kind: 'CREDIT', days, note: `${t.name} ${ref}`, createdById: user?.profileId } });
-          });
-          credited++;
-        } catch (err) {
-          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') skipped++;
-          else throw err;
+      const policies = await this.entitlement.load(t.id);
+      for (const e of facts) {
+        if (e.joinDate > asOf) continue;
+        const key = { employeeId: e.id, leaveTypeId: t.id };
+        const calc = this.entitlement.compute(this.entitlement.resolve(policies, e, asOf), e, year.start);
+        if (calc) {
+          const { winner, result } = calc;
+          await this.entitlement.record(e.id, t.id, year.start, winner, e, result);
+          if (winner.creditMethod === 'UPFRONT') {
+            if (result.quantity > 0) count(await this.creditOnce(key, result.quantity, year.start, year.end, `P:${year.label}`, `${t.name} ${year.label}`, user?.profileId));
+          } else if (winner.creditMethod === 'MONTHLY') {
+            const schedule = this.entitlement.monthlySchedule(result, winner.input.rounding, winner.input.tie ?? 'UP', monthIndex);
+            for (let k = 0; k < schedule.length; k++) {
+              if (schedule[k] <= 0) continue;
+              const on = addMonthsIso(year.start, k);
+              count(await this.creditOnce(key, schedule[k], on, year.end, `P:${year.label}:${on.slice(0, 7)}`, `${t.name} ${on.slice(0, 7)}`, user?.profileId));
+            }
+          }
+          continue;
         }
+        if (t.accrual !== 'ANNUAL' && t.accrual !== 'MONTHLY') continue;
+        const monthly = t.accrual === 'MONTHLY';
+        const days = monthly ? monthlyCredit(num(t.annualDays)) : num(t.annualDays);
+        if (days <= 0) continue;
+        const ref = monthly ? asOf.slice(0, 7) : year.label;
+        count(await this.creditOnce(key, days, monthly ? `${asOf.slice(0, 7)}-01` : year.start, year.end, ref, `${t.name} ${ref}`, user?.profileId));
       }
     }
     if (user) await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_ACCRUAL_RUN', entityType: 'LeaveCredit', entityId: asOf, metadata: { credited, skipped } });
