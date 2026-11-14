@@ -53,8 +53,10 @@ async function remove() {
 }
 
 async function add() {
-  const params = await prisma.parameter.findMany({ where: { parameterType: { name: { in: ['Branch', 'Department', 'Gender', 'Employee Type'] } } }, select: { id: true, text: true, parameterType: { select: { name: true } } } });
+  const params = await prisma.parameter.findMany({ where: { parameterType: { name: { in: ['Department', 'Gender', 'Employee Type'] } } }, select: { id: true, text: true, parameterType: { select: { name: true } } } });
   const find = (type, text) => params.find((p) => p.parameterType.name === type && p.text === text)?.id ?? null;
+  const branches = await prisma.branch.findMany({ select: { id: true, name: true } });
+  const branchId = (name) => branches.find((b) => b.name === name)?.id ?? null;
   const hash = await bcrypt.hash(PASSWORD, 12);
   const empIds = new Map();
   let made = 0;
@@ -72,14 +74,14 @@ async function add() {
           employeeCode: `DEMO${String(made + empIds.size + 1).padStart(3, '0')}`,
           dateOfJoining: new Date(`${joined}T00:00:00Z`),
           designation: role === 'Manager' ? `${dept} Manager` : role === 'HRAdmin' ? 'HR Manager' : `${dept} Executive`,
-          branchId: find('Branch', branch),
+          branchId: branchId(branch),
           employeeTypeId: find('Employee Type', empType),
           shiftId: 1,
           reportingToId: reportsTo ? empIds.get(reportsTo) ?? null : null,
           workEmail: `${username}@demo.test`,
         },
       });
-      await tx.employeeProfileSection.create({ data: { employeeId: employee.id, sectionKey: 'organization', data: { legalEntityCountry: country, employmentType: empType, department: dept, branch: String(find('Branch', branch)) } } });
+      await tx.employeeProfileSection.create({ data: { employeeId: employee.id, sectionKey: 'organization', data: { legalEntityCountry: country, employmentType: empType, department: dept, branch: String(branchId(branch)) } } });
       await tx.user.create({ data: { profileId: profile.id, userTypeId: UT[role], username, passwordHash: hash, mustChangePassword: false, allBranches: true } });
       return employee;
     });

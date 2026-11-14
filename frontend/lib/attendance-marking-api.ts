@@ -112,7 +112,6 @@ export const deletePolicy = (id: number) => request<null>(`/attendance-config/po
 export const unassignPolicy = (assignmentId: number) => request<null>(`/attendance-config/assignments/${assignmentId}`, { method: 'DELETE' });
 export const addRamadan = (p: { countryCode: string; startDate: string; endDate: string }) => request<unknown>('/attendance-config/ramadan', { method: 'POST', body: JSON.stringify(p) });
 export const removeRamadan = (id: number) => request<null>(`/attendance-config/ramadan/${id}`, { method: 'DELETE' });
-export const setBranchTimezone = (branchId: number, timezone: string | null) => request<null>(`/attendance-config/branches/${branchId}/timezone`, { method: 'PUT', body: JSON.stringify({ timezone }) });
 export const saveAttendanceSettings = (p: AttendanceConfig['settings']) => request<unknown>('/attendance-config/settings', { method: 'PUT', body: JSON.stringify(p) });
 export const saveAttendanceStatus = (code: string, p: { name?: string; color?: string; isActive?: boolean }) => request<unknown>(`/attendance-config/statuses/${code}`, { method: 'PUT', body: JSON.stringify(p) });
 

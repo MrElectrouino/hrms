@@ -41,11 +41,6 @@ export class RamadanDto {
   @IsString() endDate: string;
 }
 
-export class BranchTimezoneDto {
-  @IsOptional() @IsString() @MaxLength(60)
-  timezone?: string | null;
-}
-
 export class SettingsDto {
   @IsBoolean() moodEnabled: boolean;
   @IsIn(['OFF', 'OPTIONAL', 'REQUIRED']) gpsRequirement: string;

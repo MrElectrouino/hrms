@@ -373,7 +373,7 @@ export class UsersService {
     const branchIds = allBranches ? [] : dto.branchIds ?? [];
     if (!allBranches) {
       if (branchIds.length === 0) throw new BadRequestException('Choose at least one branch, or allow all branches');
-      const found = await this.prisma.parameter.count({ where: { id: { in: branchIds }, isVisible: true, parameterType: { name: 'Branch' } } });
+      const found = await this.prisma.branch.count({ where: { id: { in: branchIds }, isActive: true } });
       if (found !== branchIds.length) throw new BadRequestException('One or more branches do not exist or are inactive');
     }
     return { allBranches, branchIds };

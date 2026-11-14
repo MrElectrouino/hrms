@@ -21,13 +21,12 @@ export class AttendanceConfigService {
   }
 
   async overview() {
-    const [statuses, policies, ramadan, settings, branches, branchTz, countries] = await Promise.all([
+    const [statuses, policies, ramadan, settings, branches, countries] = await Promise.all([
       this.prisma.attendanceStatus.findMany({ orderBy: { sortOrder: 'asc' } }),
-      this.prisma.attendancePolicy.findMany({ orderBy: { name: 'asc' }, include: { assignments: { orderBy: [{ scope: 'asc' }, { effectiveFrom: 'desc' }], include: { branch: { select: { text: true } }, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } } } } }),
+      this.prisma.attendancePolicy.findMany({ orderBy: { name: 'asc' }, include: { assignments: { orderBy: [{ scope: 'asc' }, { effectiveFrom: 'desc' }], include: { branch: { select: { name: true } }, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } } } } }),
       this.prisma.ramadanPeriod.findMany({ orderBy: [{ countryCode: 'asc' }, { startDate: 'desc' }] }),
       this.prisma.attendanceSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
-      this.prisma.parameter.findMany({ where: { isVisible: true, parameterType: { name: 'Branch' } }, orderBy: { text: 'asc' }, select: { id: true, text: true } }),
-      this.prisma.branchTimezone.findMany(),
+      this.prisma.branch.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, timezone: true, countryCode: true } }),
       this.prisma.country.findMany({ where: { isActive: true }, select: { isoCode: true, name: true, defaultTimezone: true } }),
     ]);
     const f = (d: Date | null) => (d ? toIsoDate(d) : null);
@@ -35,7 +34,7 @@ export class AttendanceConfigService {
       statuses,
       settings,
       countries,
-      branches: branches.map((b) => ({ id: b.id, name: b.text, timezone: branchTz.find((t) => t.branchId === b.id)?.timezone ?? null })),
+      branches,
       ramadan: ramadan.map((r) => ({ id: r.id, countryCode: r.countryCode, startDate: toIsoDate(r.startDate), endDate: toIsoDate(r.endDate) })),
       policies: policies.map((p) => ({
         ...p,
@@ -44,7 +43,7 @@ export class AttendanceConfigService {
           scope: a.scope,
           countryCode: a.countryCode,
           branchId: a.branchId,
-          branchName: a.branch?.text ?? null,
+          branchName: a.branch?.name ?? null,
           employeeId: a.employeeId,
           employeeName: a.employee ? `${a.employee.profile.name} ${a.employee.profile.lastName ?? ''} (${a.employee.employeeCode})`.trim() : null,
           effectiveFrom: f(a.effectiveFrom),
@@ -138,17 +137,6 @@ export class AttendanceConfigService {
     const res = await this.prisma.ramadanPeriod.deleteMany({ where: { id } });
     if (!res.count) throw new NotFoundException('Period not found');
     await this.log(user, 'RAMADAN_PERIOD_REMOVED', id, ip);
-  }
-
-  /** null or empty removes the override, so the branch uses its country's timezone. */
-  async setBranchTimezone(branchId: number, timezone: string | null, user: CurrentUserPayload, ip?: string) {
-    if (!(await this.prisma.parameter.count({ where: { id: branchId, parameterType: { name: 'Branch' } } }))) throw new NotFoundException('Branch not found');
-    if (!timezone) await this.prisma.branchTimezone.deleteMany({ where: { branchId } });
-    else {
-      if (!isValidTimeZone(timezone)) throw new BadRequestException(`"${timezone}" is not a valid timezone (for example Asia/Dubai)`);
-      await this.prisma.branchTimezone.upsert({ where: { branchId }, create: { branchId, timezone }, update: { timezone } });
-    }
-    await this.log(user, 'BRANCH_TIMEZONE_SET', branchId, ip);
   }
 
   async saveSettings(dto: SettingsDto, user: CurrentUserPayload, ip?: string) {

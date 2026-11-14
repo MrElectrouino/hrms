@@ -77,13 +77,14 @@ export class AttendanceService {
   }
 
   private async timeZoneOf(branchId: number | null, country: string): Promise<string> {
-    if (branchId) {
-      const b = await this.prisma.branchTimezone.findUnique({ where: { branchId } });
-      if (b) return b.timezone;
+    // The branch's own timezone, then its country's, then the employee's country's, then the company's Default Country.
+    const branch = branchId ? await this.prisma.branch.findUnique({ where: { id: branchId }, select: { timezone: true, countryCode: true } }) : null;
+    if (branch?.timezone) return branch.timezone;
+    for (const code of [branch?.countryCode, country]) {
+      if (!code) continue;
+      const hit = await this.prisma.country.findUnique({ where: { isoCode: code }, select: { defaultTimezone: true } });
+      if (hit?.defaultTimezone) return hit.defaultTimezone;
     }
-    // Then the timezone of the employee's country, then of the company's Default Country (System settings > Countries).
-    const own = await this.prisma.country.findUnique({ where: { isoCode: country }, select: { defaultTimezone: true } });
-    if (own?.defaultTimezone) return own.defaultTimezone;
     const def = await this.prisma.systemConfiguration.findUnique({ where: { name: 'Default Country' }, select: { value: true } });
     const c = def?.value ? await this.prisma.country.findUnique({ where: { isoCode: def.value }, select: { defaultTimezone: true } }) : null;
     return c?.defaultTimezone || 'UTC';
@@ -450,16 +451,18 @@ export class AttendanceService {
   private async timeZones(employeeIds: number[]): Promise<Map<number, string>> {
     const map = new Map<number, string>();
     if (!employeeIds.length) return map;
-    const [emps, sections, branchTz, countries, defaultCountry] = await Promise.all([
+    const [emps, sections, branches, countries, defaultCountry] = await Promise.all([
       this.prisma.employee.findMany({ where: { id: { in: employeeIds } }, select: { id: true, branchId: true } }),
       this.prisma.employeeProfileSection.findMany({ where: { employeeId: { in: employeeIds }, sectionKey: 'organization' }, select: { employeeId: true, data: true } }),
-      this.prisma.branchTimezone.findMany(),
+      this.prisma.branch.findMany({ select: { id: true, timezone: true, countryCode: true } }),
       this.prisma.country.findMany({ select: { isoCode: true, defaultTimezone: true } }),
       this.prisma.systemConfiguration.findUnique({ where: { name: 'Default Country' }, select: { value: true } }),
     ]);
     for (const e of emps) {
       const country = (sections.find((s) => s.employeeId === e.id)?.data as { legalEntityCountry?: string } | null)?.legalEntityCountry ?? 'IN';
-      map.set(e.id, branchTz.find((b) => b.branchId === e.branchId)?.timezone ?? countries.find((c) => c.isoCode === country)?.defaultTimezone ?? countries.find((c) => c.isoCode === defaultCountry?.value)?.defaultTimezone ?? 'UTC');
+      const branch = branches.find((b) => b.id === e.branchId);
+      const tzOf = (code: string | null | undefined) => (code ? countries.find((c) => c.isoCode === code)?.defaultTimezone : undefined);
+      map.set(e.id, branch?.timezone ?? tzOf(branch?.countryCode) ?? tzOf(country) ?? tzOf(defaultCountry?.value) ?? 'UTC');
     }
     return map;
   }

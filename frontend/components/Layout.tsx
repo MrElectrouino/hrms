@@ -78,6 +78,7 @@ const ROLE_LABEL: Record<number, string> = {
 
 const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/attendance-setup', label: 'Attendance setup', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
+  { href: '/branches', label: 'Branches', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/masters', label: 'Masters', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/users', label: 'Users', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/access-control', label: 'Menus & rights', roles: [UserType.SystemAdmin, UserType.HRAdmin] },

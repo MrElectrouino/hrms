@@ -11,7 +11,7 @@ import { AttendanceProcessingService } from './attendance-processing.service';
 import { RegularizationService } from './regularization.service';
 import { AttendanceReportsService, ExceptionKind } from './attendance-reports.service';
 import { DecisionDto, EditAttendanceDto, MarkAttendanceDto, ProcessDto, RegularizationDto } from './dto/attendance.dto';
-import { AssignmentDto, BranchTimezoneDto, PolicyDto, RamadanDto, SettingsDto, StatusDto } from './dto/config.dto';
+import { AssignmentDto, PolicyDto, RamadanDto, SettingsDto, StatusDto } from './dto/config.dto';
 
 const ok = (data: unknown, text: string) => ({ data, message: { code: 'OK', text } });
 
@@ -150,11 +150,6 @@ export class AttendanceConfigController {
   async removeRamadan(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     await this.service.removeRamadan(id, u, ip);
     return ok(null, 'Ramadan period removed');
-  }
-  @Put('branches/:branchId/timezone')
-  async branchTimezone(@Param('branchId', ParseIntPipe) branchId: number, @Body() dto: BranchTimezoneDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
-    await this.service.setBranchTimezone(branchId, dto.timezone ?? null, u, ip);
-    return ok(null, 'Branch timezone saved');
   }
   @Put('settings')
   async settings(@Body() dto: SettingsDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {

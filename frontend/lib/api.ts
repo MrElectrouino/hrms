@@ -1029,12 +1029,29 @@ export interface BranchOption {
   code: string;
   name: string;
   countryCode: string | null;
+  timezone?: string | null;
 }
 
-/** Every active branch (parameter type "Branch"), for giving an account branch access. */
+export interface BranchRow extends BranchOption {
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  email: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  employeeCount: number;
+}
+export type BranchPayload = Omit<BranchRow, 'id' | 'employeeCount'>;
+
+/** Every active branch, for giving an account branch access. */
 export async function getBranches() {
   return request<BranchOption[]>('/branches');
 }
+export const getBranchesToManage = () =>
+  request<{ branches: BranchRow[]; countries: { isoCode: string; name: string; defaultTimezone: string }[] }>('/branches/manage');
+export const createBranch = (p: BranchPayload) => request<BranchRow>('/branches', { method: 'POST', body: JSON.stringify(p) });
+export const updateBranch = (id: number, p: BranchPayload) => request<BranchRow>('/branches/' + id, { method: 'PUT', body: JSON.stringify(p) });
+export const deleteBranch = (id: number) => request<null>('/branches/' + id, { method: 'DELETE' });
 export async function getMyBranches() {
   return request<{ restricted: boolean; branches: BranchOption[] }>('/branches/mine');
 }

@@ -430,17 +430,8 @@ model Parameter {
   /// NEW: stable slug for new code (legacy only had text).
   code            String?
 
-  parameterType     ParameterType                @relation(fields: [parameterTypeId], references: [id])
-  codeSequence      EmployeeCodeSequence?
-  /// Employees whose branch this is (parameter type "Branch").
-  branchEmployees   Employee[]                   @relation("EmployeeBranch")
-  /// Accounts allowed to work in this branch.
-  branchUsers       UserBranch[]                 @relation("UserBranchParameter")
-  /// Holiday calendars that belong to this branch.
-  holidayCalendars  HolidayCalendar[]            @relation("HolidayCalendarBranch")
-  /// Timezone override for this branch (parameter type "Branch").
-  timezone          BranchTimezone?
-  policyAssignments AttendancePolicyAssignment[] @relation("PolicyAssignmentBranch")
+  parameterType ParameterType         @relation(fields: [parameterTypeId], references: [id])
+  codeSequence  EmployeeCodeSequence?
 
   @@unique([parameterTypeId, text])
   @@index([parameterTypeId])
@@ -613,7 +604,7 @@ model Employee {
   reports           Employee[]                   @relation("ReportingTree")
   site              Site?                        @relation(fields: [siteId], references: [id])
   shift             Shift?                       @relation(fields: [shiftId], references: [id])
-  branch            Parameter?                   @relation("EmployeeBranch", fields: [branchId], references: [id])
+  branch            Branch?                      @relation(fields: [branchId], references: [id])
   workSchedules     EmployeeWorkSchedule[]
   rosterPatterns    EmployeeRosterPattern[]
   rosterEntries     RosterEntry[]
@@ -971,8 +962,8 @@ model UserBranch {
   userId   Int
   branchId Int
 
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  branch Parameter @relation("UserBranchParameter", fields: [branchId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@id([userId, branchId])
   @@index([branchId])
@@ -1045,7 +1036,7 @@ model HolidayCalendar {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
-  branch      Parameter?                @relation("HolidayCalendarBranch", fields: [branchId], references: [id])
+  branch      Branch?                   @relation(fields: [branchId], references: [id])
   holidays    Holiday[]
   assignments EmployeeHolidayCalendar[]
 
@@ -1247,7 +1238,7 @@ model AttendancePolicyAssignment {
   effectiveTo   DateTime? @db.Date
 
   policy   AttendancePolicy @relation(fields: [policyId], references: [id])
-  branch   Parameter?       @relation("PolicyAssignmentBranch", fields: [branchId], references: [id])
+  branch   Branch?          @relation(fields: [branchId], references: [id])
   employee Employee?        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([scope, countryCode])
@@ -1264,16 +1255,6 @@ model RamadanPeriod {
 
   @@index([countryCode, startDate])
   @@map("ramadan_periods")
-}
-
-model BranchTimezone {
-  branchId Int    @id
-  /// IANA name, e.g. Asia/Dubai
-  timezone String
-
-  branch Parameter @relation(fields: [branchId], references: [id], onDelete: Cascade)
-
-  @@map("branch_timezones")
 }
 
 /// Singleton (id 1): settings that apply to every employee.
@@ -1634,4 +1615,32 @@ model LeaveEntitlementRun {
   @@unique([employeeId, leaveTypeId, yearStart, policyId])
   @@index([employeeId, yearStart])
   @@map("leave_entitlement_runs")
+}
+
+/// A place the company works from. Carries its country and, optionally, its own timezone.
+/// (Used to be a parameter of type "Branch"; ids were kept so existing links still point at the same branch.)
+model Branch {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  name        String   @unique
+  /// Country list (countries.isoCode). Decides the profile layout default and the timezone fallback.
+  countryCode String?
+  /// IANA name, e.g. Asia/Dubai. Empty = use the country's timezone.
+  timezone    String?
+  address     String?
+  city        String?
+  phone       String?
+  email       String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  employees         Employee[]
+  users             UserBranch[]
+  holidayCalendars  HolidayCalendar[]
+  policyAssignments AttendancePolicyAssignment[]
+
+  @@index([countryCode])
+  @@map("branches")
 }

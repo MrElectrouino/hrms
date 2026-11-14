@@ -123,9 +123,9 @@ export class AttendanceSetupService {
   async listCalendars() {
     const rows = await this.prisma.holidayCalendar.findMany({
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      include: { _count: { select: { holidays: true, assignments: true } }, branch: { select: { id: true, text: true } } },
+      include: { _count: { select: { holidays: true, assignments: true } }, branch: { select: { id: true, name: true } } },
     });
-    return rows.map(({ _count, branch, ...c }) => ({ ...c, holidayCount: _count.holidays, employeeCount: _count.assignments, branchName: branch?.text ?? null }));
+    return rows.map(({ _count, branch, ...c }) => ({ ...c, holidayCount: _count.holidays, employeeCount: _count.assignments, branchName: branch?.name ?? null }));
   }
 
   private calendarData(dto: HolidayCalendarDto) {
@@ -142,7 +142,7 @@ export class AttendanceSetupService {
 
   private async assertBranch(branchId: number | null) {
     if (!branchId) return;
-    const ok = await this.prisma.parameter.count({ where: { id: branchId, parameterType: { name: 'Branch' } } });
+    const ok = await this.prisma.branch.count({ where: { id: branchId } });
     if (!ok) throw new BadRequestException('Unknown branch');
   }
 

@@ -120,14 +120,10 @@ export class EmployeeProfileService {
         orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
         select: { text: true },
       }),
-      this.prisma.parameter.findMany({
-        where: {
-          isVisible: true,
-          parameterType: { name: 'Branch' },
-          ...(branchAccess ? { id: { in: branchAccess } } : {}),
-        },
-        orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
-        select: { id: true, text: true },
+      this.prisma.branch.findMany({
+        where: { isActive: true, ...(branchAccess ? { id: { in: branchAccess } } : {}) },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true },
       }),
       this.prisma.employee.findMany({
         where: { isActive: true, ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}) },
@@ -153,7 +149,7 @@ export class EmployeeProfileService {
       relationships: relationships.map((d) => d.text),
       parameters,
       shifts: shifts.map((s) => ({ value: String(s.id), label: s.name })),
-      branches: branches.map((b) => ({ value: String(b.id), label: b.text })),
+      branches: branches.map((b) => ({ value: String(b.id), label: b.name })),
       employees: employees.map((e) => ({
         value: String(e.id),
         label: `${[e.profile.name, e.profile.lastName].filter(Boolean).join(' ')} (${e.employeeCode})`,

@@ -107,7 +107,7 @@ export class EmployeesService {
           },
           site: { select: { id: true, name: true } },
           shift: { select: { id: true, name: true } },
-          branch: { select: { id: true, text: true } },
+          branch: { select: { id: true, name: true } },
         },
       }),
     ]);
@@ -115,7 +115,7 @@ export class EmployeesService {
     return {
       items: items.map((e) => ({
         ...this.sanitizeEmployee(e, true),
-        branch: e.branch ? { id: e.branch.id, name: e.branch.text } : null,
+        branch: e.branch ? { id: e.branch.id, name: e.branch.name } : null,
       })),
       pagination: {
         page,

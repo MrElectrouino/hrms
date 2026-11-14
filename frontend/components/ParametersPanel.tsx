@@ -123,11 +123,6 @@ export default function ParametersPanel() {
           The code of an employee type is the prefix for new employee codes: a type with code <span className="font-mono">PRM</span> gives <span className="font-mono">PRM-0001</span>, <span className="font-mono">PRM-0002</span> and so on.
         </p>
       )}
-      {type?.name === 'Branch' && (
-        <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          Branches appear in the top-bar branch switcher, in Organization → Branch on an employee, and can be assigned to accounts under Users. Hiding a branch removes it from those lists.
-        </p>
-      )}
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
       {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
 

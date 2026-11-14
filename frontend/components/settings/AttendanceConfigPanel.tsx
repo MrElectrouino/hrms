@@ -16,18 +16,16 @@ import {
   removeRamadan,
   saveAttendanceSettings,
   saveAttendanceStatus,
-  setBranchTimezone,
   unassignPolicy,
   deletePolicy,
   updatePolicy,
 } from '../../lib/attendance-marking-api';
 import Drawer, { fieldClass } from '../Drawer';
 
-type Tab = 'policies' | 'periods' | 'timezones' | 'settings' | 'statuses' | 'processing';
+type Tab = 'policies' | 'periods' | 'settings' | 'statuses' | 'processing';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'policies', label: 'Policies' },
   { key: 'periods', label: 'Ramadan / special periods' },
-  { key: 'timezones', label: 'Timezones' },
   { key: 'settings', label: 'Marking settings' },
   { key: 'statuses', label: 'Statuses' },
   { key: 'processing', label: 'Daily processing' },
@@ -64,14 +62,6 @@ const RULES: { key: keyof PolicyPayload; label: string; hint: string }[] = [
   { key: 'overtimeEnabled', label: 'Count overtime', hint: 'Time worked beyond the required time, after the threshold below, is overtime.' },
   { key: 'useRamadanShiftStart', label: 'Use the alternate shift start in special periods', hint: 'Uses the shift\'s alternate start time during the periods set on the Ramadan tab.' },
 ];
-
-const timeZones: string[] = (() => {
-  try {
-    return (Intl as any).supportedValuesOf('timeZone') as string[];
-  } catch {
-    return ['Asia/Dubai', 'Asia/Kolkata', 'Europe/London', 'America/New_York', 'UTC'];
-  }
-})();
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -275,28 +265,6 @@ export default function AttendanceConfigPanel() {
               ))}
             </tbody>
           </table>
-        </section>
-      )}
-
-      {cfg && tab === 'timezones' && (
-        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-600">Each country has a default timezone (set in System settings, Countries). A branch can override it. Times shown to employees and used for the late rule follow this.</p>
-          <datalist id="tzlist">{timeZones.map((z) => <option key={z} value={z} />)}</datalist>
-          <table className="mt-4 min-w-full text-sm">
-            <thead className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500"><tr><th className="py-1">Branch</th><th className="py-1">Timezone override</th><th /></tr></thead>
-            <tbody className="divide-y divide-gray-100">
-              {cfg.branches.length === 0 && <tr><td colSpan={3} className="py-6 text-center text-gray-500">No branches yet. Add them in Masters → Parameters → Branch.</td></tr>}
-              {cfg.branches.map((b) => (
-                <tr key={b.id}>
-                  <td className="py-1.5 text-gray-900">{b.name}</td>
-                  <td className="py-1.5"><input list="tzlist" defaultValue={b.timezone ?? ''} placeholder="Uses the country default" onBlur={(e) => { const v = e.target.value.trim(); if (v !== (b.timezone ?? '')) run(() => setBranchTimezone(b.id, v || null), 'Timezone saved'); }} className="w-64 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></td>
-                  <td className="py-1.5 text-xs text-gray-400">{b.timezone ? '' : 'default'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <h4 className="mt-6 text-sm font-semibold text-gray-900">Country defaults</h4>
-          <ul className="mt-2 text-sm text-gray-600">{cfg.countries.map((c) => <li key={c.isoCode}>{c.name}: <span className="font-mono text-[13px]">{c.defaultTimezone}</span></li>)}</ul>
         </section>
       )}
 
