@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/auth';
 import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, getLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
 import Select from '../../components/Select';
+import Modal from '../../components/Modal';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const STATUS_TONE: Record<string, string> = {
@@ -25,6 +26,7 @@ export default function MyLeavePage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [applying, setApplying] = useState(false);
 
   const reload = useCallback(async () => {
     try {
@@ -58,6 +60,15 @@ export default function MyLeavePage() {
     return () => clearTimeout(t);
   }, [form.leaveTypeId, form.fromDate, form.toDate, form.half, single]);
 
+  const openApply = () => {
+    setError('');
+    setNotice('');
+    setPreview(null);
+    setPreviewError('');
+    setForm({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '', reason: '' });
+    setApplying(true);
+  };
+
   const submit = async () => {
     setBusy(true);
     setError('');
@@ -65,7 +76,7 @@ export default function MyLeavePage() {
     try {
       await applyLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, reason: form.reason.trim() || undefined });
       setNotice('Leave sent for approval');
-      setForm({ ...form, reason: '', half: '' });
+      setApplying(false);
       await reload();
     } catch (e: any) {
       setError(e.message || 'Could not apply');
@@ -87,9 +98,12 @@ export default function MyLeavePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">My leave</h2>
-        <p className="mt-1 text-gray-500">Your balance, a leave request with the days counted for you, and what you have asked for.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">My leave</h2>
+          <p className="mt-1 text-gray-500">Your balance, a leave request with the days counted for you, and what you have asked for.</p>
+        </div>
+        <button type="button" onClick={openApply} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Apply for leave</button>
       </div>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
@@ -105,9 +119,23 @@ export default function MyLeavePage() {
         ))}
       </div>
 
-      <section className="grid grid-cols-1 gap-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:grid-cols-2">
+      {applying && (
+        <Modal
+          size="xl"
+          title="Apply for leave"
+          subtitle="Choose the type and dates. The days are counted for you before you send it."
+          busy={busy}
+          onClose={() => setApplying(false)}
+          footer={
+            <>
+              <button type="button" onClick={() => setApplying(false)} disabled={busy} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={submit} disabled={busy || !preview || !preview.enough} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Sending…' : 'Send for approval'}</button>
+            </>
+          }
+        >
+          {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          <h3 className="text-base font-semibold text-gray-900">Apply for leave</h3>
           <label className="block text-sm font-medium text-gray-700">Leave type
             <Select className={fieldClass} value={form.leaveTypeId} onChange={(e) => setForm({ ...form, leaveTypeId: e.target.value })}>
               <option value="">Select…</option>
@@ -128,7 +156,6 @@ export default function MyLeavePage() {
           <label className="block text-sm font-medium text-gray-700">Reason
             <textarea rows={2} maxLength={300} className={fieldClass} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
           </label>
-          <button type="button" onClick={submit} disabled={busy || !preview || !preview.enough} className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Sending…' : 'Send for approval'}</button>
         </div>
 
         <div>
@@ -157,7 +184,9 @@ export default function MyLeavePage() {
             </div>
           )}
         </div>
-      </section>
+          </div>
+        </Modal>
+      )}
 
       <section className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-gray-200 text-sm">

@@ -174,7 +174,8 @@ export default function Select(props: SelectProps) {
   };
 
   const onListKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    // Escape closes only this list, not a dialog it is inside of (React events bubble through the portal)
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(shown.length - 1, a + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
     else if (e.key === 'Enter') {
