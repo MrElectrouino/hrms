@@ -187,7 +187,7 @@ export class UsersService {
       profileId = profile.id;
     }
 
-    const branchChange = await this.checkBranchAccess(dto, actor, true);
+    const branchChange = await this.checkBranchAccess(dto, actor, true, dto.userTypeId);
     // No password given: generate a temporary one. It is returned once and never stored in readable form.
     const generated = !dto.password;
     const password = dto.password ?? generateTemporaryPassword();
@@ -265,7 +265,7 @@ export class UsersService {
       await this.assertAnotherActiveAdminExists(target.id);
     }
 
-    const branchChange = await this.checkBranchAccess(dto, actor, target.allBranches);
+    const branchChange = await this.checkBranchAccess(dto, actor, target.allBranches, dto.userTypeId ?? target.userTypeId, changesType);
     const data: Prisma.UserUncheckedUpdateInput = {};
     if (branchChange) data.allBranches = branchChange.allBranches;
     if (changesType) data.userTypeId = dto.userTypeId;
@@ -415,11 +415,22 @@ export class UsersService {
   }
 
   /** Validates a branch-access change; only System Admins may grant branch access. */
+  /** Only these user types can be limited to some branches; everyone else works in every branch. */
+  private canBeBranchLimited(userTypeId: number) {
+    return userTypeId === UserType.Manager || userTypeId === UserType.HRAdmin;
+  }
+
   private async checkBranchAccess(
     dto: { allBranches?: boolean; branchIds?: number[] },
     actor: CurrentUserPayload,
     currentAll: boolean,
+    finalUserTypeId: number,
+    clearLimits = false,
   ): Promise<{ allBranches: boolean; branchIds: number[] } | null> {
+    // An Executive (or System Admin) is never limited by branch, so any limit sent or left over is dropped.
+    if (!this.canBeBranchLimited(finalUserTypeId)) {
+      return clearLimits || dto.allBranches !== undefined || dto.branchIds !== undefined ? { allBranches: true, branchIds: [] } : null;
+    }
     if (dto.allBranches === undefined && dto.branchIds === undefined) return null;
     if (actor.userTypeId !== UserType.SystemAdmin) {
       throw new ForbiddenException('Only a System Admin can change branch access');

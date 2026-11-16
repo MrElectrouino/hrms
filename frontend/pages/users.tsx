@@ -79,6 +79,9 @@ export default function UsersPage() {
     }
   };
 
+  /** Only Managers and HR Admins can be limited to some branches. */
+  const hasBranchChoice = (userTypeId: string | number) => [UserType.Manager, UserType.HRAdmin].includes(Number(userTypeId));
+
   const openEdit = (u: User) => {
     setEditingUser(u);
     setEditForm({
@@ -99,7 +102,7 @@ export default function UsersPage() {
         ...(form.email.trim() ? { email: form.email.trim() } : {}),
         ...(form.password ? { password: form.password } : {}),
         userTypeId: parseInt(form.userTypeId, 10),
-        ...(isSystemAdmin && parseInt(form.userTypeId, 10) !== UserType.SystemAdmin ? { allBranches: form.allBranches, branchIds: form.branchIds } : {}),
+        ...(isSystemAdmin && hasBranchChoice(form.userTypeId) ? { allBranches: form.allBranches, branchIds: form.branchIds } : {}),
       });
       setShowCreate(false);
       setForm({ profileId: '', email: '', username: '', password: '', userTypeId: '', allBranches: true, branchIds: [] });
@@ -112,6 +115,10 @@ export default function UsersPage() {
   };
 
   /** Open the create form for an employee who is waiting for a login, with their details filled in. */
+  // Employees given site access on their profile who have no login yet: listed with the users, first page only.
+  const needle = search.trim().toLowerCase();
+  const pending = page === 1 ? candidates.filter((c) => !needle || `${c.name} ${c.code} ${c.username}`.toLowerCase().includes(needle)) : [];
+
   const startFor = (c: LoginCandidate) => {
     const match = userTypes.find((t) => t.name.toLowerCase() === (c.accessRole ?? '').toLowerCase());
     setForm({ profileId: String(c.profileId), email: '', username: c.username, password: '', userTypeId: match ? String(match.id) : String(userTypes.find((t) => t.id === UserType.Executive)?.id ?? ''), allBranches: true, branchIds: [] });
@@ -126,7 +133,7 @@ export default function UsersPage() {
         email: editForm.email.trim(),
         userTypeId: editForm.userTypeId ? parseInt(editForm.userTypeId, 10) : undefined,
         isActive: editForm.isActive,
-        ...(isSystemAdmin && editingUser.userTypeId !== UserType.SystemAdmin ? { allBranches: editForm.allBranches, branchIds: editForm.branchIds } : {}),
+        ...(isSystemAdmin ? (hasBranchChoice(editForm.userTypeId) ? { allBranches: editForm.allBranches, branchIds: editForm.branchIds } : { allBranches: true, branchIds: [] }) : {}),
       });
       setEditingUser(null);
       loadUsers();
@@ -175,22 +182,6 @@ export default function UsersPage() {
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
       )}
 
-      {candidates.length > 0 && (
-        <section className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-          <h3 className="text-sm font-semibold text-blue-900">Employees waiting for a login ({candidates.length})</h3>
-          <p className="mt-0.5 text-xs text-blue-800">These employees have Login enabled on their System Access tab but no account yet. Create the account in one step; a temporary password is generated and shown once.</p>
-          <div className="mt-3 divide-y divide-blue-100 rounded-lg border border-blue-100 bg-white">
-            {candidates.slice(0, 10).map((c) => (
-              <div key={c.profileId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
-                <span className="text-gray-900">{c.name} <span className="text-xs text-gray-400">{c.code}</span>{c.branchName && <span className="ml-2 text-xs text-gray-500">{c.branchName}</span>}</span>
-                <button type="button" onClick={() => startFor(c)} className="rounded-lg border border-blue-300 bg-white px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50">Create login</button>
-              </div>
-            ))}
-            {candidates.length > 10 && <p className="px-3 py-2 text-xs text-gray-500">+{candidates.length - 10} more: choose them in Add User.</p>}
-          </div>
-        </section>
-      )}
-
       <div className="flex gap-4">
         <input
           type="text"
@@ -225,14 +216,23 @@ export default function UsersPage() {
                   Loading...
                 </td>
               </tr>
-            ) : users.length === 0 ? (
+            ) : users.length === 0 && pending.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
                   No users found.
                 </td>
               </tr>
             ) : (
-              users.map((u) => (
+              <>
+              {pending.map((c) => (
+                <tr key={`p${c.profileId}`} className="bg-amber-50/50 hover:bg-amber-50">
+                  <td className="px-6 py-4 font-medium text-gray-900">{c.name} <span className="text-xs font-normal text-gray-400">{c.code}</span></td>
+                  <td className="px-6 py-4 text-gray-500">{c.accessRole ?? '—'}</td>
+                  <td className="px-6 py-4"><span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Site access given, no login yet</span></td>
+                  <td className="px-6 py-4 text-right"><button onClick={() => startFor(c)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Create login</button></td>
+                </tr>
+              ))}
+              {users.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-medium text-gray-900">{u.username}</td>
                   <td className="px-6 py-4 text-gray-600">{u.userType?.name}</td>
@@ -268,7 +268,8 @@ export default function UsersPage() {
                     )}
                   </td>
                 </tr>
-              ))
+              ))}
+              </>
             )}
           </tbody>
         </table>
@@ -370,7 +371,7 @@ export default function UsersPage() {
                 </Select>
               </div>
 
-              {isSystemAdmin && form.userTypeId !== String(UserType.SystemAdmin) && (
+              {isSystemAdmin && hasBranchChoice(form.userTypeId) && (
                 <BranchAccessPicker branches={branchOptions} allBranches={form.allBranches} branchIds={form.branchIds} onChange={(v) => setForm({ ...form, ...v })} />
               )}
 
@@ -442,7 +443,7 @@ export default function UsersPage() {
                 Active
               </label>
 
-              {isSystemAdmin && editingUser.userTypeId !== UserType.SystemAdmin && (
+              {isSystemAdmin && hasBranchChoice(editForm.userTypeId) && (
                 <BranchAccessPicker branches={branchOptions} allBranches={editForm.allBranches} branchIds={editForm.branchIds} onChange={(v) => setEditForm({ ...editForm, ...v })} />
               )}
 
