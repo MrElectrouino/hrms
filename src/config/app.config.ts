@@ -26,6 +26,8 @@ export default registerAs('app', () => ({
     smtpUser: process.env.SMTP_USER ?? '',
     smtpPass: process.env.SMTP_PASS ?? '',
     from: process.env.EMAIL_FROM ?? 'no-reply@example.com',
+    // Outside production, all email goes to this one mailbox (see email-routing.ts).
+    devRedirectTo: process.env.DEV_MAIL_REDIRECT_TO ?? '',
   },
   frontendBaseUrl: process.env.FRONTEND_BASE_URL ?? 'http://localhost:3001',
 }));

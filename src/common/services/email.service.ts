@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import { routeEmail } from './email-routing';
 
 export interface EmailMessage {
   to: string | string[];
@@ -15,6 +16,8 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly transporter?: Transporter;
   private readonly from: string;
+  private readonly nodeEnv: string;
+  private readonly devRedirectTo: string;
 
   constructor(private readonly config: ConfigService) {
     const smtpHost = this.config.get<string>('app.email.smtpHost', '');
@@ -23,6 +26,13 @@ export class EmailService {
     const smtpUser = this.config.get<string>('app.email.smtpUser', '');
     const smtpPass = this.config.get<string>('app.email.smtpPass', '');
     this.from = this.config.get<string>('app.email.from', 'no-reply@example.com');
+    this.nodeEnv = this.config.get<string>('app.nodeEnv', 'development');
+    this.devRedirectTo = this.config.get<string>('app.email.devRedirectTo', '');
+    if (this.nodeEnv === 'production' && this.devRedirectTo) {
+      this.logger.warn('DEV_MAIL_REDIRECT_TO is set but ignored in production.');
+    } else if (this.devRedirectTo) {
+      this.logger.warn('All email is redirected to the development mailbox (DEV_MAIL_REDIRECT_TO).');
+    }
 
     if (smtpHost) {
       this.transporter = nodemailer.createTransport({
@@ -39,7 +49,8 @@ export class EmailService {
     }
   }
 
-  async send(message: EmailMessage): Promise<void> {
+  async send(original: EmailMessage): Promise<void> {
+    const message = routeEmail(original, this.nodeEnv, this.devRedirectTo);
     if (!this.transporter) {
       this.logger.warn('SMTP not configured; email would be sent:', {
         to: message.to,

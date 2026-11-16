@@ -60,6 +60,7 @@ Copy `.env.example` to `.env` in the project root and fill it. These are the val
 | `APP_TIMEZONE` | `Asia/Dubai` (or your business timezone) |
 | `DOCUMENT_STORAGE_PATH` | `./private-storage/documents` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | for password-reset email. Leave `SMTP_HOST` empty in development and the email is written to the log instead |
+| `DEV_MAIL_REDIRECT_TO` | A test mailbox. **Outside production, every email goes to this address** instead of the real recipient (subject shows `[DEV → original]`). Ignored when `NODE_ENV=production`. Leave empty to send normally |
 
 Keep the PII values safe. They encrypt national ID numbers and similar personal data. **If you lose them, that data in any existing database can no longer be read.**
 
@@ -236,6 +237,7 @@ Never edit a migration that has already been applied. Add a new one.
 | "Your account is not linked to an active employee record" on Mark attendance | The `admin` account is not an employee. Use an employee login, or link the account to an employee |
 | "No attendance policy applies to this employee" | Create a policy and assign it to the employee's country, branch or the employee (B6) |
 | Leave policy preview says no policy covers the employee | Check scope and dates; employee type and country come from the employee's profile (Organization tab) |
+| Password reset email does not arrive | Check the server log for "no active account with site access has this email". The email must be on the account (Users, Edit), the employee profile (work, personal or official email) and the person needs site access. In development all mail goes to `DEV_MAIL_REDIRECT_TO` |
 | Default Country dropdown is empty | Add the country first (B1, Countries) |
 | Branch country dropdown is empty | Same: add countries first |
 | Page shows old data after a code change | Restart the API (and the frontend dev server) |
