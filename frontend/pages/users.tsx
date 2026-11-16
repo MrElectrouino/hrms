@@ -16,6 +16,7 @@ import {
 import BranchAccessPicker from '../components/BranchAccessPicker';
 import { UserType } from '../lib/user-types';
 import Select from '../components/Select';
+import Modal from '../components/Modal';
 
 export default function UsersPage() {
   const { isAuthenticated, user: me } = useAuth();
@@ -301,9 +302,7 @@ export default function UsersPage() {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Create User</h3>
+        <Modal title="Create User" size="sm" onClose={() => setShowCreate(false)}>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Employee <span className="font-normal text-gray-400">(optional)</span></label>
@@ -391,15 +390,12 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Edit modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Edit User</h3>
+        <Modal title="Edit User" size="sm" onClose={() => setEditingUser(null)}>
             <form onSubmit={handleUpdate} className="space-y-4">
               <div className="text-sm text-gray-500 mb-2">
                 Username: <span className="font-medium text-gray-900">{editingUser.username}</span>
@@ -463,34 +459,33 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {shown && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" />
-          <div role="dialog" aria-modal="true" className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h4 className="text-base font-semibold text-gray-900">{shown.reset ? 'New temporary password' : 'Account created'}</h4>
-            <p className="mt-1 text-sm text-gray-600">Give this to <b>{shown.username}</b>. It is shown <b>only now</b> and cannot be looked up later. They must choose their own password at the first sign-in.</p>
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5">
-              <code className="flex-1 select-all break-all font-mono text-base tracking-wide text-gray-900">{shown.password}</code>
-              <button
-                type="button"
-                onClick={async () => {
-                  try { await navigator.clipboard.writeText(shown.password); setCopied(true); } catch { setCopied(false); }
-                }}
-                className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
-              >
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-            <p className="mt-2 text-xs text-gray-500">If it is lost, use Reset Password to make a new one.</p>
-            <div className="mt-5 flex justify-end">
-              <button type="button" onClick={() => { setShown(null); setCopied(false); }} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">I have noted it</button>
-            </div>
-          </div>
+        <Modal
+          size="sm"
+          title={shown.reset ? 'New temporary password' : 'Account created'}
+          onClose={() => { setShown(null); setCopied(false); }}
+          footer={
+            <button type="button" onClick={() => { setShown(null); setCopied(false); }} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">I have noted it</button>
+          }
+        >
+        <p className="text-sm text-gray-600">Give this to <b>{shown.username}</b>. It is shown <b>only now</b> and cannot be looked up later. They must choose their own password at the first sign-in.</p>
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5">
+          <code className="flex-1 select-all break-all font-mono text-base tracking-wide text-gray-900">{shown.password}</code>
+          <button
+            type="button"
+            onClick={async () => {
+              try { await navigator.clipboard.writeText(shown.password); setCopied(true); } catch { setCopied(false); }
+            }}
+            className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
         </div>
+        <p className="mt-2 text-xs text-gray-500">If it is lost, use Reset Password to make a new one.</p>
+        </Modal>
       )}
     </div>
   );

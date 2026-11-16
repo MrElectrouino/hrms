@@ -4,6 +4,7 @@ import { BranchOption, getBranches } from '../lib/api';
 import { BulkEmployee, BulkField, BulkResult, applyBulkUpdate, getBulkEmployees, getBulkFields } from '../lib/bulk-api';
 import { fieldClass } from '../components/Drawer';
 import Select from '../components/Select';
+import Modal from '../components/Modal';
 
 type Draft = { on: boolean; value: string; clear: boolean };
 
@@ -177,22 +178,25 @@ export default function BulkUpdatePage() {
       </div>
 
       {confirming && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !applying && setConfirming(false)} />
-          <div role="dialog" aria-modal="true" className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h4 className="text-base font-semibold text-gray-900">Update {chosen.size} employee{chosen.size === 1 ? '' : 's'}?</h4>
-            <ul className="mt-3 space-y-1 text-sm text-gray-700">
-              {fields.filter((f) => draft(f.key).on).map((f) => (
-                <li key={f.key}><b>{f.label}</b> → {draft(f.key).clear ? <em>cleared</em> : labelOf(f, draft(f.key).value)}</li>
-              ))}
-            </ul>
-            <p className="mt-3 text-xs text-gray-500">The change is recorded in the audit log. Previous values are not kept, so this cannot be undone in one step.</p>
-            <div className="mt-5 flex justify-end gap-2">
+        <Modal
+          size="sm"
+          title={`Update ${chosen.size} employee${chosen.size === 1 ? '' : 's'}?`}
+          busy={applying}
+          onClose={() => setConfirming(false)}
+          footer={
+            <>
               <button type="button" disabled={applying} onClick={() => setConfirming(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
               <button type="button" disabled={applying} onClick={apply} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{applying ? 'Updating…' : 'Update'}</button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+        <ul className="space-y-1 text-sm text-gray-700">
+          {fields.filter((f) => draft(f.key).on).map((f) => (
+            <li key={f.key}><b>{f.label}</b> → {draft(f.key).clear ? <em>cleared</em> : labelOf(f, draft(f.key).value)}</li>
+          ))}
+        </ul>
+        <p className="mt-3 text-xs text-gray-500">The change is recorded in the audit log. Previous values are not kept, so this cannot be undone in one step.</p>
+        </Modal>
       )}
     </div>
   );
