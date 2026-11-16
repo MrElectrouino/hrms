@@ -507,6 +507,10 @@ export async function createSite(payload: MasterItemPayload) {
 export async function updateSite(id: number, payload: Partial<MasterItemPayload>) {
   return request<MasterItem>(`/masters/sites/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
+/** Permanent delete of a master or dropdown value. Refused by the server while it is in use. */
+export async function deleteMaster(kind: 'sites' | 'languages' | 'shifts' | 'document-types' | 'parameters', id: number) {
+  return request<null>(`/masters/${kind}/${id}/permanent`, { method: 'DELETE' });
+}
 export async function deactivateSite(id: number) {
   return request<MasterItem>(`/masters/sites/${id}`, { method: 'DELETE' });
 }

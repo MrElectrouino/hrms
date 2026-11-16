@@ -13,6 +13,7 @@ import {
   createSite,
   updateSite,
   deactivateSite,
+  deleteMaster,
   createLanguage,
   updateLanguage,
   deactivateLanguage,
@@ -217,6 +218,19 @@ export default function MastersPage() {
     }
   };
 
+  const removeItem = async (item: MasterItem | ShiftItem) => {
+    if (!window.confirm(`Delete "${item.name}" permanently? This cannot be undone. If it is in use you will be told to deactivate it instead.`)) return;
+    setError('');
+    setNotice('');
+    try {
+      await deleteMaster(activeTab, item.id);
+      setNotice(`"${item.name}" deleted`);
+      await loadAll();
+    } catch (err: any) {
+      setError(err.message || 'Could not delete');
+    }
+  };
+
   const currentTab = tabs.find((t) => t.key === activeTab)!;
   const currentItems = items[activeTab];
   const isShifts = activeTab === 'shifts';
@@ -350,6 +364,9 @@ export default function MastersPage() {
                             className={`text-xs font-medium ${item.isActive ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}
                           >
                             {item.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button type="button" onClick={() => removeItem(item)} className="ml-4 text-xs font-medium text-red-600 hover:text-red-800">
+                            Delete
                           </button>
                         </td>
                       </tr>
