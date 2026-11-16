@@ -5,6 +5,7 @@ import BrandingPanel from '../components/settings/BrandingPanel';
 import AttendanceConfigPanel from '../components/settings/AttendanceConfigPanel';
 import LeaveConfigPanel from '../components/settings/LeaveConfigPanel';
 import { CountryItem, SystemConfigurationItem, createCountry, getCountries, getSystemConfigurations, updateCountry, updateSystemConfiguration } from '../lib/api';
+import Select from '../components/Select';
 
 // Default Country now lives in the Countries tab; time and number format in the Branding tab.
 // Security Configuration (§I) as 33-35.
@@ -166,10 +167,10 @@ export default function SystemSettingsPage() {
                 <label key={item.id} className={`block text-sm font-medium text-gray-700 ${WIDE.has(item.name) ? 'md:col-span-2' : ''}`}>
                   {item.name}
                   {choices ? (
-                    <select className={inputClass} value={value} onChange={(e) => set(e.target.value)}>
+                    <Select className={inputClass} value={value} onChange={(e) => set(e.target.value)}>
                       {!choices.some((c) => c.value === value) && <option value={value}>{value || 'Select…'}</option>}
                       {choices.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                    </select>
+                    </Select>
                   ) : WIDE.has(item.name) ? (
                     <textarea className={inputClass} rows={3} maxLength={500} value={value} onChange={(e) => set(e.target.value)} />
                   ) : (

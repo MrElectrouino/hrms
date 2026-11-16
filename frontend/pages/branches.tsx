@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { BranchPayload, BranchRow, createBranch, deleteBranch, getBranchesToManage, updateBranch } from '../lib/api';
 import Drawer, { fieldClass } from '../components/Drawer';
+import Select from '../components/Select';
 
 type Country = { isoCode: string; name: string; defaultTimezone: string };
 
@@ -128,10 +129,10 @@ export default function BranchesPage() {
             <Label text="Code"><input className={fieldClass} value={editing.form.code} maxLength={20} placeholder="DXB" onChange={(e) => setForm({ code: e.target.value.toUpperCase() })} /></Label>
           </div>
           <Label text="Country">
-            <select className={fieldClass} value={editing.form.countryCode ?? ''} onChange={(e) => setForm({ countryCode: e.target.value || null })}>
+            <Select className={fieldClass} value={editing.form.countryCode ?? ''} onChange={(e) => setForm({ countryCode: e.target.value || null })}>
               <option value="">Select…</option>
               {countries.map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
-            </select>
+            </Select>
           </Label>
           {countries.length === 0 && <p className="text-xs text-amber-700">No countries yet. Add them in System settings → Countries first.</p>}
           <Label text="Timezone (optional)">

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { Parameter, createParameter, deleteMaster, getParameterTypes, listParameters, updateParameter } from '../lib/api';
+import Select from './Select';
 
 type Row = Parameter & { displayOrder?: number; isVisible?: boolean };
 
@@ -126,9 +127,9 @@ export default function ParametersPanel() {
 
       <label className="block max-w-xs text-sm font-medium text-gray-700">
         Parameter type
-        <select className={field} value={typeId ?? ''} onChange={(e) => { setTypeId(Number(e.target.value)); setNotice(''); setError(''); }}>
+        <Select className={field} value={typeId ?? ''} onChange={(e) => { setTypeId(Number(e.target.value)); setNotice(''); setError(''); }}>
           {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+        </Select>
       </label>
 
       {isEmployeeType && (

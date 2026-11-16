@@ -17,6 +17,7 @@ import {
   uploadEmployeePhoto,
   validateNewProfile,
 } from '../../lib/api';
+import Select from '../../components/Select';
 
 type Values = Record<string, any>;
 
@@ -81,7 +82,7 @@ function MultiSelect({
         </span>
       ))}
       {!disabled && (
-        <select
+        <Select
           id={id}
           value=""
           onChange={(e) => e.target.value && onChange([...value, e.target.value])}
@@ -91,7 +92,7 @@ function MultiSelect({
         >
           <option value="">{options.length === 0 ? 'No options yet (add in Masters)' : remaining.length ? (value.length ? 'Add another…' : 'Select…') : 'All selected'}</option>
           {remaining.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        </Select>
       )}
       {disabled && value.length === 0 && <span className="px-1 text-sm text-gray-400">—</span>}
     </div>
@@ -167,21 +168,21 @@ function Control({
   }
   if (def.type === 'select') {
     return (
-      <select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+      <Select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">{(def.items ?? def.options ?? []).length ? 'Select' : 'No options yet'}</option>
         {def.items
           ? def.items.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
           : (def.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
+      </Select>
     );
   }
   if (def.type === 'yn') {
     return (
-      <select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+      <Select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">Select</option>
         <option value="Yes">Yes</option>
         <option value="No">No</option>
-      </select>
+      </Select>
     );
   }
   if (def.type === 'textarea') {

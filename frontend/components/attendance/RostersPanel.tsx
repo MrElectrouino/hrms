@@ -4,6 +4,7 @@ import { ShiftItem, getShifts } from '../../lib/api';
 import { RosterPattern, createRosterPattern, getRosterPatterns, importRoster, updateRosterPattern } from '../../lib/attendance-api';
 import Drawer, { fieldClass } from '../Drawer';
 import ExcelImport from '../ExcelImport';
+import Select from '../Select';
 
 const OFF = 'OFF';
 
@@ -140,9 +141,9 @@ export default function RostersPanel() {
             <input className={fieldClass} maxLength={100} value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label className="block text-sm font-medium text-gray-700">Repeats every
-            <select className={fieldClass} value={cycleDays} onChange={(e) => changeCycle(Number(e.target.value))}>
+            <Select className={fieldClass} value={cycleDays} onChange={(e) => changeCycle(Number(e.target.value))}>
               {[7, 14, 21, 28].map((n) => <option key={n} value={n}>{n} days ({n / 7} week{n > 7 ? 's' : ''})</option>)}
-            </select>
+            </Select>
           </label>
           <div>
             <p className="text-sm font-medium text-gray-700">Each day of the cycle</p>
@@ -151,10 +152,10 @@ export default function RostersPanel() {
               {days.map((d, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <span className="w-16 text-sm text-gray-600">Day {i + 1}</span>
-                  <select aria-label={`Day ${i + 1}`} className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" value={d} onChange={(e) => setDays((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}>
+                  <Select aria-label={`Day ${i + 1}`} className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" value={d} onChange={(e) => setDays((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}>
                     {shifts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                     <option value={OFF}>Weekly off</option>
-                  </select>
+                  </Select>
                 </div>
               ))}
             </div>

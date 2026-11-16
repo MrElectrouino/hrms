@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 import { createMenuItem, getMenuItems, MenuItemPayload, MenuItemRow, updateMenuItem } from '../lib/admin-api';
 import { descendantIds, flattenWithDepth } from '../lib/menu-tree';
 import { UserType } from '../lib/user-types';
+import Select from './Select';
 
 interface FormState {
   name: string;
@@ -214,14 +215,14 @@ export default function MenusPanel() {
 
               <label className="block text-sm font-medium text-gray-700">
                 Parent
-                <select className={inputClass} value={form.parentId} onChange={(e) => setForm({ ...form, parentId: e.target.value })}>
+                <Select className={inputClass} value={form.parentId} onChange={(e) => setForm({ ...form, parentId: e.target.value })}>
                   <option value="">Top level</option>
                   {parentChoices.map(({ item, depth }) => (
                     <option key={item.id} value={item.id}>
                       {`${'— '.repeat(depth)}${item.name}`}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
 
               <label className="block text-sm font-medium text-gray-700">

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { ShiftItem, getShifts } from '../../lib/api';
 import { BulkEmployee, getBulkEmployees } from '../../lib/bulk-api';
-import MultiSelect from '../MultiSelect';
 import {
   AssignmentRow,
   Assignments,
@@ -25,6 +24,7 @@ import {
   removeAssignment,
   setRosterEntry,
 } from '../../lib/attendance-api';
+import Select from '../Select';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const monthStart = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}-01`;
@@ -82,10 +82,10 @@ function AssignmentCard({
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <label className="text-xs font-medium text-gray-600">Assign
-          <select value={pick} onChange={(e) => setPick(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
+          <Select value={pick} onChange={(e) => setPick(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
             <option value="">Select…</option>
             {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          </Select>
         </label>
         <label className="text-xs font-medium text-gray-600">From
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
@@ -225,11 +225,11 @@ export default function AssignmentsPanel() {
       </div>
 
       <div className="max-w-xl">
-        <MultiSelect
+        <Select multiple
           label="Employees"
           options={employees.map((e) => ({ value: String(e.id), label: `${e.name} (${e.code})`, hint: e.branchName ?? undefined }))}
-          selected={picked.map(String)}
-          onChange={(v) => { setPicked(v.map(Number)); setNotice(''); setError(''); }}
+          values={picked.map(String)}
+          onValuesChange={(v) => { setPicked(v.map(Number)); setNotice(''); setError(''); }}
           placeholder="Select one or more employees…"
           allText=""
           noun="employees"
@@ -320,12 +320,12 @@ export default function AssignmentsPanel() {
                         </td>
                         <td className="py-1.5 text-gray-600">{d.workSchedule?.name ?? '—'}</td>
                         <td className="py-1.5">
-                          <select aria-label={`Change ${d.date}`} value="" onChange={(e) => override(d.date, e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
+                          <Select aria-label={`Change ${d.date}`} value="" onChange={(e) => override(d.date, e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
                             <option value="">…</option>
                             {shifts.map((sh) => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
                             <option value="OFF">Weekly off</option>
                             {d.roster.source === 'ENTRY' && <option value="PATTERN">Pattern or weekly off</option>}
-                          </select>
+                          </Select>
                         </td>
                       </tr>
                     );

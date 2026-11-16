@@ -10,6 +10,7 @@ import {
   getDocuments,
   getEmployee,
 } from '../lib/api';
+import Select from './Select';
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED = ['jpg', 'jpeg', 'png', 'pdf'];
@@ -196,10 +197,10 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label className="block text-sm font-medium text-gray-700">
               Document type <span className="text-red-500">*</span>
-              <select className={field} value={form.documentTypeId} onChange={(e) => setForm({ ...form, documentTypeId: e.target.value })}>
+              <Select className={field} value={form.documentTypeId} onChange={(e) => setForm({ ...form, documentTypeId: e.target.value })}>
                 <option value="">Select…</option>
                 {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
+              </Select>
               {types.length === 0 && <span className="mt-1 block text-xs text-gray-500">No document types yet. Add them in Masters → Document Types.</span>}
             </label>
             <label className="block text-sm font-medium text-gray-700">

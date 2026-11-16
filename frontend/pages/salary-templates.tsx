@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { SalaryTemplate, createSalaryTemplate, getSalaryTemplates, updateSalaryTemplate } from '../lib/api';
+import Select from '../components/Select';
 
 const COUNTRIES = [
   ['ALL', 'All countries'],
@@ -148,11 +149,11 @@ export default function SalaryTemplatesPage() {
           </div>
           <div>
             <label htmlFor="tpl-country" className="mb-1.5 block text-xs font-medium text-gray-600">Country</label>
-            <select id="tpl-country" value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })} className={inputClass}>
+            <Select id="tpl-country" value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })} className={inputClass}>
               {COUNTRIES.map(([c, n]) => (
                 <option key={c} value={c}>{n}</option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 

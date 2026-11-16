@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/auth';
 import { UserType } from '../../lib/user-types';
 import { LeaveSettings, LeaveType, LeaveTypePayload, createLeaveType, deleteLeaveType, getLeaveConfig, runAccrual, saveLeaveSettings, syncCompOff, updateLeaveType } from '../../lib/leave-api';
 import Drawer, { fieldClass } from '../Drawer';
+import Select from '../Select';
 
 const blankType: LeaveTypePayload = {
   code: '', name: '', isPaid: true, balanceTracking: true, accrual: 'NONE', annualDays: 0, allowHalfDay: true, allowNegative: false,
@@ -138,7 +139,7 @@ export default function LeaveConfigPanel() {
           <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <h3 className="text-base font-semibold text-gray-900">Leave year and comp off</h3>
             <label className="block text-sm font-medium text-gray-700">Leave year starts in
-              <select className={fieldClass} value={settings.leaveYearStartMonth} onChange={(e) => set({ leaveYearStartMonth: Number(e.target.value) })}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select>
+              <Select className={fieldClass} value={settings.leaveYearStartMonth} onChange={(e) => set({ leaveYearStartMonth: Number(e.target.value) })}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</Select>
             </label>
             <label className="flex items-start gap-3 text-sm text-gray-700">
               <input type="checkbox" className={`${check} mt-0.5`} checked={settings.compOffEnabled} onChange={(e) => set({ compOffEnabled: e.target.checked })} />
@@ -193,9 +194,9 @@ export default function LeaveConfigPanel() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <label className="block text-sm font-medium text-gray-700">How days are credited
-              <select className={fieldClass} value={editing.form.accrual} onChange={(e) => setF({ accrual: e.target.value as LeaveType['accrual'] })}>
+              <Select className={fieldClass} value={editing.form.accrual} onChange={(e) => setF({ accrual: e.target.value as LeaveType['accrual'] })}>
                 <option value="NONE">Not credited automatically</option><option value="ANNUAL">All at the start of the leave year</option><option value="MONTHLY">A twelfth each month</option>
-              </select>
+              </Select>
             </label>
             <label className="block text-sm font-medium text-gray-700">Days per year<input type="number" min="0" step="0.5" disabled={editing.form.accrual === 'NONE'} className={fieldClass} value={editing.form.annualDays} onChange={(e) => setF({ annualDays: e.target.value })} /></label>
             <label className="block text-sm font-medium text-gray-700">Longest request (days)<input type="number" min="1" placeholder="No limit" className={fieldClass} value={editing.form.maxDaysPerRequest ?? ''} onChange={(e) => setF({ maxDaysPerRequest: e.target.value ? Number(e.target.value) : null })} /></label>

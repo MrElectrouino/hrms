@@ -7,6 +7,7 @@ import {
   createLeavePolicy, deleteLeavePolicy, getLeavePolicies, previewEntitlement, updateLeavePolicy,
 } from '../lib/leave-policy-api';
 import Drawer, { fieldClass } from '../components/Drawer';
+import Select from '../components/Select';
 
 const blankRule = (leaveTypeId: number): PolicyRule => ({ leaveTypeId, annualDays: 0, creditMethod: 'MONTHLY', slabs: [], slabTiming: 'IMMEDIATE', proration: 'COMPLETED_MONTHS', cutoffDay: null, rounding: 'NONE', tieRule: 'UP', minDays: null, maxDays: null });
 const blankPolicy = (): LeavePolicyPayload => ({ name: '', layer: 'COMPANY', countryCode: null, branchId: null, employeeTypeId: null, employeeId: null, effectiveFrom: `${new Date().getFullYear()}-01-01`, effectiveTo: null, priority: 0, isActive: true, note: null, rules: [] });
@@ -133,7 +134,7 @@ export default function LeavePoliciesPage() {
           <fieldset className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <Label text="Name"><input className={fieldClass} value={editing.form.name} onChange={(e) => setForm({ name: e.target.value })} maxLength={100} /></Label>
-              <Label text="Kind"><select className={fieldClass} disabled={editing.used} value={editing.form.layer} onChange={(e) => setForm({ layer: e.target.value as 'STATUTORY' | 'COMPANY' })}><option value="COMPANY">Company benefit</option><option value="STATUTORY">Statutory (required by law)</option></select></Label>
+              <Label text="Kind"><Select className={fieldClass} disabled={editing.used} value={editing.form.layer} onChange={(e) => setForm({ layer: e.target.value as 'STATUTORY' | 'COMPANY' })}><option value="COMPANY">Company benefit</option><option value="STATUTORY">Statutory (required by law)</option></Select></Label>
               <Label text="From"><input type="date" className={fieldClass} disabled={editing.used} value={editing.form.effectiveFrom} onChange={(e) => setForm({ effectiveFrom: e.target.value })} /></Label>
               <Label text="Until (leave empty if open)"><input type="date" className={fieldClass} value={editing.form.effectiveTo ?? ''} onChange={(e) => setForm({ effectiveTo: e.target.value || null })} /></Label>
             </div>
@@ -141,8 +142,8 @@ export default function LeavePoliciesPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Applies to (leave empty for everyone)</p>
               <div className="mt-2 grid gap-3 sm:grid-cols-3">
                 <Label text="Country code"><input className={fieldClass} disabled={editing.used} placeholder="e.g. AE" value={editing.form.countryCode ?? ''} onChange={(e) => setForm({ countryCode: e.target.value || null })} maxLength={10} /></Label>
-                <Label text="Branch"><select className={fieldClass} disabled={editing.used} value={editing.form.branchId ?? ''} onChange={(e) => setForm({ branchId: numOrNull(e.target.value) })}><option value="">Any branch</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Label>
-                <Label text="Employee type"><select className={fieldClass} disabled={editing.used} value={editing.form.employeeTypeId ?? ''} onChange={(e) => setForm({ employeeTypeId: numOrNull(e.target.value) })}><option value="">Any type</option>{empTypes.map((t) => <option key={t.id} value={t.id}>{t.text}</option>)}</select></Label>
+                <Label text="Branch"><Select className={fieldClass} disabled={editing.used} value={editing.form.branchId ?? ''} onChange={(e) => setForm({ branchId: numOrNull(e.target.value) })}><option value="">Any branch</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Label>
+                <Label text="Employee type"><Select className={fieldClass} disabled={editing.used} value={editing.form.employeeTypeId ?? ''} onChange={(e) => setForm({ employeeTypeId: numOrNull(e.target.value) })}><option value="">Any type</option>{empTypes.map((t) => <option key={t.id} value={t.id}>{t.text}</option>)}</Select></Label>
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <Label text="Priority (breaks ties)"><input type="number" min={0} max={100} className={fieldClass} value={editing.form.priority} onChange={(e) => setForm({ priority: Number(e.target.value) })} /></Label>
@@ -152,18 +153,18 @@ export default function LeavePoliciesPage() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between"><p className="text-sm font-semibold text-gray-900">Rules by leave type</p>
-                {!editing.used && <select className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm" value="" onChange={(e) => { if (e.target.value) setForm({ rules: [...editing.form.rules, blankRule(Number(e.target.value))] }); }}><option value="">+ Add leave type…</option>{types.filter((t) => !editing.form.rules.some((r) => r.leaveTypeId === t.id)).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>}
+                {!editing.used && <Select className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm" value="" onChange={(e) => { if (e.target.value) setForm({ rules: [...editing.form.rules, blankRule(Number(e.target.value))] }); }}><option value="">+ Add leave type…</option>{types.filter((t) => !editing.form.rules.some((r) => r.leaveTypeId === t.id)).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>}
               </div>
               {editing.form.rules.map((r, i) => (
                 <fieldset key={r.leaveTypeId} disabled={editing.used} className="space-y-3 rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center justify-between"><p className="font-medium text-gray-900">{types.find((t) => t.id === r.leaveTypeId)?.name ?? r.leaveType}</p>{!editing.used && <button type="button" className="text-xs text-red-600" onClick={() => setForm({ rules: editing.form.rules.filter((_, k) => k !== i) })}>Remove</button>}</div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <Label text="Days per year"><input type="number" step="0.5" min={0} className={fieldClass} value={r.annualDays} onChange={(e) => setRule(i, { annualDays: Number(e.target.value) })} /></Label>
-                    <Label text="Credited"><select className={fieldClass} value={r.creditMethod} onChange={(e) => setRule(i, { creditMethod: e.target.value as PolicyRule['creditMethod'] })}>{Object.entries(CREDIT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Label>
-                    <Label text="Joining part-way through the year"><select className={fieldClass} value={r.proration} onChange={(e) => setRule(i, { proration: e.target.value as PolicyRule['proration'] })}>{Object.entries(PRORATION_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Label>
+                    <Label text="Credited"><Select className={fieldClass} value={r.creditMethod} onChange={(e) => setRule(i, { creditMethod: e.target.value as PolicyRule['creditMethod'] })}>{Object.entries(CREDIT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Label>
+                    <Label text="Joining part-way through the year"><Select className={fieldClass} value={r.proration} onChange={(e) => setRule(i, { proration: e.target.value as PolicyRule['proration'] })}>{Object.entries(PRORATION_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Label>
                     {r.proration === 'CUTOFF_DAY' && <Label text="Cut-off day of month"><input type="number" min={1} max={31} className={fieldClass} value={r.cutoffDay ?? ''} onChange={(e) => setRule(i, { cutoffDay: numOrNull(e.target.value) })} /></Label>}
-                    <Label text="Rounding"><select className={fieldClass} value={r.rounding} onChange={(e) => setRule(i, { rounding: e.target.value as PolicyRule['rounding'] })}>{Object.entries(ROUNDING_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Label>
-                    <Label text="Exactly halfway rounds"><select className={fieldClass} value={r.tieRule} onChange={(e) => setRule(i, { tieRule: e.target.value as 'UP' | 'DOWN' })}><option value="UP">Up</option><option value="DOWN">Down</option></select></Label>
+                    <Label text="Rounding"><Select className={fieldClass} value={r.rounding} onChange={(e) => setRule(i, { rounding: e.target.value as PolicyRule['rounding'] })}>{Object.entries(ROUNDING_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Label>
+                    <Label text="Exactly halfway rounds"><Select className={fieldClass} value={r.tieRule} onChange={(e) => setRule(i, { tieRule: e.target.value as 'UP' | 'DOWN' })}><option value="UP">Up</option><option value="DOWN">Down</option></Select></Label>
                     <Label text="At least (days)"><input type="number" step="0.5" min={0} className={fieldClass} value={r.minDays ?? ''} onChange={(e) => setRule(i, { minDays: numOrNull(e.target.value) })} /></Label>
                     <Label text="At most (days)"><input type="number" step="0.5" min={0} className={fieldClass} value={r.maxDays ?? ''} onChange={(e) => setRule(i, { maxDays: numOrNull(e.target.value) })} /></Label>
                   </div>
@@ -179,7 +180,7 @@ export default function LeavePoliciesPage() {
                             {!editing.used && <button type="button" className="pb-1.5 text-red-600" onClick={() => setRule(i, { slabs: r.slabs.filter((_, j) => j !== k) })}>Remove</button>}
                           </div>
                         ))}
-                        <Label text="A new slab starts"><select className="mt-1 block rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" value={r.slabTiming} onChange={(e) => setRule(i, { slabTiming: e.target.value as 'NEXT_YEAR' | 'IMMEDIATE' })}><option value="IMMEDIATE">As soon as the milestone is reached</option><option value="NEXT_YEAR">From the next leave year</option></select></Label>
+                        <Label text="A new slab starts"><Select className="mt-1 block rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm" value={r.slabTiming} onChange={(e) => setRule(i, { slabTiming: e.target.value as 'NEXT_YEAR' | 'IMMEDIATE' })}><option value="IMMEDIATE">As soon as the milestone is reached</option><option value="NEXT_YEAR">From the next leave year</option></Select></Label>
                       </div>
                     )}
                   </div>
@@ -226,8 +227,8 @@ function Tester({ types }: { types: LeaveType[] }) {
       <p className="mt-1 text-sm text-gray-500">See which policy applies and how the days are worked out. Nothing is saved.</p>
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <Label text="Find employee"><input type="search" className="mt-1 block w-48 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" placeholder="Name or code…" value={search} onChange={(e) => setSearch(e.target.value)} /></Label>
-        <Label text="Employee"><select className="mt-1 block w-60 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}><option value="">Select…</option>{emps.map((e) => <option key={e.id} value={e.id}>{[e.profile?.name, e.profile?.lastName].filter(Boolean).join(' ')} ({e.employeeCode})</option>)}</select></Label>
-        <Label text="Leave type"><select className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" value={typeId} onChange={(e) => setTypeId(e.target.value)}><option value="">Select…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Label>
+        <Label text="Employee"><Select className="mt-1 block w-60 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}><option value="">Select…</option>{emps.map((e) => <option key={e.id} value={e.id}>{[e.profile?.name, e.profile?.lastName].filter(Boolean).join(' ')} ({e.employeeCode})</option>)}</Select></Label>
+        <Label text="Leave type"><Select className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" value={typeId} onChange={(e) => setTypeId(e.target.value)}><option value="">Select…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Label>
         <Label text="Leave year starting"><input type="date" className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" value={yearStart} onChange={(e) => setYearStart(e.target.value)} /></Label>
         <button type="button" disabled={!employeeId || !typeId} onClick={run} className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">Work it out</button>
       </div>

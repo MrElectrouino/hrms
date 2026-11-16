@@ -27,6 +27,7 @@ Local database: `hrms` on `localhost:5432`. Postgres lives at `E:\Installed\DB` 
 - One Save button per form. The user dislikes a Save per row.
 - Merge related screens rather than adding new menu items (the user asked for System settings with side tabs, Masters merged, and so on).
 - Keep language plain; the user is not deeply technical.
+- **Dropdowns: use `frontend/components/Select.tsx` only** (single or `multiple`, with search; it also accepts `<option>` children like a native select). Do not add native `<select>` elements.
 - Never commit `frontend/package-lock.json` or `frontend/next-env.d.ts` changes unless asked.
 - The user could not push to a remote. Work is committed locally on `master`. A zip, a git bundle and a database dump are the way to carry it between PCs (see section 10).
 

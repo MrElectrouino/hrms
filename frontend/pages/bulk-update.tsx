@@ -3,7 +3,7 @@ import { useAuth } from '../lib/auth';
 import { BranchOption, getBranches } from '../lib/api';
 import { BulkEmployee, BulkField, BulkResult, applyBulkUpdate, getBulkEmployees, getBulkFields } from '../lib/bulk-api';
 import { fieldClass } from '../components/Drawer';
-import MultiSelect from '../components/MultiSelect';
+import Select from '../components/Select';
 
 type Draft = { on: boolean; value: string; clear: boolean };
 
@@ -105,19 +105,19 @@ export default function BulkUpdatePage() {
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="text-base font-semibold text-gray-900">1. Choose employees</h3>
         <div className="mt-3 grid gap-4 md:grid-cols-2">
-          <MultiSelect
+          <Select multiple
             label="Branches"
             options={branchOptions}
-            selected={branchIds.map(String)}
-            onChange={(v) => setBranchIds(v.map(Number))}
+            values={branchIds.map(String)}
+            onValuesChange={(v) => setBranchIds(v.map(Number))}
             allText="All branches"
             noun="branches"
           />
-          <MultiSelect
+          <Select multiple
             label="Employees"
             options={employeeOptions}
-            selected={[...chosen].map(String)}
-            onChange={(v) => setChosen(new Set(v.map(Number)))}
+            values={[...chosen].map(String)}
+            onValuesChange={(v) => setChosen(new Set(v.map(Number)))}
             placeholder={loading ? 'Loading…' : employees.length === 0 ? 'No employees in these branches' : 'Select employees…'}
             allText=""
             noun="employees"
@@ -155,10 +155,10 @@ export default function BulkUpdatePage() {
                   f.type === 'text' ? (
                     <input className={`${fieldClass} !mt-0 max-w-xs`} maxLength={120} placeholder={`New ${f.label.toLowerCase()}`} value={d.value} onChange={(e) => setDraft(f.key, { value: e.target.value })} />
                   ) : (
-                    <select className={`${fieldClass} !mt-0 max-w-xs`} value={d.value} onChange={(e) => setDraft(f.key, { value: e.target.value })}>
+                    <Select className={`${fieldClass} !mt-0 max-w-xs`} value={d.value} onChange={(e) => setDraft(f.key, { value: e.target.value })}>
                       <option value="">Select…</option>
                       {f.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                    </Select>
                   )
                 )}
                 {d.on && !f.required && (

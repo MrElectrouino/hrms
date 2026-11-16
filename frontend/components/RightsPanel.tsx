@@ -4,6 +4,7 @@ import { getUserTypes, MenuFlags } from '../lib/api';
 import { getMenuItems, getMenuPermissions, MenuItemRow, MenuPermissionRow, setMenuPermissions } from '../lib/admin-api';
 import { flattenWithDepth, Selection, toggleSelection } from '../lib/menu-tree';
 import { UserType } from '../lib/user-types';
+import Select from './Select';
 
 type FlagKey = keyof MenuFlags;
 
@@ -105,7 +106,7 @@ export default function RightsPanel() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
         <label className="block text-sm font-medium text-gray-700">
           User type
-          <select
+          <Select
             className="mt-1 block w-full sm:w-72 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             value={userTypeId}
             onChange={(e) => setUserTypeId(e.target.value === '' ? '' : Number(e.target.value))}
@@ -116,7 +117,7 @@ export default function RightsPanel() {
                 {t.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         {message && (

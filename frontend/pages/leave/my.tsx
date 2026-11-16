@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, getLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
+import Select from '../../components/Select';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const STATUS_TONE: Record<string, string> = {
@@ -108,10 +109,10 @@ export default function MyLeavePage() {
         <div className="space-y-4">
           <h3 className="text-base font-semibold text-gray-900">Apply for leave</h3>
           <label className="block text-sm font-medium text-gray-700">Leave type
-            <select className={fieldClass} value={form.leaveTypeId} onChange={(e) => setForm({ ...form, leaveTypeId: e.target.value })}>
+            <Select className={fieldClass} value={form.leaveTypeId} onChange={(e) => setForm({ ...form, leaveTypeId: e.target.value })}>
               <option value="">Select…</option>
               {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            </Select>
           </label>
           <div className="grid grid-cols-2 gap-4">
             <label className="block text-sm font-medium text-gray-700">From<input type="date" className={fieldClass} value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value, toDate: form.toDate < e.target.value ? e.target.value : form.toDate })} /></label>
@@ -119,9 +120,9 @@ export default function MyLeavePage() {
           </div>
           {single && type?.allowHalfDay && (
             <label className="block text-sm font-medium text-gray-700">Part of the day
-              <select className={fieldClass} value={form.half} onChange={(e) => setForm({ ...form, half: e.target.value as '' | 'FIRST' | 'SECOND' })}>
+              <Select className={fieldClass} value={form.half} onChange={(e) => setForm({ ...form, half: e.target.value as '' | 'FIRST' | 'SECOND' })}>
                 <option value="">Full day</option><option value="FIRST">First half</option><option value="SECOND">Second half</option>
-              </select>
+              </Select>
             </label>
           )}
           <label className="block text-sm font-medium text-gray-700">Reason

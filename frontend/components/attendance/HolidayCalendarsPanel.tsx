@@ -17,6 +17,7 @@ import {
 } from '../../lib/attendance-api';
 import Drawer, { fieldClass } from '../Drawer';
 import ExcelImport from '../ExcelImport';
+import Select from '../Select';
 
 const COUNTRIES: [string, string][] = [['IN', 'India'], ['AE', 'UAE'], ['GB', 'United Kingdom'], ['US', 'United States']];
 const LEVEL_LABEL: Record<HolidayLevel, { name: string; hint: string }> = {
@@ -211,9 +212,9 @@ export default function HolidayCalendarsPanel() {
                     <p className="text-xs text-gray-500">{scopeText(selected)}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
+                    <Select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
                       {years.map((y) => <option key={y} value={y}>{y}</option>)}
-                    </select>
+                    </Select>
                     <button type="button" onClick={() => startEdit(selected)} className="text-sm font-medium text-blue-600 hover:text-blue-800">Edit calendar</button>
                   </div>
                 </div>
@@ -222,9 +223,9 @@ export default function HolidayCalendarsPanel() {
                   <input type="date" aria-label="Date" className={`${fieldClass} !mt-0`} value={hol.date} onChange={(e) => setHol({ ...hol, date: e.target.value, endDate: hol.endDate && hol.endDate < e.target.value ? '' : hol.endDate })} />
                   <input type="date" aria-label="End date (optional)" title="End date (optional): for a holiday that lasts several days" className={`${fieldClass} !mt-0`} min={hol.date || undefined} value={hol.endDate} onChange={(e) => setHol({ ...hol, endDate: e.target.value })} />
                   <input aria-label="Holiday name" placeholder="Holiday name" className={`${fieldClass} !mt-0`} maxLength={120} value={hol.name} onChange={(e) => setHol({ ...hol, name: e.target.value })} />
-                  <select aria-label="Type" className={`${fieldClass} !mt-0`} value={hol.holidayType} onChange={(e) => setHol({ ...hol, holidayType: e.target.value })}>
+                  <Select aria-label="Type" className={`${fieldClass} !mt-0`} value={hol.holidayType} onChange={(e) => setHol({ ...hol, holidayType: e.target.value })}>
                     <option value="PUBLIC">Public</option><option value="COMPANY">Company</option><option value="OPTIONAL">Optional</option>
-                  </select>
+                  </Select>
                   <button type="button" onClick={addHoliday} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Add</button>
                 </div>
 
@@ -278,25 +279,25 @@ export default function HolidayCalendarsPanel() {
             <input className={fieldClass} maxLength={100} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </label>
           <label className="block text-sm font-medium text-gray-700">Applies to
-            <select className={fieldClass} value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}>
+            <Select className={fieldClass} value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}>
               <option value="COMPANY">The whole company</option>
               <option value="COUNTRY">A country</option>
               <option value="BRANCH">A branch</option>
-            </select>
+            </Select>
           </label>
           {form.scope === 'COUNTRY' && (
             <label className="block text-sm font-medium text-gray-700">Country
-              <select className={fieldClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
+              <Select className={fieldClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
                 {COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
-              </select>
+              </Select>
             </label>
           )}
           {form.scope === 'BRANCH' && (
             <label className="block text-sm font-medium text-gray-700">Branch
-              <select className={fieldClass} value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
+              <Select className={fieldClass} value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
                 <option value="">Select…</option>
                 {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
+              </Select>
             </label>
           )}
           <label className="flex items-center gap-2 text-sm text-gray-700">

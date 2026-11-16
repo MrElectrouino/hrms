@@ -7,6 +7,7 @@ import {
   getParameters,
   updateEmployeeDependant,
 } from '../lib/api';
+import Select from './Select';
 
 type Opt = { id: number; text: string };
 
@@ -158,18 +159,18 @@ export default function EmployeeDependants({ employeeId, canEdit }: { employeeId
             </label>
             <label className="block text-sm font-medium text-gray-700">
               Relation <span className="text-red-500">*</span>
-              <select className={field} value={form.relationTypeId} onChange={(e) => setForm({ ...form, relationTypeId: e.target.value })}>
+              <Select className={field} value={form.relationTypeId} onChange={(e) => setForm({ ...form, relationTypeId: e.target.value })}>
                 <option value="">Select…</option>
                 {relations.map((o) => <option key={o.id} value={o.id}>{o.text}</option>)}
-              </select>
+              </Select>
               {relations.length === 0 && <span className="mt-1 block text-xs text-gray-500">No relation options yet. Add "Dependant Relation" values in Masters.</span>}
             </label>
             <label className="block text-sm font-medium text-gray-700">
               Gender
-              <select className={field} value={form.genderId} onChange={(e) => setForm({ ...form, genderId: e.target.value })}>
+              <Select className={field} value={form.genderId} onChange={(e) => setForm({ ...form, genderId: e.target.value })}>
                 <option value="">Select…</option>
                 {genders.map((o) => <option key={o.id} value={o.id}>{o.text}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="block text-sm font-medium text-gray-700">
               Date of birth

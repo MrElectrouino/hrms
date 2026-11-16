@@ -21,6 +21,7 @@ import {
   updatePolicy,
 } from '../../lib/attendance-marking-api';
 import Drawer, { fieldClass } from '../Drawer';
+import Select from '../Select';
 
 type Tab = 'policies' | 'periods' | 'settings' | 'statuses' | 'processing';
 const TABS: { key: Tab; label: string }[] = [
@@ -249,9 +250,9 @@ export default function AttendanceConfigPanel() {
           <p className="text-sm text-gray-600">During a period, a policy that uses the alternate shift start measures lateness against the shift's alternate start time (for example shorter Ramadan hours).</p>
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <label className="text-xs font-medium text-gray-600">Country
-              <select value={period.countryCode} onChange={(e) => setPeriod({ ...period, countryCode: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
+              <Select value={period.countryCode} onChange={(e) => setPeriod({ ...period, countryCode: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
                 <option value="">Select…</option>{cfg.countries.map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="text-xs font-medium text-gray-600">From<input type="date" value={period.startDate} onChange={(e) => setPeriod({ ...period, startDate: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
             <label className="text-xs font-medium text-gray-600">To<input type="date" value={period.endDate} onChange={(e) => setPeriod({ ...period, endDate: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
@@ -279,9 +280,9 @@ export default function AttendanceConfigPanel() {
           {(['gpsRequirement', 'addressRequirement'] as const).map((k) => (
             <label key={k} className="block text-sm font-medium text-gray-700">
               {k === 'gpsRequirement' ? 'GPS location' : 'Address'}
-              <select className={fieldClass} value={cfg.settings[k]} onChange={(e) => setCfg({ ...cfg, settings: { ...cfg.settings, [k]: e.target.value as 'OFF' | 'OPTIONAL' | 'REQUIRED' } })}>
+              <Select className={fieldClass} value={cfg.settings[k]} onChange={(e) => setCfg({ ...cfg, settings: { ...cfg.settings, [k]: e.target.value as 'OFF' | 'OPTIONAL' | 'REQUIRED' } })}>
                 <option value="OFF">Not collected</option><option value="OPTIONAL">Optional</option><option value="REQUIRED">Required to mark attendance</option>
-              </select>
+              </Select>
             </label>
           ))}
           <p className="text-xs text-gray-500">The server always records the IP address itself.</p>
@@ -393,25 +394,25 @@ export default function AttendanceConfigPanel() {
         >
           {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
           <label className="block text-sm font-medium text-gray-700">Applies to
-            <select className={fieldClass} value={asg.scope} onChange={(e) => setAsg({ ...asg, scope: e.target.value })}>
+            <Select className={fieldClass} value={asg.scope} onChange={(e) => setAsg({ ...asg, scope: e.target.value })}>
               <option value="COUNTRY">A country</option><option value="BRANCH">A branch</option><option value="EMPLOYEE">One employee</option>
-            </select>
+            </Select>
           </label>
           {asg.scope === 'COUNTRY' && (
             <label className="block text-sm font-medium text-gray-700">Country
-              <select className={fieldClass} value={asg.countryCode} onChange={(e) => setAsg({ ...asg, countryCode: e.target.value })}>{cfg.countries.map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}</select>
+              <Select className={fieldClass} value={asg.countryCode} onChange={(e) => setAsg({ ...asg, countryCode: e.target.value })}>{cfg.countries.map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}</Select>
             </label>
           )}
           {asg.scope === 'BRANCH' && (
             <label className="block text-sm font-medium text-gray-700">Branch
-              <select className={fieldClass} value={asg.branchId} onChange={(e) => setAsg({ ...asg, branchId: e.target.value })}><option value="">Select…</option>{cfg.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+              <Select className={fieldClass} value={asg.branchId} onChange={(e) => setAsg({ ...asg, branchId: e.target.value })}><option value="">Select…</option>{cfg.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select>
             </label>
           )}
           {asg.scope === 'EMPLOYEE' && (
             <>
               <label className="block text-sm font-medium text-gray-700">Find employee<input type="search" className={fieldClass} value={empSearch} onChange={(e) => setEmpSearch(e.target.value)} placeholder="Name or code…" /></label>
               <label className="block text-sm font-medium text-gray-700">Employee
-                <select className={fieldClass} value={asg.employeeId} onChange={(e) => setAsg({ ...asg, employeeId: e.target.value })}><option value="">Select…</option>{emps.map((e) => <option key={e.id} value={e.id}>{[e.profile?.name, e.profile?.lastName].filter(Boolean).join(' ')} ({e.employeeCode})</option>)}</select>
+                <Select className={fieldClass} value={asg.employeeId} onChange={(e) => setAsg({ ...asg, employeeId: e.target.value })}><option value="">Select…</option>{emps.map((e) => <option key={e.id} value={e.id}>{[e.profile?.name, e.profile?.lastName].filter(Boolean).join(' ')} ({e.employeeCode})</option>)}</Select>
               </label>
             </>
           )}

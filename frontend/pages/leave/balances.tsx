@@ -3,6 +3,7 @@ import { useAuth } from '../../lib/auth';
 import { Employee, getEmployees } from '../../lib/api';
 import { LeaveBalance, LeaveType, LedgerRow, adjustBalance, getBalancesOf, getLeaveTypes, getLedger } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
+import Select from '../../components/Select';
 
 const KIND: Record<string, string> = { CREDIT: 'Credit', DEBIT: 'Used', REVERSAL: 'Returned', EXPIRY: 'Expired', ADJUSTMENT: 'Adjustment' };
 
@@ -71,10 +72,10 @@ export default function LeaveBalancesPage() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm font-medium text-gray-700">Find employee<input type="search" placeholder="Name or code…" value={search} onChange={(e) => setSearch(e.target.value)} className="mt-1 block w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" /></label>
         <label className="text-sm font-medium text-gray-700">Employee
-          <select value={employeeId ?? ''} onChange={(e) => { setEmployeeId(e.target.value ? Number(e.target.value) : null); setNotice(''); }} className="mt-1 block w-72 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+          <Select value={employeeId ?? ''} onChange={(e) => { setEmployeeId(e.target.value ? Number(e.target.value) : null); setNotice(''); }} className="mt-1 block w-72 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
             <option value="">Select employee…</option>
             {emps.map((e) => <option key={e.id} value={e.id}>{[e.profile?.name, e.profile?.lastName].filter(Boolean).join(' ')} ({e.employeeCode})</option>)}
-          </select>
+          </Select>
         </label>
       </div>
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
@@ -98,7 +99,7 @@ export default function LeaveBalancesPage() {
             <h3 className="text-base font-semibold text-gray-900">Add or take away days</h3>
             <div className="mt-3 flex flex-wrap items-end gap-3">
               <label className="text-xs font-medium text-gray-600">Leave type
-                <select value={adj.leaveTypeId} onChange={(e) => setAdj({ ...adj, leaveTypeId: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"><option value="">Select…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+                <Select value={adj.leaveTypeId} onChange={(e) => setAdj({ ...adj, leaveTypeId: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"><option value="">Select…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
               </label>
               <label className="text-xs font-medium text-gray-600">Days (use − to take away)<input type="number" step="0.5" value={adj.days} onChange={(e) => setAdj({ ...adj, days: e.target.value })} className="mt-1 block w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
               <label className="text-xs font-medium text-gray-600">Expires (optional)<input type="date" value={adj.expiresOn} onChange={(e) => setAdj({ ...adj, expiresOn: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>

@@ -13,6 +13,7 @@ import {
 } from '../lib/api';
 import BranchAccessPicker from '../components/BranchAccessPicker';
 import { UserType } from '../lib/user-types';
+import Select from '../components/Select';
 
 export default function UsersPage() {
   const { isAuthenticated, user: me } = useAuth();
@@ -287,7 +288,7 @@ export default function UsersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
-                <select
+                <Select
                   required
                   value={form.userTypeId}
                   onChange={(e) => setForm({ ...form, userTypeId: e.target.value })}
@@ -299,7 +300,7 @@ export default function UsersPage() {
                       {ut.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               {isSystemAdmin && form.userTypeId !== String(UserType.SystemAdmin) && (
@@ -338,7 +339,7 @@ export default function UsersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
-                <select
+                <Select
                   required
                   value={editForm.userTypeId}
                   onChange={(e) => setEditForm({ ...editForm, userTypeId: e.target.value })}
@@ -350,7 +351,7 @@ export default function UsersPage() {
                       {ut.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <label className="flex items-center gap-2 text-sm text-gray-700">

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { WeeklyOffRule, WeeklyOffTemplate, createWeeklyOffTemplate, deleteWeeklyOffTemplate, getWeeklyOffTemplates, updateWeeklyOffTemplate } from '../../lib/attendance-api';
 import Drawer, { fieldClass } from '../Drawer';
+import Select from '../Select';
 
 /** Days shown Monday first; the number is the weekday used by the server (0 = Sunday ... 6 = Saturday). */
 const WEEK: { day: number; short: string; long: string }[] = [
@@ -221,12 +222,12 @@ export default function WeeklyOffPanel() {
                 return (
                   <div key={w.day} className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 ${r.mode !== 'WORK' ? 'bg-orange-50/50' : ''}`}>
                     <span className="w-24 text-sm font-medium text-gray-800">{w.long}</span>
-                    <select aria-label={`${w.long} rule`} className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm" value={r.mode} onChange={(e) => setRow(w.day, { mode: e.target.value as Mode })}>
+                    <Select aria-label={`${w.long} rule`} className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm" value={r.mode} onChange={(e) => setRow(w.day, { mode: e.target.value as Mode })}>
                       <option value="WORK">Working day</option>
                       <option value="ALL">Off every week</option>
                       <option value="WEEKS">Off in some weeks of the month</option>
                       <option value="ALTERNATE">Off every other week</option>
-                    </select>
+                    </Select>
                     {r.mode === 'WEEKS' && (
                       <div className="flex flex-wrap gap-1.5">
                         {WEEKS.map((k) => (
