@@ -151,18 +151,22 @@ export async function downloadFile(path: string, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+/** A weekday that is off only some weeks: the chosen occurrences in the month (1-5, -1 = last), or every other week from a date. */
+export type WeeklyOffRule = { day: number; kind: 'WEEKS'; weeks: number[] } | { day: number; kind: 'ALTERNATE'; anchor: string };
+
 export interface WeeklyOffTemplate {
   id: number;
   name: string;
-  /** 0 = Sunday ... 6 = Saturday. */
+  /** Weekdays off every week: 0 = Sunday ... 6 = Saturday. */
   days: number[];
+  rules: WeeklyOffRule[];
   daysText: string;
   note: string | null;
   isActive: boolean;
   employeeCount: number;
   everAssigned: boolean;
 }
-export type WeeklyOffPayload = { name: string; days: number[]; note?: string | null; isActive?: boolean };
+export type WeeklyOffPayload = { name: string; days: number[]; rules?: WeeklyOffRule[]; note?: string | null; isActive?: boolean };
 export const getWeeklyOffTemplates = () => request<WeeklyOffTemplate[]>('/attendance/weekly-off-templates');
 export const createWeeklyOffTemplate = (p: WeeklyOffPayload) => request<WeeklyOffTemplate>('/attendance/weekly-off-templates', { method: 'POST', body: json(p) });
 export const updateWeeklyOffTemplate = (id: number, p: WeeklyOffPayload) => request<WeeklyOffTemplate>(`/attendance/weekly-off-templates/${id}`, { method: 'PUT', body: json(p) });

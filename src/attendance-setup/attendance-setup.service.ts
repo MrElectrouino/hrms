@@ -23,7 +23,7 @@ import {
   WorkScheduleDto,
 } from './dto/attendance.dto';
 import { AssignWeeklyOffDto, WeeklyOffTemplateDto } from './dto/weekly-off.dto';
-import { assignWeeklyOff, describeDays, validateDays } from './weekly-off.util';
+import { WeeklyOffRule, assignWeeklyOff, describeTemplate, validateTemplate } from './weekly-off.util';
 import { IMPORT_MAX_BYTES, buildTemplate, readSheet } from './excel.util';
 
 const HOLIDAY_ORDER_KEY = 'holiday_calendar_order';
@@ -395,14 +395,15 @@ export class AttendanceSetupService {
     const today = new Date(`${toIsoDate(new Date())}T00:00:00Z`);
     const current = await this.prisma.employeeWeeklyOff.groupBy({ by: ['templateId'], _count: { _all: true }, where: { effectiveFrom: { lte: today }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }] } });
     const now = new Map(current.map((c) => [c.templateId, c._count._all]));
-    return rows.map(({ _count, ...t }) => ({ ...t, daysText: describeDays(t.days), employeeCount: now.get(t.id) ?? 0, everAssigned: _count.assignments > 0 }));
+    return rows.map(({ _count, ...t }) => ({ ...t, daysText: describeTemplate({ days: t.days, rules: t.rules as unknown as WeeklyOffRule[] }), employeeCount: now.get(t.id) ?? 0, everAssigned: _count.assignments > 0 }));
   }
 
   private weeklyOffData(dto: WeeklyOffTemplateDto) {
     const days = [...new Set(dto.days)].sort((a, b) => a - b);
-    const problems = validateDays(days);
+    const rules: WeeklyOffRule[] = (dto.rules ?? []).map((r) => (r.kind === 'WEEKS' ? { day: r.day, kind: 'WEEKS', weeks: [...new Set(r.weeks ?? [])] } : { day: r.day, kind: 'ALTERNATE', anchor: r.anchor ?? '' }));
+    const problems = validateTemplate(days, rules);
     if (problems.length) throw new BadRequestException(problems[0]);
-    return { name: dto.name.trim(), days, note: dto.note?.trim() || null, isActive: dto.isActive ?? true };
+    return { name: dto.name.trim(), days, rules: rules as unknown as Prisma.InputJsonValue, note: dto.note?.trim() || null, isActive: dto.isActive ?? true };
   }
 
   async createWeeklyOffTemplate(dto: WeeklyOffTemplateDto, user: CurrentUserPayload, ip?: string) {

@@ -1653,7 +1653,10 @@ model Branch {
 model WeeklyOffTemplate {
   id        Int      @id @default(autoincrement())
   name      String   @unique
+  /// Weekdays that are off every week.
   days      Int[]
+  /// Weekdays that are off only some weeks: [{ day, kind: "WEEKS", weeks: [2, 4] }] (1-5, -1 = last) or [{ day, kind: "ALTERNATE", anchor: "YYYY-MM-DD" }].
+  rules     Json     @default("[]")
   note      String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(3)

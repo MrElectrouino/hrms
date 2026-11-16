@@ -15,6 +15,7 @@ import {
 } from './attendance-logic';
 import { RosterEntryDto } from './dto/attendance.dto';
 import { IMPORT_MAX_BYTES, buildTemplate, readSheet } from './excel.util';
+import { WeeklyOffRule, isWeeklyOffDay } from './weekly-off.util';
 
 const MAX_RANGE_DAYS = 62;
 
@@ -64,7 +65,7 @@ export class RosterService {
         },
         orderBy: { id: 'asc' },
       }),
-      this.prisma.employeeWeeklyOff.findMany({ where: overlap, include: { template: { select: { days: true } } } }),
+      this.prisma.employeeWeeklyOff.findMany({ where: overlap, include: { template: { select: { days: true, rules: true } } } }),
     ]);
 
     const levelCalendar = (scope: string) => candidateCalendars.find((c) => c.scope === scope)?.id ?? null;
@@ -111,7 +112,7 @@ export class RosterService {
       // No entry or pattern for the day: the weekly off template says which weekdays are off.
       if (roster.source === 'NONE') {
         const wo = weeklyOffs.find((a) => covers(a, date));
-        if (wo) roster = { source: 'TEMPLATE', isWeeklyOff: wo.template.days.includes(date.getUTCDay()), shift: null };
+        if (wo) roster = { source: 'TEMPLATE', isWeeklyOff: isWeeklyOffDay({ days: wo.template.days, rules: wo.template.rules as unknown as WeeklyOffRule[] }, date), shift: null };
       }
 
       const sch = schedules.find((a) => covers(a, date));
