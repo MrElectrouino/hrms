@@ -126,7 +126,7 @@ export default function MyLeavePage() {
 
       {applying && (
         <Modal
-          size="xl"
+          size="lg"
           title="Apply for leave"
           subtitle="Choose the type and dates. The days are counted for you before you send it."
           busy={busy}
@@ -139,7 +139,7 @@ export default function MyLeavePage() {
           }
         >
           {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="space-y-4">
           <label className="block text-sm font-medium text-gray-700">Leave type
             <Select className={fieldClass} value={form.leaveTypeId} onChange={(e) => setForm({ ...form, leaveTypeId: e.target.value })}>
@@ -163,7 +163,7 @@ export default function MyLeavePage() {
           </label>
         </div>
 
-        <div>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
           <h3 className="text-base font-semibold text-gray-900">What this will take</h3>
           {previewError && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{previewError}</p>}
           {!preview && !previewError && <p className="mt-3 text-sm text-gray-500">Choose a leave type and dates to see the days counted.</p>}

@@ -111,6 +111,7 @@ export const createHolidayCalendar = (p: HolidayCalendarPayload) => request<Holi
 export const updateHolidayCalendar = (id: number, p: HolidayCalendarPayload) => request<HolidayCalendar>(`/attendance/holiday-calendars/${id}`, { method: 'PUT', body: json(p) });
 export const getHolidayCalendar = (id: number) => request<HolidayCalendar & { holidays: Holiday[] }>(`/attendance/holiday-calendars/${id}`);
 export const saveHoliday = (id: number, p: { date: string; endDate?: string | null; name: string; holidayType?: string }) => request<Holiday>(`/attendance/holiday-calendars/${id}/holidays`, { method: 'POST', body: json(p) });
+export const updateHoliday = (id: number, holidayId: number, p: { date: string; endDate?: string | null; name: string; holidayType?: string }) => request<Holiday>(`/attendance/holiday-calendars/${id}/holidays/${holidayId}`, { method: 'PUT', body: json(p) });
 export const removeHoliday = (id: number, holidayId: number) => request<null>(`/attendance/holiday-calendars/${id}/holidays/${holidayId}`, { method: 'DELETE' });
 
 export const getRosterPatterns = () => request<RosterPattern[]>('/attendance/roster-patterns');

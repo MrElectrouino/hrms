@@ -204,6 +204,27 @@ export class AttendanceSetupService {
     return { ...saved, date: toIsoDate(saved.date), endDate: saved.endDate ? toIsoDate(saved.endDate) : null };
   }
 
+  /** Change one holiday (including its date). */
+  async updateHoliday(calendarId: number, holidayId: number, dto: HolidayDto, user: CurrentUserPayload, ip?: string) {
+    const current = await this.prisma.holiday.findFirst({ where: { id: holidayId, calendarId } });
+    if (!current) throw new NotFoundException('Holiday not found');
+    const date = mustDate(dto.date, 'Date');
+    const endDate = dto.endDate && dto.endDate !== dto.date ? mustDate(dto.endDate, 'End date') : null;
+    if (endDate) {
+      if (endDate < date) throw new BadRequestException('The end date cannot be before the date');
+      if ((endDate.getTime() - date.getTime()) / 86_400_000 + 1 > MAX_HOLIDAY_DAYS) throw new BadRequestException(`A holiday can last at most ${MAX_HOLIDAY_DAYS} days`);
+    }
+    const last = endDate ?? date;
+    const clash = await this.prisma.holiday.findFirst({
+      where: { calendarId, id: { not: holidayId }, date: { lte: last }, OR: [{ endDate: { gte: date } }, { endDate: null, date: { gte: date } }] },
+      select: { name: true, date: true },
+    });
+    if (clash) throw new BadRequestException(`This overlaps "${clash.name}" (${toIsoDate(clash.date)}) in the same calendar`);
+    const saved = await this.prisma.holiday.update({ where: { id: holidayId }, data: { date, endDate, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' } });
+    await this.log(user, 'HOLIDAY_UPDATED', 'HolidayCalendar', calendarId, ip, { from: toIsoDate(current.date), date: dto.date, endDate: dto.endDate ?? null });
+    return { ...saved, date: toIsoDate(saved.date), endDate: saved.endDate ? toIsoDate(saved.endDate) : null };
+  }
+
   async removeHoliday(calendarId: number, holidayId: number, user: CurrentUserPayload, ip?: string) {
     const h = await this.prisma.holiday.findFirst({ where: { id: holidayId, calendarId } });
     if (!h) throw new NotFoundException('Holiday not found');

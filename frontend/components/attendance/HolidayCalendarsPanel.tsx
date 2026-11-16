@@ -12,6 +12,7 @@ import {
   importHolidays,
   removeHoliday,
   saveHoliday,
+  updateHoliday,
   saveHolidayOrder,
   updateHolidayCalendar,
 } from '../../lib/attendance-api';
@@ -42,6 +43,8 @@ export default function HolidayCalendarsPanel() {
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [form, setForm] = useState(blank);
   const [hol, setHol] = useState({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
+  /** The holiday being changed; null when adding a new one. */
+  const [editingHol, setEditingHol] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -127,13 +130,25 @@ export default function HolidayCalendarsPanel() {
     if (hol.endDate && hol.endDate < hol.date) return setError('The end date cannot be before the date');
     setError('');
     try {
-      await saveHoliday(selected.id, { date: hol.date, endDate: hol.endDate || null, name: hol.name.trim(), holidayType: hol.holidayType });
+      const payload = { date: hol.date, endDate: hol.endDate || null, name: hol.name.trim(), holidayType: hol.holidayType };
+      if (editingHol === null) await saveHoliday(selected.id, payload);
+      else await updateHoliday(selected.id, editingHol, payload);
       setHol({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
+      setEditingHol(null);
       await open(selected.id);
       loadCalendars();
     } catch (e: any) {
       setError(e.message || 'Could not save the holiday');
     }
+  };
+  const startEditHoliday = (h: Holiday) => {
+    setHol({ date: h.date, endDate: h.endDate && h.endDate !== h.date ? h.endDate : '', name: h.name, holidayType: h.holidayType });
+    setEditingHol(h.id);
+    setError('');
+  };
+  const cancelEditHoliday = () => {
+    setHol({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
+    setEditingHol(null);
   };
   const delHoliday = async (h: Holiday) => {
     if (!selected || !window.confirm(`Remove ${h.name} (${h.date})?`)) return;
@@ -219,14 +234,15 @@ export default function HolidayCalendarsPanel() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[9rem_9rem_1fr_9rem_auto]">
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[9rem_9rem_1fr_9rem_auto_auto]">
                   <input type="date" aria-label="Date" className={`${fieldClass} !mt-0`} value={hol.date} onChange={(e) => setHol({ ...hol, date: e.target.value, endDate: hol.endDate && hol.endDate < e.target.value ? '' : hol.endDate })} />
                   <input type="date" aria-label="End date (optional)" title="End date (optional): for a holiday that lasts several days" className={`${fieldClass} !mt-0`} min={hol.date || undefined} value={hol.endDate} onChange={(e) => setHol({ ...hol, endDate: e.target.value })} />
                   <input aria-label="Holiday name" placeholder="Holiday name" className={`${fieldClass} !mt-0`} maxLength={120} value={hol.name} onChange={(e) => setHol({ ...hol, name: e.target.value })} />
                   <Select aria-label="Type" className={`${fieldClass} !mt-0`} value={hol.holidayType} onChange={(e) => setHol({ ...hol, holidayType: e.target.value })}>
                     <option value="PUBLIC">Public</option><option value="COMPANY">Company</option><option value="OPTIONAL">Optional</option>
                   </Select>
-                  <button type="button" onClick={addHoliday} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Add</button>
+                  <button type="button" onClick={addHoliday} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">{editingHol === null ? 'Add' : 'Save'}</button>
+                  {editingHol !== null && <button type="button" onClick={cancelEditHoliday} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>}
                 </div>
 
                 <table className="mt-4 min-w-full divide-y divide-gray-200 text-sm">
@@ -242,7 +258,7 @@ export default function HolidayCalendarsPanel() {
                           <td className="py-2 font-mono text-[13px] text-gray-700">{h.date}{h.endDate && h.endDate !== h.date ? ` to ${h.endDate}` : ''}</td>
                           <td className="py-2 text-gray-900">{h.name}</td>
                           <td className="py-2 text-gray-600">{h.holidayType.charAt(0) + h.holidayType.slice(1).toLowerCase()}</td>
-                          <td className="py-2 text-right"><button type="button" onClick={() => delHoliday(h)} className="text-xs font-medium text-red-600 hover:text-red-800">Remove</button></td>
+                          <td className="whitespace-nowrap py-2 text-right"><button type="button" onClick={() => startEditHoliday(h)} className="mr-3 text-xs font-medium text-blue-600 hover:text-blue-800">Edit</button><button type="button" onClick={() => delHoliday(h)} className="text-xs font-medium text-red-600 hover:text-red-800">Remove</button></td>
                         </tr>
                       ))
                     )}

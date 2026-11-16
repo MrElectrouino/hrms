@@ -143,6 +143,10 @@ export class AttendanceSetupController {
   async saveHoliday(@Param('id', ParseIntPipe) id: number, @Body() dto: HolidayDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     return this.ok(await this.setup.saveHoliday(id, dto, u, ip), 'Holiday saved');
   }
+  @Put('holiday-calendars/:id/holidays/:holidayId')
+  async updateHoliday(@Param('id', ParseIntPipe) id: number, @Param('holidayId', ParseIntPipe) holidayId: number, @Body() dto: HolidayDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.updateHoliday(id, holidayId, dto, u, ip), 'Holiday updated');
+  }
   @Delete('holiday-calendars/:id/holidays/:holidayId')
   async removeHoliday(@Param('id', ParseIntPipe) id: number, @Param('holidayId', ParseIntPipe) holidayId: number, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     await this.setup.removeHoliday(id, holidayId, u, ip);
