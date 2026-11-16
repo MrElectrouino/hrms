@@ -441,6 +441,22 @@ export class EmployeeProfileService {
     return updated;
   }
 
+  /** A custom field that already holds values is kept (deactivate it instead); an unused one is removed with its profile rules. */
+  async deleteCustomField(code: string, user: CurrentUserPayload, ip: string) {
+    if (!this.isSystemAdmin(user)) throw new ForbiddenException('Only System Admin can delete custom fields');
+    const def = await this.prisma.customFieldDefinition.findUnique({ where: { code }, select: { id: true, label: true } });
+    if (!def) throw new NotFoundException('Custom field not found');
+    const used = await this.prisma.customFieldValue.count({ where: { definitionId: def.id } });
+    if (used > 0) {
+      throw new ConflictException(`"${def.label}" already holds a value for ${used} employee${used === 1 ? '' : 's'}, so it cannot be deleted. Deactivate it instead.`);
+    }
+    await this.prisma.$transaction([
+      this.prisma.profileFieldRule.deleteMany({ where: { fieldKey: code } }),
+      this.prisma.customFieldDefinition.delete({ where: { id: def.id } }),
+    ]);
+    await this.audit.log({ actorProfileId: user.profileId, action: 'custom_field.deleted', entityType: 'custom_field', entityId: code, ipAddress: ip, metadata: { label: def.label } });
+  }
+
   /* -------------------------------------------------------------- shared checks */
 
   /** Salary template id and amounts (compensation section only). Mutates result.values to the cleaned form. */

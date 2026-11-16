@@ -772,6 +772,10 @@ export async function createCustomField(payload: CreateCustomFieldPayload) {
   return request<CustomFieldAdmin>('/custom-fields', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function deleteCustomField(code: string) {
+  return request<null>(`/custom-fields/${code}`, { method: 'DELETE' });
+}
+
 export async function updateCustomField(code: string, payload: { isActive?: boolean; label?: string; isRequired?: boolean; placeholder?: string }) {
   return request<CustomFieldAdmin>(`/custom-fields/${code}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }

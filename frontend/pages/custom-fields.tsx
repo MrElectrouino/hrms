@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { CustomFieldAdmin, createCustomField, getCustomFieldDefinitions, updateCustomField } from '../lib/api';
+import { CustomFieldAdmin, createCustomField, deleteCustomField, getCustomFieldDefinitions, updateCustomField } from '../lib/api';
 
 const TABS = [
   ['personal', 'Personal'],
@@ -77,6 +77,17 @@ export default function CustomFieldsPage() {
     }
   };
 
+  const remove = async (f: CustomFieldAdmin) => {
+    if (!window.confirm(`Delete the custom field "${f.label}"? This cannot be undone. If employees already have a value in it you will be told to deactivate it instead.`)) return;
+    setError('');
+    try {
+      await deleteCustomField(f.code);
+      load();
+    } catch (err: any) {
+      setError(err.message || 'Could not delete the field');
+    }
+  };
+
   const toggle = async (f: CustomFieldAdmin) => {
     setError('');
     try {
@@ -149,6 +160,7 @@ export default function CustomFieldsPage() {
                     <button type="button" onClick={() => toggle(f)} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50">
                       {f.isActive ? 'Deactivate' : 'Activate'}
                     </button>
+                    <button type="button" onClick={() => remove(f)} className="ml-2 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm hover:bg-red-50">Delete</button>
                   </td>
                 </tr>
               ))}
