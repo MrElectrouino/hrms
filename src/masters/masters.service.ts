@@ -17,6 +17,7 @@ import { UpdateShiftDto } from './dto/update-shift.dto';
 import { CreateDocumentTypeDto } from './dto/create-document-type.dto';
 import { UpdateDocumentTypeDto } from './dto/update-document-type.dto';
 import { CreateParameterDto, UpdateParameterDto } from './dto/parameter.dto';
+import { timeOfDay } from './time-of-day';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -446,15 +447,15 @@ export class MastersService {
   private buildShiftData(dto: CreateShiftDto | UpdateShiftDto): any {
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name.trim();
-    if (dto.startTime !== undefined) data.startTime = new Date(`1970-01-01T${dto.startTime}`);
-    if (dto.endTime !== undefined) data.endTime = new Date(`1970-01-01T${dto.endTime}`);
+    if (dto.startTime !== undefined) data.startTime = timeOfDay(dto.startTime);
+    if (dto.endTime !== undefined) data.endTime = timeOfDay(dto.endTime);
     if ('lateMinutes' in dto && dto.lateMinutes !== undefined) data.lateMinutes = dto.lateMinutes;
     if ('halfDayMinutes' in dto && dto.halfDayMinutes !== undefined)
       data.halfDayMinutes = dto.halfDayMinutes;
     if (dto.altStartTime !== undefined)
-      data.altStartTime = dto.altStartTime ? new Date(`1970-01-01T${dto.altStartTime}`) : null;
+      data.altStartTime = dto.altStartTime ? timeOfDay(dto.altStartTime) : null;
     if (dto.altEndTime !== undefined)
-      data.altEndTime = dto.altEndTime ? new Date(`1970-01-01T${dto.altEndTime}`) : null;
+      data.altEndTime = dto.altEndTime ? timeOfDay(dto.altEndTime) : null;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     return data;
   }
