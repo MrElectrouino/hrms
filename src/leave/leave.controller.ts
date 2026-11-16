@@ -43,8 +43,14 @@ export class LeaveController {
   }
 
   @Get('applications/me')
-  async mine(@CurrentUser() u: CurrentUserPayload) {
-    return ok(await this.service.mine(u), 'Applications retrieved');
+  async mine(
+    @CurrentUser() u: CurrentUserPayload,
+    @Query('status') status?: string,
+    @Query('leaveTypeId') leaveTypeId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return ok(await this.service.mine(u, { status: status || undefined, leaveTypeId: leaveTypeId ? Number(leaveTypeId) || undefined : undefined, from: from || undefined, to: to || undefined }), 'Applications retrieved');
   }
 
   @Get('applications/team')

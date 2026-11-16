@@ -104,7 +104,18 @@ export const getMyBalances = () => request<LeaveBalance[]>('/leave/balances');
 export const getBalancesOf = (employeeId: number) => request<LeaveBalance[]>(`/leave/balances/${employeeId}`);
 export const previewLeave = (p: LeaveRequestPayload) => request<LeavePreview>('/leave/preview', { method: 'POST', body: json(p) });
 export const applyLeave = (p: LeaveRequestPayload) => request<LeaveApplication>('/leave/applications', { method: 'POST', body: json(p) });
-export const getMyLeave = () => request<LeaveApplication[]>('/leave/applications/me');
+export interface MyLeaveFilters {
+  status?: string;
+  leaveTypeId?: string;
+  from?: string;
+  to?: string;
+}
+export const getMyLeave = (f: MyLeaveFilters = {}) => {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(f)) if (v) q.set(k, v);
+  const text = q.toString();
+  return request<LeaveApplication[]>('/leave/applications/me' + (text ? '?' + text : ''));
+};
 export const getTeamLeave = (status?: string) => request<LeaveApplication[]>(`/leave/applications/team${status ? `?status=${status}` : ''}`);
 export const decideLeave = (id: number, approve: boolean, note?: string) => request<null>(`/leave/applications/${id}/decision`, { method: 'PUT', body: json({ approve, note }) });
 export const cancelLeave = (id: number) => request<null>(`/leave/applications/${id}/cancel`, { method: 'PUT' });

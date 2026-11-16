@@ -27,21 +27,26 @@ export default function MyLeavePage() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [filters, setFilters] = useState({ status: '', leaveTypeId: '', from: '', to: '' });
+  const filtered = Object.values(filters).some(Boolean);
 
   const reload = useCallback(async () => {
     try {
-      const [b, a] = await Promise.all([getMyBalances(), getMyLeave()]);
+      const [b, a] = await Promise.all([getMyBalances(), getMyLeave(filters)]);
       setBalances(b.data);
       setApps(a.data);
     } catch (e: any) {
       setError(e.message || 'Could not load your leave');
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
-    getLeaveTypes().then((r) => setTypes(r.data)).catch(() => {});
-    reload();
+    if (isAuthenticated) getLeaveTypes().then((r) => setTypes(r.data)).catch(() => {});
+  }, [isAuthenticated]);
+
+  // Loads again whenever a filter changes.
+  useEffect(() => {
+    if (isAuthenticated) reload();
   }, [isAuthenticated, reload]);
 
   const type = types.find((t) => String(t.id) === form.leaveTypeId);
@@ -188,12 +193,41 @@ export default function MyLeavePage() {
         </Modal>
       )}
 
+      <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-xs font-medium text-gray-600">Status
+            <Select className={`${fieldClass} !mt-1 w-40`} value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
+              <option value="">All</option>
+              <option value="PENDING">Waiting for approval</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="CANCELLED">Cancelled</option>
+            </Select>
+          </label>
+          <label className="text-xs font-medium text-gray-600">Leave type
+            <Select className={`${fieldClass} !mt-1 w-48`} value={filters.leaveTypeId} onChange={(e) => setFilters({ ...filters, leaveTypeId: e.target.value })}>
+              <option value="">All types</option>
+              {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </Select>
+          </label>
+          <label className="text-xs font-medium text-gray-600">From
+            <input type="date" className={`${fieldClass} !mt-1`} value={filters.from} max={filters.to || undefined} onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
+          </label>
+          <label className="text-xs font-medium text-gray-600">To
+            <input type="date" className={`${fieldClass} !mt-1`} value={filters.to} min={filters.from || undefined} onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+          </label>
+          {filtered && <button type="button" onClick={() => setFilters({ status: '', leaveTypeId: '', from: '', to: '' })} className="pb-2 text-sm font-medium text-blue-600 hover:text-blue-800">Clear filters</button>}
+          <p className="ml-auto pb-2 text-sm text-gray-500">{apps.length} application{apps.length === 1 ? '' : 's'}{filtered ? ' match' : ''}</p>
+        </div>
+        <p className="mt-1 text-xs text-gray-400">The date filter shows leave that overlaps the dates you choose.</p>
+      </section>
+
       <section className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"><tr><th className="px-4 py-3">Type</th><th className="px-4 py-3">Dates</th><th className="px-4 py-3">Days</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Reason / note</th><th className="px-4 py-3" /></tr></thead>
           <tbody className="divide-y divide-gray-100">
             {apps.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">No leave yet.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">{filtered ? 'No leave matches these filters.' : 'No leave yet.'}</td></tr>
             ) : (
               apps.map((a) => (
                 <tr key={a.id}>
