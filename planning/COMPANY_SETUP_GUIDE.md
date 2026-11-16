@@ -140,7 +140,7 @@ Add each place the company works from. For each: name, code (short, unique), **c
 
 ### B5. Users and access (Administration)
 
-1. **Users.** Create accounts for HR Admins, Managers and Executives. A user is linked to a person (profile). Choose the user type: Executive, Manager, System Admin or HR Admin. Give an HR Admin access to **all branches** or only chosen branches.
+1. **Users.** The easiest way: on the employee, open the **System Access** tab and set **Login enabled** to Yes. The employee then appears on the Users page under **Employees waiting for a login**; click **Create login**, check the username and user type, and save. A random temporary password is generated and shown **once**: note it down and give it to the employee, who must choose their own at the first sign-in. (You can also type a password yourself. **Reset Password** generates a new temporary one the same way.) Create accounts for HR Admins, Managers and Executives. A user is linked to a person (profile). Choose the user type: Executive, Manager, System Admin or HR Admin. Give an HR Admin access to **all branches** or only chosen branches.
 2. **Menus & rights.** Adjust which menu items each user type (or a single user) can open.
 3. **Modules** (System Admin). Switch modules on or off. Leave and Attendance are on. Payroll and the others are not built.
 

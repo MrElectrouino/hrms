@@ -60,8 +60,10 @@ export interface User {
 
 export interface CreateUserPayload {
   username: string;
-  password: string;
+  /** Leave out to have a temporary password generated (returned once). */
+  password?: string;
   userTypeId: number;
+  /** Make the account for this existing person (employee) instead of a new blank profile. */
   profileId?: number;
   allBranches?: boolean;
   branchIds?: number[];
@@ -392,8 +394,25 @@ export async function getUsers(params?: Record<string, string | number | boolean
   return request<User[]>(`/users${query}`);
 }
 
+export interface LoginCandidate {
+  profileId: number;
+  employeeId: number;
+  code: string;
+  name: string;
+  branchName: string | null;
+  designation: string | null;
+  /** From the employee's System Access tab, or the employee code. */
+  username: string;
+  accessRole: string | null;
+}
+
+/** Employees marked "Login enabled" on their System Access tab who have no account yet. */
+export async function getLoginCandidates() {
+  return request<LoginCandidate[]>('/users/candidates');
+}
+
 export async function createUser(payload: CreateUserPayload) {
-  return request<User>('/users', {
+  return request<User & { temporaryPassword?: string }>('/users', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -412,10 +431,11 @@ export async function deactivateUser(id: number) {
   });
 }
 
-export async function resetUserPassword(id: number, newPassword: string) {
-  return request<null>(`/users/${id}/reset-password`, {
+/** Without a password, one is generated and returned once. */
+export async function resetUserPassword(id: number, newPassword?: string) {
+  return request<{ temporaryPassword?: string }>(`/users/${id}/reset-password`, {
     method: 'POST',
-    body: JSON.stringify({ newPassword }),
+    body: JSON.stringify(newPassword ? { newPassword } : {}),
   });
 }
 

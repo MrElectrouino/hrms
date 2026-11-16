@@ -13,6 +13,7 @@ import { AuditService } from '../common/services/audit.service';
 import { SessionService } from '../auth/session.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserType } from '../common/constants/user-types';
+import { generateTemporaryPassword } from '../common/utils/crypto.util';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
@@ -125,6 +126,44 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Employees who are allowed to sign in (System Access tab: Login enabled = Yes) but have no account yet.
+   * HR limited to some branches only sees employees of those branches.
+   */
+  async loginCandidates(actor: CurrentUserPayload) {
+    const rows = await this.prisma.employeeProfileSection.findMany({
+      where: {
+        sectionKey: 'access',
+        data: { path: ['loginEnabled'], equals: 'Yes' },
+        employee: {
+          isActive: true,
+          profile: { user: null },
+          ...(actor.branchAccess ? { branchId: { in: actor.branchAccess } } : {}),
+        },
+      },
+      select: {
+        data: true,
+        employee: { select: { id: true, employeeCode: true, designation: true, profileId: true, branch: { select: { name: true } }, profile: { select: { name: true, lastName: true } } } },
+      },
+      orderBy: { employee: { employeeCode: 'asc' } },
+      take: 500,
+    });
+    return rows.map((r) => {
+      const d = (r.data ?? {}) as { username?: unknown; accessRole?: unknown };
+      return {
+        profileId: r.employee.profileId,
+        employeeId: r.employee.id,
+        code: r.employee.employeeCode,
+        name: [r.employee.profile.name, r.employee.profile.lastName].filter(Boolean).join(' '),
+        branchName: r.employee.branch?.name ?? null,
+        designation: r.employee.designation,
+        // what the System Access tab already says, to pre-fill the new account
+        username: typeof d.username === 'string' && d.username.trim() ? d.username.trim().toLowerCase() : r.employee.employeeCode.toLowerCase(),
+        accessRole: typeof d.accessRole === 'string' ? d.accessRole : null,
+      };
+    });
+  }
+
   async create(dto: CreateUserDto, actor: CurrentUserPayload, ip?: string) {
     this.assertMayAssignType(actor, dto.userTypeId);
     await this.assertUserTypeExists(dto.userTypeId);
@@ -149,7 +188,10 @@ export class UsersService {
     }
 
     const branchChange = await this.checkBranchAccess(dto, actor, true);
-    const passwordHash = await bcrypt.hash(dto.password, this.bcryptRounds);
+    // No password given: generate a temporary one. It is returned once and never stored in readable form.
+    const generated = !dto.password;
+    const password = dto.password ?? generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
 
     let user;
     try {
@@ -176,16 +218,20 @@ export class UsersService {
       throw error;
     }
 
+    // An account for an existing person needs site access switched on, or sign-in is refused.
+    if (dto.profileId) await this.prisma.profile.update({ where: { id: dto.profileId }, data: { isSiteAccess: true } });
+
     await this.audit.log({
       actorProfileId: actor.profileId,
       action: 'USER_CREATED',
       entityType: 'User',
       entityId: String(user.id),
       ipAddress: ip,
-      metadata: { userTypeId: dto.userTypeId, profileId },
+      metadata: { userTypeId: dto.userTypeId, profileId, passwordGenerated: generated },
     });
 
-    return user;
+    // The generated password is shown once to the person who created the account.
+    return generated ? { ...user, temporaryPassword: password } : user;
   }
 
   async update(id: number, dto: UpdateUserDto, actor: CurrentUserPayload, ip?: string) {
@@ -267,7 +313,7 @@ export class UsersService {
    * Admin sets a temporary password. The user must change it at next sign-in,
    * and every existing session is signed out.
    */
-  async resetPassword(id: number, newPassword: string, actor: CurrentUserPayload, ip?: string) {
+  async resetPassword(id: number, newPassword: string | undefined, actor: CurrentUserPayload, ip?: string): Promise<{ temporaryPassword?: string }> {
     const target = await this.prisma.user.findUnique({ where: { id } });
     if (!target) throw new NotFoundException('User not found');
     if (target.id === actor.userId) {
@@ -275,7 +321,9 @@ export class UsersService {
     }
     if (target.userTypeId === UserType.SystemAdmin) this.assertMayTouchAdmin(actor);
 
-    const passwordHash = await bcrypt.hash(newPassword, this.bcryptRounds);
+    const generated = !newPassword;
+    const password = newPassword ?? generateTemporaryPassword();
+    const passwordHash = await bcrypt.hash(password, this.bcryptRounds);
     const now = new Date();
 
     await this.prisma.$transaction([
@@ -307,7 +355,9 @@ export class UsersService {
       entityType: 'User',
       entityId: String(id),
       ipAddress: ip,
+      metadata: { passwordGenerated: generated },
     });
+    return generated ? { temporaryPassword: password } : {};
   }
 
   /** Clears a lock (legacy had no unlock path; auto-unlock also applies after lockedUntil). */

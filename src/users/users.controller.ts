@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Ip,
@@ -45,6 +46,7 @@ export class UsersController {
   }
 
   @Post()
+  @Header('Cache-Control', 'no-store')
   async create(
     @Body() dto: CreateUserDto,
     @CurrentUser() user: CurrentUserPayload,
@@ -52,6 +54,12 @@ export class UsersController {
   ) {
     const created = await this.usersService.create(dto, user, ip);
     return { data: created, message: { code: 'OK', text: 'User created successfully' } };
+  }
+
+  /** Employees marked "Login enabled" on their System Access tab who have no account yet. */
+  @Get('candidates')
+  async candidates(@CurrentUser() user: CurrentUserPayload) {
+    return { data: await this.usersService.loginCandidates(user), message: { code: 'OK', text: 'Employees retrieved successfully' } };
   }
 
   @Get(':id')
@@ -82,6 +90,7 @@ export class UsersController {
   }
 
   @Post(':id/reset-password')
+  @Header('Cache-Control', 'no-store')
   @HttpCode(HttpStatus.OK)
   async resetPassword(
     @Param('id', ParseIntPipe) id: number,
@@ -89,8 +98,8 @@ export class UsersController {
     @CurrentUser() user: CurrentUserPayload,
     @Ip() ip: string,
   ) {
-    await this.usersService.resetPassword(id, dto.newPassword, user, ip);
-    return { data: null, message: { code: 'OK', text: 'Password reset successfully' } };
+    const result = await this.usersService.resetPassword(id, dto.newPassword, user, ip);
+    return { data: result, message: { code: 'OK', text: 'Password reset successfully' } };
   }
 
   @Post(':id/unlock')
