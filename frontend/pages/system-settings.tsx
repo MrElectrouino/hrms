@@ -4,7 +4,7 @@ import { useAuth } from '../lib/auth';
 import BrandingPanel from '../components/settings/BrandingPanel';
 import AttendanceConfigPanel from '../components/settings/AttendanceConfigPanel';
 import LeaveConfigPanel from '../components/settings/LeaveConfigPanel';
-import { CountryItem, SystemConfigurationItem, createCountry, getCountries, getSystemConfigurations, updateCountry, updateSystemConfiguration } from '../lib/api';
+import { CountryItem, EmailStatus, SystemConfigurationItem, createCountry, getEmailStatus, sendTestEmail, getCountries, getSystemConfigurations, updateCountry, updateSystemConfiguration } from '../lib/api';
 import Select from '../components/Select';
 
 // Default Country now lives in the Countries tab; time and number format in the Branding tab.
@@ -145,6 +145,8 @@ export default function SystemSettingsPage() {
           <p className="mt-1">At least 8 characters, with upper, lower, digit and special characters. Multi-factor authentication is not yet implemented.</p>
         </div>
       )}
+
+      {tab === 'security' && !loading && <EmailTest />}
 
       {tab === 'branding' ? (
         <BrandingPanel />
@@ -307,5 +309,51 @@ function CountryList({ countries, defaultCountry, onChanged, onMessage, onError 
         </div>
       </section>
     </div>
+  );
+}
+
+/** Is email set up, and does it really arrive? Sends one test message and says where it went. */
+function EmailTest() {
+  const [status, setStatus] = useState<EmailStatus | null>(null);
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    getEmailStatus().then((r) => setStatus(r.data)).catch(() => {});
+  }, []);
+
+  const send = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setResult(null);
+    try {
+      const r = await sendTestEmail(to.trim());
+      setResult({ ok: true, text: r.data.redirected ? `Sent. Because this is a development copy, it was delivered to ${r.data.deliveredTo} (not ${r.data.requestedFor}). Check that inbox, and the junk folder.` : `Sent to ${r.data.deliveredTo}. Check that inbox, and the junk folder.` });
+    } catch (err: any) {
+      setResult({ ok: false, text: err.message || 'Could not send' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h3 className="text-base font-semibold text-gray-900">Email</h3>
+      {status && (
+        <p className="mt-1 text-sm text-gray-600">
+          {status.configured ? <>Mail server <b>{status.host}:{status.port}</b>, sent from <b>{status.from}</b>.</> : <span className="text-amber-700">No mail server is set up (SMTP_HOST is empty), so messages are only written to the server log.</span>}
+          {' '}Environment: <b>{status.environment}</b>.
+          {status.redirectedTo && <> All email is redirected to <b>{status.redirectedTo}</b>.</>}
+        </p>
+      )}
+      <form onSubmit={send} className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="text-xs font-medium text-gray-600">Send a test email to
+          <input type="email" required value={to} onChange={(e) => setTo(e.target.value)} placeholder="name@company.com" className={inputClass + ' w-72'} />
+        </label>
+        <button type="submit" disabled={busy || !to.trim()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{busy ? 'Sending…' : 'Send test email'}</button>
+      </form>
+      {result && <p className={`mt-3 rounded-lg px-3.5 py-2.5 text-sm ${result.ok ? 'border border-green-200 bg-green-50 text-green-800' : 'border border-red-200 bg-red-50 text-red-700'}`}>{result.text}</p>}
+    </section>
   );
 }

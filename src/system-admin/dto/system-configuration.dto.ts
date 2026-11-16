@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 
 const VALUE_KINDS = ['string', 'number', 'date', 'secret'] as const;
 
@@ -34,4 +34,11 @@ export class UpdateSystemConfigurationDto {
   @IsString()
   @MaxLength(300)
   description?: string;
+}
+
+/** POST /system-configurations/email/test — System Admin only. */
+export class TestEmailDto {
+  @IsEmail()
+  @MaxLength(120)
+  to!: string;
 }

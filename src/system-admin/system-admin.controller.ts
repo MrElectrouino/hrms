@@ -6,7 +6,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserType } from '../common/constants/user-types';
 import { SystemAdminService } from './system-admin.service';
-import { CreateSystemConfigurationDto, UpdateSystemConfigurationDto } from './dto/system-configuration.dto';
+import { CreateSystemConfigurationDto, UpdateSystemConfigurationDto, TestEmailDto } from './dto/system-configuration.dto';
 
 @ApiTags('System Admin')
 @ApiBearerAuth()
@@ -23,6 +23,18 @@ export class SystemAdminController {
   @Get()
   async list() {
     return this.ok(await this.service.listConfigurations(), 'System configurations retrieved');
+  }
+
+  /** Is email set up, and where would it go? */
+  @Get('email/status')
+  async emailStatus() {
+    return this.ok(this.service.emailStatus(), 'Email status retrieved');
+  }
+
+  /** Sends a test email. In development it goes to DEV_MAIL_REDIRECT_TO instead. */
+  @Post('email/test')
+  async emailTest(@Body() dto: TestEmailDto, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.service.sendTestEmail(dto.to, user, ip), 'Test email sent');
   }
 
   @Post()

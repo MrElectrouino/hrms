@@ -897,6 +897,22 @@ export async function getSystemConfigurations() {
   return request<SystemConfigurationItem[]>('/system-configurations');
 }
 
+export interface EmailStatus {
+  configured: boolean;
+  host: string;
+  port: number;
+  from: string;
+  environment: string;
+  /** Set in development: every email goes here instead of the real recipient. */
+  redirectedTo: string | null;
+}
+export async function getEmailStatus() {
+  return request<EmailStatus>('/system-configurations/email/status');
+}
+export async function sendTestEmail(to: string) {
+  return request<{ requestedFor: string; deliveredTo: string; redirected: boolean }>('/system-configurations/email/test', { method: 'POST', body: JSON.stringify({ to }) });
+}
+
 export async function createSystemConfiguration(payload: SystemConfigurationPayload) {
   return request<SystemConfigurationItem>('/system-configurations', { method: 'POST', body: JSON.stringify(payload) });
 }

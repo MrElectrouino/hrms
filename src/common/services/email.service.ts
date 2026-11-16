@@ -49,6 +49,19 @@ export class EmailService {
     }
   }
 
+  /** What a test needs to know: is mail set up, and where does it really go? */
+  status() {
+    const redirected = this.nodeEnv !== 'production' && this.devRedirectTo.trim() !== '';
+    return {
+      configured: !!this.transporter,
+      host: this.config.get<string>('app.email.smtpHost', ''),
+      port: this.config.get<number>('app.email.smtpPort', 587),
+      from: this.from,
+      environment: this.nodeEnv,
+      redirectedTo: redirected ? this.devRedirectTo.trim() : null,
+    };
+  }
+
   async send(original: EmailMessage): Promise<void> {
     const message = routeEmail(original, this.nodeEnv, this.devRedirectTo);
     if (!this.transporter) {
