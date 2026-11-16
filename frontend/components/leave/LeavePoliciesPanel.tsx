@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '../lib/auth';
-import { BranchOption, Employee, Parameter, getBranches, getEmployees, getParameters } from '../lib/api';
-import { LeaveType, getLeaveTypes } from '../lib/leave-api';
+import { useAuth } from '../../lib/auth';
+import { BranchOption, Employee, Parameter, getBranches, getEmployees, getParameters } from '../../lib/api';
+import { LeaveType, getLeaveTypes } from '../../lib/leave-api';
 import {
   CREDIT_LABEL, EntitlementPreview, LeavePolicy, LeavePolicyPayload, PRORATION_LABEL, PolicyRule, ROUNDING_LABEL,
   createLeavePolicy, deleteLeavePolicy, getLeavePolicies, previewEntitlement, updateLeavePolicy,
-} from '../lib/leave-policy-api';
-import Drawer, { fieldClass } from '../components/Drawer';
-import Select from '../components/Select';
+} from '../../lib/leave-policy-api';
+import Drawer, { fieldClass } from '../Drawer';
+import Select from '../Select';
 
 const blankRule = (leaveTypeId: number): PolicyRule => ({ leaveTypeId, annualDays: 0, creditMethod: 'MONTHLY', slabs: [], slabTiming: 'IMMEDIATE', proration: 'COMPLETED_MONTHS', cutoffDay: null, rounding: 'NONE', tieRule: 'UP', minDays: null, maxDays: null });
 const blankPolicy = (): LeavePolicyPayload => ({ name: '', layer: 'COMPANY', countryCode: null, branchId: null, employeeTypeId: null, employeeId: null, effectiveFrom: `${new Date().getFullYear()}-01-01`, effectiveTo: null, priority: 0, isActive: true, note: null, rules: [] });
@@ -16,7 +16,7 @@ const numOrNull = (v: string) => (v === '' ? null : Number(v));
 const Label = ({ text, children }: { text: string; children: React.ReactNode }) => <label className="block text-xs font-medium text-gray-600">{text}{children}</label>;
 
 /** HR and System Admin: who gets how much leave, from when, and how it is worked out. */
-export default function LeavePoliciesPage() {
+export default function LeavePoliciesPanel() {
   const { isAuthenticated } = useAuth();
   const [policies, setPolicies] = useState<LeavePolicy[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
@@ -91,7 +91,7 @@ export default function LeavePoliciesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Leave policies</h2>
+          <h3 className="text-lg font-semibold text-gray-900">Leave policies</h3>
           <p className="mt-1 max-w-2xl text-gray-500">A policy says how many days each leave type gives, to whom, from which date, and how joiners and length of service are handled. The most specific policy wins. Statutory and company policies are kept apart and the employee gets the higher.</p>
         </div>
         <button type="button" onClick={() => setEditing({ id: null, used: false, form: blankPolicy() })} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">New policy</button>

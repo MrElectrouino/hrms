@@ -83,7 +83,7 @@ const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
   { href: '/masters', label: 'Masters', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/users', label: 'Users', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/access-control', label: 'Menus & rights', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/leave-policies', label: 'Leave policies', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
+  { href: '/leave-setup', label: 'Leave setup', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/salary-templates', label: 'Salary templates', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
   { href: '/modules', label: 'Modules', roles: [UserType.SystemAdmin] },
 ];
@@ -232,7 +232,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const leaveChildren: NavChild[] = [
     { href: '/leave/my', label: 'My leave' },
     ...(userType === UserType.Manager || userType === UserType.HRAdmin || userType === UserType.SystemAdmin ? [{ href: '/leave/team', label: 'Team leave' }] : []),
-    ...(userType === UserType.HRAdmin || userType === UserType.SystemAdmin ? [{ href: '/leave/balances', label: 'Balances' }] : []),
   ];
 
   const entries: NavEntry[] = [
