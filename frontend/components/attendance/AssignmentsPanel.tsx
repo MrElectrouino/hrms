@@ -7,15 +7,18 @@ import {
   HolidayCalendar,
   ResolvedDay,
   RosterPattern,
+  WeeklyOffTemplate,
   WorkSchedule,
   assignHolidayCalendar,
   assignRosterPattern,
+  assignWeeklyOffTemplate,
   assignWorkSchedule,
   clearRosterEntry,
   getAssignments,
   getEmployeeCalendar,
   getHolidayCalendars,
   getRosterPatterns,
+  getWeeklyOffTemplates,
   getWorkSchedules,
   removeAssignment,
   setRosterEntry,
@@ -26,7 +29,7 @@ const monthStart = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '
 const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
 const LEVEL = { EMPLOYEE: 'Employee', BRANCH: 'Branch', COUNTRY: 'Country', COMPANY: 'Company' } as const;
 
-type Kind = 'work-schedule' | 'roster-pattern' | 'holiday-calendar';
+type Kind = 'work-schedule' | 'roster-pattern' | 'holiday-calendar' | 'weekly-off';
 
 function AssignmentCard({
   title,
@@ -108,7 +111,7 @@ function AssignmentCard({
   );
 }
 
-/** Per employee: work schedule, roster pattern and holiday calendar (all effective-dated), plus a month preview. */
+/** Per employee: work schedule, weekly off, roster pattern and holiday calendar (all effective-dated), plus a month preview. */
 export default function AssignmentsPanel() {
   const { isAuthenticated } = useAuth();
   const [search, setSearch] = useState('');
@@ -118,6 +121,7 @@ export default function AssignmentsPanel() {
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
   const [patterns, setPatterns] = useState<RosterPattern[]>([]);
   const [calendars, setCalendars] = useState<HolidayCalendar[]>([]);
+  const [weeklyOffs, setWeeklyOffs] = useState<WeeklyOffTemplate[]>([]);
   const [shifts, setShifts] = useState<ShiftItem[]>([]);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [days, setDays] = useState<ResolvedDay[]>([]);
@@ -130,6 +134,7 @@ export default function AssignmentsPanel() {
     getWorkSchedules().then((r) => setSchedules(r.data.filter((s) => s.isActive))).catch(() => {});
     getRosterPatterns().then((r) => setPatterns(r.data.filter((p) => p.isActive))).catch(() => {});
     getHolidayCalendars().then((r) => setCalendars(r.data.filter((c) => c.isActive))).catch(() => {});
+    getWeeklyOffTemplates().then((r) => setWeeklyOffs(r.data.filter((t) => t.isActive))).catch(() => {});
     getShifts().then((r) => setShifts(r.data.filter((s) => s.isActive))).catch(() => {});
   }, [isAuthenticated]);
 
@@ -179,7 +184,7 @@ export default function AssignmentsPanel() {
   const statusOf = (d: ResolvedDay) => {
     if (d.holiday) return { text: `Holiday: ${d.holiday.name}`, tone: 'bg-purple-50 text-purple-700 border-purple-200', note: `${LEVEL[d.holiday.calendarLevel]} calendar` };
     if (d.roster.source === 'NONE') return { text: 'No roster', tone: 'bg-gray-50 text-gray-500 border-gray-200', note: '' };
-    if (d.roster.isWeeklyOff) return { text: 'Weekly off', tone: 'bg-gray-100 text-gray-600 border-gray-200', note: d.roster.source === 'ENTRY' ? 'single day' : '' };
+    if (d.roster.isWeeklyOff) return { text: 'Weekly off', tone: 'bg-gray-100 text-gray-600 border-gray-200', note: d.roster.source === 'ENTRY' ? 'single day' : d.roster.source === 'TEMPLATE' ? 'weekly off template' : '' };
     return { text: d.roster.shift?.name ?? 'Working', tone: 'bg-green-50 text-green-700 border-green-200', note: d.roster.source === 'ENTRY' ? 'single day' : '' };
   };
 
@@ -193,7 +198,7 @@ export default function AssignmentsPanel() {
     <div className="space-y-5">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Assignments</h2>
-        <p className="mt-1 text-gray-500">Give an employee a work schedule, a roster pattern and, if needed, their own holiday calendar. Each has an effective date, so history is kept.</p>
+        <p className="mt-1 text-gray-500">Give an employee a work schedule, a weekly off, a roster pattern and, if needed, their own holiday calendar. Each has an effective date, so history is kept.</p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -217,7 +222,7 @@ export default function AssignmentsPanel() {
         <p className="text-sm text-gray-400">Loading…</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <AssignmentCard
               title="Work schedule"
               hint="Required hours and start model."
@@ -225,6 +230,14 @@ export default function AssignmentsPanel() {
               options={schedules.map((s) => ({ id: s.id, name: `${s.name} (${s.code})` }))}
               onAssign={(id, from) => run(() => assignWorkSchedule(employeeId, { workScheduleId: id, effectiveFrom: from }), 'Work schedule assigned')}
               onRemove={(id) => run(() => removeAssignment(employeeId, 'work-schedule' as Kind, id), 'Assignment removed')}
+            />
+            <AssignmentCard
+              title="Weekly off"
+              hint="Which weekdays are off (templates are made under Weekly off). A roster entry or pattern still wins for the days it covers."
+              rows={assignments.weeklyOffs ?? []}
+              options={weeklyOffs.map((t) => ({ id: t.id, name: t.name }))}
+              onAssign={(id, from) => run(() => assignWeeklyOffTemplate(employeeId, { templateId: id, effectiveFrom: from }), 'Weekly off assigned')}
+              onRemove={(id) => run(() => removeAssignment(employeeId, 'weekly-off' as Kind, id), 'Assignment removed')}
             />
             <AssignmentCard
               title="Roster pattern"
@@ -277,7 +290,7 @@ export default function AssignmentsPanel() {
                             <option value="">…</option>
                             {shifts.map((sh) => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
                             <option value="OFF">Weekly off</option>
-                            {d.roster.source === 'ENTRY' && <option value="PATTERN">Pattern</option>}
+                            {d.roster.source === 'ENTRY' && <option value="PATTERN">Pattern or weekly off</option>}
                           </select>
                         </td>
                       </tr>

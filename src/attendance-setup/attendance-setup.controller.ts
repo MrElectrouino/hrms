@@ -117,10 +117,10 @@ export class AttendanceSetupController {
     await this.setup.deleteWeeklyOffTemplate(id, u, ip);
     return this.ok(null, 'Weekly off template deleted');
   }
-  @Post('employees/:employeeId/weekly-off')
+  @Post('employees/:id/weekly-off')
   @UseGuards(EmployeeBranchGuard)
-  async assignWeeklyOff(@Param('employeeId', ParseIntPipe) employeeId: number, @Body() dto: AssignWeeklyOffDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
-    return this.ok(await this.setup.assignWeeklyOff(employeeId, dto, u, ip), 'Weekly off assigned');
+  async assignWeeklyOff(@Param('id', ParseIntPipe) id: number, @Body() dto: AssignWeeklyOffDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.assignWeeklyOff(id, dto, u, ip), 'Weekly off assigned');
   }
 
   @Post('holiday-calendars')

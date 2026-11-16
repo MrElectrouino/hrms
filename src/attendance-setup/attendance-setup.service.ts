@@ -305,16 +305,18 @@ export class AttendanceSetupService {
   /* ------------------------------------------------------------------ employee assignments (effective-dated) */
 
   async listAssignments(employeeId: number) {
-    const [schedules, patterns, calendars] = await Promise.all([
+    const [schedules, patterns, calendars, weeklyOffs] = await Promise.all([
       this.prisma.employeeWorkSchedule.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { workSchedule: { select: { id: true, name: true, code: true } } } }),
       this.prisma.employeeRosterPattern.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { pattern: { select: { id: true, name: true, cycleDays: true } } } }),
       this.prisma.employeeHolidayCalendar.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { calendar: { select: { id: true, name: true } } } }),
+      this.prisma.employeeWeeklyOff.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { template: { select: { id: true, name: true } } } }),
     ]);
     const f = (d: Date | null) => (d ? toIsoDate(d) : null);
     return {
       workSchedules: schedules.map((a) => ({ id: a.id, ref: a.workSchedule, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
       rosterPatterns: patterns.map((a) => ({ id: a.id, ref: a.pattern, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo), anchorDate: f(a.anchorDate) })),
       holidayCalendars: calendars.map((a) => ({ id: a.id, ref: a.calendar, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
+      weeklyOffs: weeklyOffs.map((a) => ({ id: a.id, ref: a.template, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
     };
   }
 
@@ -440,6 +442,25 @@ export class AttendanceSetupService {
     await this.log(user, 'WEEKLY_OFF_TEMPLATE_DELETED', 'WeeklyOffTemplate', id, ip, { name: t.name });
   }
 
+  /** The profile's Weekly off field shows the template that applies today (or nothing). */
+  private async syncWeeklyOffProfile(employeeId: number) {
+    const today = mustDate(toIsoDate(new Date()), 'Today');
+    const current = await this.prisma.employeeWeeklyOff.findFirst({
+      where: { employeeId, effectiveFrom: { lte: today }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }] },
+      orderBy: { effectiveFrom: 'desc' },
+      include: { template: { select: { name: true } } },
+    });
+    const row = await this.prisma.employeeProfileSection.findUnique({ where: { employeeId_sectionKey: { employeeId, sectionKey: 'attendance' } } });
+    const data = { ...((row?.data as Record<string, unknown> | null) ?? {}) };
+    if (current) data.weeklyOff = current.template.name;
+    else delete data.weeklyOff;
+    await this.prisma.employeeProfileSection.upsert({
+      where: { employeeId_sectionKey: { employeeId, sectionKey: 'attendance' } },
+      create: { employeeId, sectionKey: 'attendance', data: data as Prisma.InputJsonValue },
+      update: { data: data as Prisma.InputJsonValue },
+    });
+  }
+
   /** Gives one employee a weekly off template from a date (default today), or removes it with templateId null. */
   async assignWeeklyOff(employeeId: number, dto: AssignWeeklyOffDto, user: CurrentUserPayload, ip?: string) {
     await this.assertEmployee(employeeId);
@@ -450,19 +471,22 @@ export class AttendanceSetupService {
       if (!t || !t.isActive) throw new BadRequestException('Choose an active weekly off template');
     }
     const changed = await this.prisma.$transaction((tx) => assignWeeklyOff(tx, employeeId, templateId, from));
+    await this.syncWeeklyOffProfile(employeeId);
     await this.log(user, 'WEEKLY_OFF_ASSIGNED', 'Employee', employeeId, ip, { templateId, from: toIsoDate(from) });
     return { changed };
   }
 
-  /** Removes an assignment of the given kind (work-schedule | roster-pattern | holiday-calendar). */
+  /** Removes an assignment of the given kind (work-schedule | roster-pattern | holiday-calendar | weekly-off). */
   async removeAssignment(employeeId: number, kind: string, assignmentId: number, user: CurrentUserPayload, ip?: string) {
     const where = { id: assignmentId, employeeId };
     let count = 0;
     if (kind === 'work-schedule') count = (await this.prisma.employeeWorkSchedule.deleteMany({ where })).count;
     else if (kind === 'roster-pattern') count = (await this.prisma.employeeRosterPattern.deleteMany({ where })).count;
     else if (kind === 'holiday-calendar') count = (await this.prisma.employeeHolidayCalendar.deleteMany({ where })).count;
+    else if (kind === 'weekly-off') count = (await this.prisma.employeeWeeklyOff.deleteMany({ where })).count;
     else throw new BadRequestException('Unknown assignment type');
     if (!count) throw new NotFoundException('Assignment not found');
+    if (kind === 'weekly-off') await this.syncWeeklyOffProfile(employeeId);
     await this.log(user, 'ASSIGNMENT_REMOVED', 'Employee', employeeId, ip, { kind, assignmentId });
   }
 }

@@ -85,6 +85,7 @@ export interface Assignments {
   workSchedules: AssignmentRow[];
   rosterPatterns: AssignmentRow[];
   holidayCalendars: AssignmentRow[];
+  weeklyOffs: AssignmentRow[];
 }
 
 export interface ResolvedDay {
@@ -121,8 +122,9 @@ export const updateRosterPattern = (id: number, p: { name: string; cycleDays: nu
 export const getAssignments = (employeeId: number) => request<Assignments>(`/attendance/employees/${employeeId}/assignments`);
 export const assignWorkSchedule = (employeeId: number, p: { workScheduleId: number; effectiveFrom: string }) => request<unknown>(`/attendance/employees/${employeeId}/work-schedule`, { method: 'POST', body: json(p) });
 export const assignRosterPattern = (employeeId: number, p: { patternId: number; effectiveFrom: string; anchorDate?: string }) => request<unknown>(`/attendance/employees/${employeeId}/roster-pattern`, { method: 'POST', body: json(p) });
+export const assignWeeklyOffTemplate = (employeeId: number, p: { templateId: number | null; effectiveFrom: string }) => request<unknown>(`/attendance/employees/${employeeId}/weekly-off`, { method: 'POST', body: json(p) });
 export const assignHolidayCalendar = (employeeId: number, p: { calendarId: number; effectiveFrom: string }) => request<unknown>(`/attendance/employees/${employeeId}/holiday-calendar`, { method: 'POST', body: json(p) });
-export const removeAssignment = (employeeId: number, kind: 'work-schedule' | 'roster-pattern' | 'holiday-calendar', id: number) =>
+export const removeAssignment = (employeeId: number, kind: 'work-schedule' | 'roster-pattern' | 'holiday-calendar' | 'weekly-off', id: number) =>
   request<null>(`/attendance/employees/${employeeId}/assignments/${kind}/${id}`, { method: 'DELETE' });
 export const getEmployeeCalendar = (employeeId: number, from: string, to: string) =>
   request<{ employeeId: number; country: string; holidayOrder: HolidayLevel[]; days: ResolvedDay[] }>(`/attendance/employees/${employeeId}/calendar?from=${from}&to=${to}`);
