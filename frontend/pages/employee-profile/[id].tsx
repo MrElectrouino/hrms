@@ -596,7 +596,7 @@ export default function EmployeeProfilePage() {
   const initials = isNew && !typedName ? '+' : displayName.split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase();
   const managerField = sections.flatMap((s) => s.groups.flatMap((g) => g.fields ?? [])).find((f) => f.key === 'reportingManager');
   const managerLabel =
-    managerField?.optionItems?.find((o) => o.value === String(orgv.reportingManager ?? ''))?.label ?? (orgv.reportingManager || '');
+    managerField?.optionItems?.find((o) => o.value === String(values.employment?.reportingManager ?? ''))?.label ?? (values.employment?.reportingManager || '');
   const branchField = sections.flatMap((s) => s.groups.flatMap((g) => g.fields ?? [])).find((f) => f.key === 'branch');
   const branchLabel = branchField?.optionItems?.find((o) => o.value === String(orgv.branch ?? ''))?.label ?? '';
   const groupsByName = sections.reduce<Record<string, ProfileSectionDef[]>>((acc, s) => {

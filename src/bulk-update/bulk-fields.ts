@@ -28,7 +28,7 @@ export const BULK_FIELDS: BulkFieldDef[] = [
   { key: 'department', label: 'Department', section: 'organization', type: 'select', source: { parameter: 'Department' }, required: true },
   { key: 'designation', label: 'Designation', section: 'organization', type: 'text', required: true, column: 'designation' },
   { key: 'grade', label: 'Grade', section: 'organization', type: 'select', source: { parameter: 'Grade' } },
-  { key: 'reportingManager', label: 'Reporting manager', section: 'organization', type: 'select', source: 'employees', column: 'reportingToId' },
+  { key: 'reportingManager', label: 'Reporting manager', section: 'employment', type: 'select', source: 'employees', column: 'reportingToId' },
   { key: 'workLocation', label: 'Work location', section: 'organization', type: 'text' },
   { key: 'costCentre', label: 'Cost centre', section: 'organization', type: 'text' },
   { key: 'employeeCategory', label: 'Employee category', section: 'employment', type: 'select', source: { parameter: 'Employee Category' } },

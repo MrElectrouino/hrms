@@ -316,9 +316,9 @@ export class EmployeeProfileService {
       await this.prisma.employee.update({ where: { id: employeeId }, data: { branchId: raw ? Number(raw) : null } });
     }
 
-    // Keep the reporting manager column in step with the Organization section: manager and team screens,
+    // Keep the reporting manager column in step with the Employment section: manager and team screens,
     // leave approval and the dashboard all read employees.reportingToId.
-    if (sectionKey === 'organization' && 'reportingManager' in result.values) {
+    if (sectionKey === 'employment' && 'reportingManager' in result.values) {
       const raw = result.values.reportingManager;
       const managerId = raw ? Number(raw) : null;
       await this.prisma.employee.update({ where: { id: employeeId }, data: { reportingToId: managerId && managerId !== employeeId ? managerId : null } });

@@ -283,7 +283,7 @@ function rawSections(country: CountryCode): SectionDef[] {
     },
     {
       key: 'employment', title: 'Employment', group: 'Employment', hrOnly: false,
-      description: 'Status, joining, probation and contract.',
+      description: 'Status, joining, probation, contract and reporting manager.',
       groups: [
         { title: 'Employment details', fields: [
           F('employeeCategory', 'Employee category', 'select', { optionsParameter: 'Employee Category' }),
@@ -298,11 +298,14 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('lastWorkingDate', 'Last working date', 'date', { showWhen: { key: 'employmentStatus', equals: 'On Notice' } }),
           F('noticeReason', 'Reason', 'select', { optionsSource: 'noticeReasons', showWhen: { key: 'employmentStatus', equals: 'On Notice' } }),
         ] },
+        { title: 'Reporting', fields: [
+          F('reportingManager', 'Reporting manager', 'select', { optionsSource: 'employees' }),
+        ] },
       ],
     },
     {
       key: 'organization', title: 'Organization', group: 'Employment', hrOnly: false,
-      description: 'Country of employment, branch, department, designation, grade and reporting manager.',
+      description: 'Country of employment, branch, department, designation and grade.',
       groups: [
         { title: 'Assignment', fields: [
           F('legalEntityCountry', 'Country of employment', 'select', { options: ORG_COUNTRY_OPTIONS, required: true, hint: 'Drives address, bank, statutory and document fields' }),
@@ -313,9 +316,6 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('designation', 'Designation', 'text', { required: true }),
           F('grade', 'Grade', 'select', { optionsParameter: 'Grade' }),
           F('costCentre', 'Cost centre'),
-        ] },
-        { title: 'Reporting structure', fields: [
-          F('reportingManager', 'Reporting manager', 'select', { optionsSource: 'employees' }),
         ] },
       ],
     },
