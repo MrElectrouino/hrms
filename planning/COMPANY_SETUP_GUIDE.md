@@ -175,6 +175,8 @@ Not built yet: probation lock, carry-forward, lapse and encashment at year end, 
 
 Employees → Add employee (the full profile form). Choose the **employee type** (this makes the employee code), the **branch**, the **country of employment** (this chooses the profile layout), reporting manager, shift, dates, and the rest. Then create the employee's **user account** (B5) so they can log in. An Excel import for employees is not built yet.
 
+To change the same thing for many employees later (move a group to another branch or department, give them a new shift or manager), use **Administration → Bulk update**: choose branches and employees, tick the fields, review and update. Personal details, pay and dates are not offered there.
+
 ---
 
 ## Part C. Check it before going live

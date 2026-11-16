@@ -74,6 +74,11 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
 - **Leave policies** (Administration, Leave policies): scope by country, branch, employee type or one employee; effective dates; statutory and company layers (employee gets the higher); per leave type: days per year, upfront or monthly credit, proration (none, completed months, started months, cut-off day, exact days), rounding (7 modes plus tie rule), min/max, service slabs with immediate or next-year timing. Used policies are locked (end them and start a new one). Accrual uses a covering policy, else the leave type's own setting.
 - Pure rules with tests: `src/leave/leave-rules.ts`, `entitlement-rules.ts`.
 
+### Bulk update (Administration, Bulk update)
+- Pick branches (multi-select) and employees, tick the fields to change, review, apply. Same value for every chosen employee, audited (`EMPLOYEE_BULK_UPDATE`), each employee saved on its own, skips are reported.
+- Only group-friendly fields: branch, department, designation, grade, reporting manager, work location, cost centre, employee category, employment type, shift, attendance applicable/processing, roster group, weekly off, OT configuration. Definitions: `src/bulk-update/bulk-fields.ts` (add a field there to offer it).
+- Also fixed: saving the Organization section now keeps `employees.reportingToId` in step with the Reporting manager field (manager and team screens, leave approval and the dashboard read that column).
+
 ### Dashboard and notifications
 - Home page keeps the original design. Live data by role: employee (own day, balances, next leave), manager (team today, approvals waiting), HR/System Admin (everyone in the selected branches, documents expiring). Employee Overview chart = real headcount for six months; Department Distribution real.
 - Notification bell + Recent Activities: leave and correction decisions, approvals waiting, expiring leave balance, expiring documents, licence expiry (System Admin).
