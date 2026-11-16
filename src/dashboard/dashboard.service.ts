@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { HR_USER_TYPES } from '../common/guards/hr-write.guard';
 import { UserType } from '../common/constants/user-types';
+import { AttendanceService } from '../attendance/attendance.service';
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (s: string, n: number) => iso(new Date(new Date(`${s}T00:00:00Z`).getTime() + n * 86_400_000));
@@ -22,7 +23,10 @@ export interface NotificationItem {
 /** Numbers and notices for the home page. Everything is worked out from existing records. */
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly attendance: AttendanceService,
+  ) {}
 
   private isHr(u: CurrentUserPayload) {
     return HR_USER_TYPES.includes(u.userTypeId);
@@ -115,8 +119,23 @@ export class DashboardService {
     for (const a of att) if (a.statusCode === 'ON_LEAVE') onLeave.add(a.employeeId);
     const present = att.filter((a) => a.isPresent && !onLeave.has(a.employeeId));
     const accounted = new Set([...present.map((a) => a.employeeId), ...onLeave]);
+    // People whose weekly off or holiday it is today and who did not come in: they are not expected, so they stay out of the rate.
+    // Worked out per person, so it is skipped for a very large scope.
+    let offToday = 0;
+    if (ids.length <= 500) {
+      for (const id of ids) {
+        if (accounted.has(id)) continue;
+        try {
+          const { day } = await this.attendance.dayInfo(id, todayStr, null);
+          if (day.holiday || day.roster.isWeeklyOff) offToday += 1;
+        } catch {
+          /* no roster information: treat as expected */
+        }
+      }
+    }
     return {
       total: ids.length,
+      offToday,
       present: present.length,
       late: present.filter((a) => a.lateMinutes > 0).length,
       onLeave: onLeave.size,
