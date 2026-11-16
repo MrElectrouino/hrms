@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth';
 import { BranchOption, getBranches } from '../lib/api';
 import { BulkEmployee, BulkField, BulkResult, applyBulkUpdate, getBulkEmployees, getBulkFields } from '../lib/bulk-api';
 import { fieldClass } from '../components/Drawer';
+import MultiSelect from '../components/MultiSelect';
 
 type Draft = { on: boolean; value: string; clear: boolean };
 
@@ -11,7 +12,6 @@ export default function BulkUpdatePage() {
   const { isAuthenticated } = useAuth();
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [branchIds, setBranchIds] = useState<number[]>([]);
-  const [search, setSearch] = useState('');
   const [employees, setEmployees] = useState<BulkEmployee[]>([]);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
   const [fields, setFields] = useState<BulkField[]>([]);
@@ -28,12 +28,12 @@ export default function BulkUpdatePage() {
     getBulkFields().then((r) => setFields(r.data)).catch((e: any) => setError(e.message || 'Could not load the fields'));
   }, [isAuthenticated]);
 
-  // The employee list follows the branches and search (a short pause while typing).
+  // The employee list follows the chosen branches.
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
     const t = setTimeout(() => {
-      getBulkEmployees(branchIds, search.trim())
+      getBulkEmployees(branchIds, '')
         .then((r) => {
           setEmployees(r.data);
           // keep only the ticked people who are still in the list
@@ -43,12 +43,11 @@ export default function BulkUpdatePage() {
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(t);
-  }, [isAuthenticated, branchIds, search]);
+  }, [isAuthenticated, branchIds]);
 
-  const toggleBranch = (id: number) => setBranchIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-  const allShownChosen = employees.length > 0 && employees.every((e) => chosen.has(e.id));
-  const toggleAll = () => setChosen(allShownChosen ? new Set() : new Set(employees.map((e) => e.id)));
-  const toggleOne = (id: number) => setChosen((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const branchOptions = branches.map((b) => ({ value: String(b.id), label: b.name }));
+  const employeeOptions = employees.map((e) => ({ value: String(e.id), label: `${e.name} (${e.code})`, hint: e.branchName ?? undefined }));
+  const chosenEmployees = employees.filter((e) => chosen.has(e.id));
 
   const draft = (key: string): Draft => drafts[key] ?? { on: false, value: '', clear: false };
   const setDraft = (key: string, patch: Partial<Draft>) => setDrafts((d) => ({ ...d, [key]: { ...draft(key), ...patch } }));
@@ -79,7 +78,7 @@ export default function BulkUpdatePage() {
       setConfirming(false);
       setChosen(new Set());
       setDrafts({});
-      const list = await getBulkEmployees(branchIds, search.trim());
+      const list = await getBulkEmployees(branchIds, '');
       setEmployees(list.data);
     } catch (e: any) {
       setConfirming(false);
@@ -105,50 +104,40 @@ export default function BulkUpdatePage() {
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
         <h3 className="text-base font-semibold text-gray-900">1. Choose employees</h3>
-        <div className="mt-3 flex flex-wrap items-start gap-6">
-          <div>
-            <p className="text-xs font-medium text-gray-600">Branches <span className="font-normal text-gray-400">(none ticked = all)</span></p>
-            <div className="mt-1.5 flex max-w-xl flex-wrap gap-2">
-              {branches.map((b) => (
-                <label key={b.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${branchIds.includes(b.id) ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}>
-                  <input type="checkbox" className="h-4 w-4 rounded border-gray-300 text-blue-600" checked={branchIds.includes(b.id)} onChange={() => toggleBranch(b.id)} />
-                  {b.name}
-                </label>
-              ))}
-              {branches.length === 0 && <span className="text-sm text-gray-500">No branches yet.</span>}
-            </div>
-          </div>
-          <label className="text-xs font-medium text-gray-600">Find
-            <input type="search" placeholder="Name or code…" value={search} onChange={(e) => setSearch(e.target.value)} className="mt-1.5 block w-56 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-          </label>
+        <div className="mt-3 grid gap-4 md:grid-cols-2">
+          <MultiSelect
+            label="Branches"
+            options={branchOptions}
+            selected={branchIds.map(String)}
+            onChange={(v) => setBranchIds(v.map(Number))}
+            allText="All branches"
+            noun="branches"
+          />
+          <MultiSelect
+            label="Employees"
+            options={employeeOptions}
+            selected={[...chosen].map(String)}
+            onChange={(v) => setChosen(new Set(v.map(Number)))}
+            placeholder={loading ? 'Loading…' : employees.length === 0 ? 'No employees in these branches' : 'Select employees…'}
+            allText=""
+            noun="employees"
+            disabled={employees.length === 0}
+          />
         </div>
-
-        <div className="mt-4 overflow-hidden rounded-lg border border-gray-200">
-          <div className="max-h-80 overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="sticky top-0 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                <tr>
-                  <th className="w-10 px-4 py-2.5"><input type="checkbox" aria-label="Choose everyone shown" className="h-4 w-4 rounded border-gray-300 text-blue-600" checked={allShownChosen} onChange={toggleAll} /></th>
-                  <th className="px-4 py-2.5">Employee</th><th className="px-4 py-2.5">Branch</th><th className="px-4 py-2.5">Department</th><th className="px-4 py-2.5">Designation</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loading && employees.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-500">Loading…</td></tr>}
-                {!loading && employees.length === 0 && <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-500">No employees match.</td></tr>}
-                {employees.map((e) => (
-                  <tr key={e.id} className={chosen.has(e.id) ? 'bg-blue-50/60' : ''}>
-                    <td className="px-4 py-2"><input type="checkbox" aria-label={`Choose ${e.name}`} className="h-4 w-4 rounded border-gray-300 text-blue-600" checked={chosen.has(e.id)} onChange={() => toggleOne(e.id)} /></td>
-                    <td className="px-4 py-2 text-gray-900">{e.name} <span className="text-xs text-gray-400">{e.code}</span></td>
-                    <td className="px-4 py-2 text-gray-700">{e.branchName ?? '—'}</td>
-                    <td className="px-4 py-2 text-gray-700">{e.department ?? '—'}</td>
-                    <td className="px-4 py-2 text-gray-700">{e.designation ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <p className="mt-2 text-xs text-gray-500">Leave Branches empty to pick from everyone. In Employees, search by name or code, then tick people, or use "Tick all shown" after searching.{employees.length >= 1000 ? ' The list is limited to the first 1,000: narrow it by branch.' : ''}</p>
+        {chosenEmployees.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {chosenEmployees.slice(0, 12).map((e) => (
+              <span key={e.id} className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-800">
+                {e.name}
+                <button type="button" aria-label={`Remove ${e.name}`} onClick={() => setChosen((p) => { const n = new Set(p); n.delete(e.id); return n; })} className="text-blue-500 hover:text-blue-800">×</button>
+              </span>
+            ))}
+            {chosenEmployees.length > 12 && <span className="text-xs text-gray-500">+{chosenEmployees.length - 12} more</span>}
+            <button type="button" onClick={() => setChosen(new Set())} className="text-xs font-medium text-gray-500 hover:text-gray-800">Clear all</button>
           </div>
-        </div>
-        <p className="mt-2 text-sm text-gray-600"><b>{chosen.size}</b> chosen of {employees.length} shown{employees.length >= 1000 ? ' (the list is limited to the first 1,000: narrow it by branch or search)' : ''}.</p>
+        )}
+        <p className="mt-3 text-sm text-gray-600"><b>{chosen.size}</b> employee{chosen.size === 1 ? '' : 's'} chosen.</p>
       </section>
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
