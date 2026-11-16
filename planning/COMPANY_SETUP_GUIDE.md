@@ -2,7 +2,7 @@
 
 A step by step guide to install the HRMS on a computer and configure it for one company. Written from what the application does today (2026-11-15). Where something is not built yet, it says so.
 
-Who does what: **System Admin** can open every screen below. **HR Admin** can open Administration, Attendance setup, Branches, Masters, Users, Menus & rights and Leave policies, but not System settings.
+Who does what: **System Admin** can open every screen below. **HR Admin** can open Administration, Attendance setup, Branches, Masters, Users, Menus & rights and Leave setup, but not System settings.
 
 ---
 
@@ -164,12 +164,15 @@ Then **System settings → Attendance configuration**:
 
 Timezone rule: the branch's own timezone, then the branch's country, then the employee's country, then the Default Country, then UTC.
 
-### B7. Leave (System settings, Leave configuration, and Administration, Leave policies)
+### B7. Leave (System settings, Leave configuration, and Administration, Leave setup)
 
 1. **Leave configuration → leave types.** The starters were deleted. Add your types (Annual, Sick, Casual, Unpaid and so on): paid or not, tracks a balance or not, half-day allowed, negative balance allowed, document needed (and after how many days), maximum days per request, takes part in the sandwich rule, is comp-off. A type that has been used cannot be deleted, only switched off.
 2. **Leave configuration → settings.** Leave year start month, the sandwich rule (weekly offs and holidays, both sides or either side), and comp-off (credit days, expiry days, minimum minutes worked).
-3. **Leave policies** (Administration). Create a policy per group of people: who it applies to (country, branch, employee type or one employee), start and end dates, statutory or company, and for each leave type the days per year, whether credited upfront or monthly, how joiners part-way through the year are prorated, rounding, minimum and maximum, and optional length-of-service slabs. The "Check an employee" box shows which policy applies and how the days were worked out, without saving anything. A policy that has produced entitlements is locked: end it and start a new one to change a rule.
-4. **Credits are created by the nightly accrual job** (02:30) or manually from Leave configuration (Run accrual). Running it twice does not double-credit.
+3. **Leave setup → Policies** (Administration). Create a policy per group of people: who it applies to (country, branch, employee type or one employee), start and end dates, statutory or company, and for each leave type the days per year, whether credited upfront or monthly, how joiners part-way through the year are prorated, rounding, minimum and maximum, and optional length-of-service slabs. The "Check an employee" box shows which policy applies and how the days were worked out, without saving anything. A policy that has produced entitlements is locked: end it and start a new one to change a rule.
+4. **Credits are created by the nightly accrual job** (02:30) or manually with **Credit leave now** in Leave configuration. Running it twice does not double-credit. A leave type with no policy and no accrual of its own credits nothing, which is the usual reason an employee cannot apply.
+5. **Leave setup → Balances** (Administration). Choose one employee to see their balances and history, or several to add or take away the same days from all of them, with a reason. Use it for opening balances when going live part-way through the year. Do not also let a policy credit the same year-to-date days.
+
+Full step-by-step guides with examples: `planning/Leave_Setup_Guide.html` (leave) and `planning/Attendance_Setup_Guide.html` (attendance policy and rules).
 
 Not built yet: probation lock, carry-forward, lapse and encashment at year end, exit settlement, leave across two leave years. These wait for the business answers in `planning/leave_entitlement_requirements.md`, section 13.
 
@@ -189,7 +192,7 @@ Log in as each kind of user and test:
 |---|---|
 | Employee | Dashboard shows own day and leave. Mark attendance (IN, then OUT). Apply for leave and see the day count. |
 | Manager | Team attendance. Approve a correction request. Approve or reject team leave. |
-| HR Admin | Branch switcher limits what is shown. Add an adjustment in Leave, Balances. Reports. |
+| HR Admin | Branch switcher limits what is shown. Add an adjustment in Leave setup, Balances. Reports. |
 | System Admin | System settings sections save. Notification bell shows licence expiry when due. |
 
 Also check: a holiday shows as a holiday on the attendance and leave calendars, a late mark follows the policy, the nightly job run (Attendance configuration, Processing) marks absent days.
@@ -236,7 +239,7 @@ Never edit a migration that has already been applied. Add a new one.
 | Login page on every page | You are signed out. Sign in again |
 | "Your account is not linked to an active employee record" on Mark attendance | The `admin` account is not an employee. Use an employee login, or link the account to an employee |
 | "No attendance policy applies to this employee" | Create a policy and assign it to the employee's country, branch or the employee (B6) |
-| Leave policy preview says no policy covers the employee | Check scope and dates; employee type and country come from the employee's profile (Organization tab) |
+| Leave setup → Policies, "Check an employee" says no policy covers the employee | Check scope and dates; employee type and country come from the employee's profile (Organization tab) |
 | Password reset email does not arrive | Check the server log for "no active account with site access has this email". The email must be on the account (Users, Edit), the employee profile (work, personal or official email) and the person needs site access. In development all mail goes to `DEV_MAIL_REDIRECT_TO` |
 | Default Country dropdown is empty | Add the country first (B1, Countries) |
 | Branch country dropdown is empty | Same: add countries first |

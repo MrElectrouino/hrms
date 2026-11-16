@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance policy and rules</title>
+<style>
+  :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --soft:#f3f4f6; --brand:#2563eb; --brand-soft:#eff6ff; --ok:#15803d; --ok-soft:#f0fdf4; --warn:#b45309; --warn-soft:#fffbeb; --bad:#b91c1c; --bad-soft:#fef2f2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:#f9fafb; }
+  .wrap { max-width:980px; margin:0 auto; padding:32px 20px 80px; }
+  h1 { font-size:2rem; line-height:1.2; margin:16px 0 8px; }
+  .lead { color:var(--muted); font-size:1.05rem; margin:0; }
+  nav.toc { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin:24px 0; }
+  nav.toc strong { display:block; margin-bottom:6px; }
+  nav.toc ol { margin:0; padding-left:20px; columns:2; column-gap:32px; }
+  nav.toc li { margin:3px 0; }
+  a { color:var(--brand); text-decoration:none; } a:hover { text-decoration:underline; }
+  section { background:#fff; border:1px solid var(--line); border-radius:12px; padding:24px; margin:20px 0; }
+  h2 { font-size:1.4rem; margin:0 0 4px; }
+  h3 { font-size:1.05rem; margin:22px 0 6px; }
+  p { margin:8px 0; }
+  .note { border-radius:10px; padding:12px 14px; margin:14px 0; font-size:.95rem; }
+  .info { background:var(--brand-soft); border:1px solid #bfdbfe; }
+  .warn { background:var(--warn-soft); border:1px solid #fde68a; }
+  .bad  { background:var(--bad-soft); border:1px solid #fecaca; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.93rem; }
+  th, td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:var(--soft); font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; color:#374151; }
+  code { background:var(--soft); padding:1px 6px; border-radius:5px; font-size:.88em; }
+  .steps { counter-reset:s; list-style:none; padding:0; margin:12px 0; }
+  .steps > li { counter-increment:s; position:relative; padding:10px 12px 10px 52px; margin:8px 0; border:1px solid var(--line); border-radius:10px; }
+  .steps > li::before { content:counter(s); position:absolute; left:12px; top:10px; width:28px; height:28px; border-radius:50%; background:var(--brand); color:#fff; font-weight:600; display:flex; align-items:center; justify-content:center; font-size:.9rem; }
+  .steps b.where { display:block; font-weight:600; }
+  .flow { display:grid; gap:10px; margin:14px 0; }
+  .flow div { border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:var(--soft); }
+  .flow div b { display:block; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:baseline; }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .card h3 { margin-top:0; }
+  footer { color:var(--muted); font-size:.85rem; margin-top:30px; text-align:center; }
+  @media (max-width:640px) { nav.toc ol { columns:1; } h1 { font-size:1.6rem; } section { padding:18px; } }
+  @media print { body { background:#fff; } section, nav.toc { break-inside:avoid; } .wrap { padding:0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Attendance policy and rules</h1>
+<p class="lead">How a day becomes Present, Late, Absent and so on, which settings change the result, and what to configure on a new database. Plain words, for HR and System Admin.</p>
+
+<nav class="toc" aria-label="Contents">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#big">The big picture</a></li>
+    <li><a href="#setup">What to set up, in order</a></li>
+    <li><a href="#status">The status list</a></li>
+    <li><a href="#marking">When an employee marks attendance</a></li>
+    <li><a href="#late">Late and half day</a></li>
+    <li><a href="#policy">The attendance policy</a></li>
+    <li><a href="#assign">Which policy applies to whom</a></li>
+    <li><a href="#settings">Settings for everyone</a></li>
+    <li><a href="#schedule">Work schedules, breaks, hours</a></li>
+    <li><a href="#offs">Weekly off, holidays, roster</a></li>
+    <li><a href="#nightly">The nightly job</a></li>
+    <li><a href="#fix">Corrections and approval</a></li>
+    <li><a href="#trouble">When something looks wrong</a></li>
+    <li><a href="#notyet">Not built yet</a></li>
+  </ol>
+</nav>
+
+<section id="big">
+  <h2>1. The big picture</h2>
+  <p>Three things decide what an employee's day looks like:</p>
+  <table>
+    <tr><th>Question</th><th>Answered by</th><th>Where you set it</th></tr>
+    <tr><td>Was the person expected to work today?</td><td>Holiday calendar, then roster entry, then roster pattern, then weekly off template</td><td>Administration → <b>Attendance setup</b></td></tr>
+    <tr><td>How many hours, and from when?</td><td>The employee's <b>work schedule</b> (or the shift)</td><td>Attendance setup → Work schedules and Assignments</td></tr>
+    <tr><td>What happens when they are late, short, or mark late?</td><td>The <b>attendance policy</b></td><td>System settings → <b>Attendance configuration</b></td></tr>
+  </table>
+  <p>Then two things write the day: the employee (or a manager or HR) when they mark, and a <b>nightly job</b> that fills the days nobody marked and works out hours.</p>
+  <div class="note info">The policy only changes <i>values</i> (on or off, minutes, cut-off time). The rules themselves are the same for every country. A country difference is a different policy assigned to that country, not different code.</div>
+</section>
+
+<section id="setup">
+  <h2>2. What to set up, in order</h2>
+  <ol class="steps">
+    <li><b class="where">Countries, branches, employees</b>Each employee needs a branch and country of employment, and a date of joining. Policies and holiday calendars find people through these.</li>
+    <li><b class="where">Work schedules</b>Attendance setup → <b>Work schedules</b>. Create at least one, for example "General 9 hours": fixed start and end, required minutes, optional automatic break.</li>
+    <li><b class="where">Weekly off</b>Attendance setup → <b>Weekly off</b>. Create a template (for example Saturday and Sunday, or alternate Saturdays).</li>
+    <li><b class="where">Holiday calendars</b>Attendance setup → <b>Holiday calendars</b>. One per company, country or branch, with the holiday dates.</li>
+    <li><b class="where">Roster (only if you use shifts)</b>Attendance setup → <b>Roster</b>: repeating shift patterns, or import from Excel.</li>
+    <li><b class="where">Assignments</b>Attendance setup → <b>Assignments</b>: give employees (many at once) their work schedule, weekly off, roster and holiday calendar, with an effective date.</li>
+    <li><b class="where">Shifts</b>Late and half-day thresholds live on the <b>Shift</b> (start time, "late after" minutes, "half day after" minutes). Make sure each employee who clocks in against a start time has a shift.</li>
+    <li><b class="where">Attendance policy</b>System settings → <b>Attendance configuration</b> → edit the default policy, or add one per country or branch (section 6), then assign it (section 7).</li>
+    <li><b class="where">Everyone-settings</b>Same page: mood, GPS and address requirements (section 8). Add Ramadan periods if you use a different start time then.</li>
+    <li><b class="where">Test</b>Mark attendance as an employee on <b>Mark attendance</b>. Next morning check the nightly job filled the previous day (section 11).</li>
+  </ol>
+  <div class="note warn"><b>Without a weekly off template or roster the system cannot tell a working day from a day off</b>, so the nightly job leaves unmarked days empty instead of guessing Absent. Set this up before relying on Absent.</div>
+</section>
+
+<section id="status">
+  <h2>3. The status list</h2>
+  <p>One list for every country (System settings, Attendance status). Each status has a category.</p>
+  <table>
+    <tr><th>Status</th><th>Category</th><th>Meaning</th></tr>
+    <tr><td><span class="dot" style="background:#16a34a"></span>Present</td><td>Work</td><td>Marked and approved (or approval is not required).</td></tr>
+    <tr><td><span class="dot" style="background:#d97706"></span>Late</td><td>Work</td><td>Pressed IN after the late limit.</td></tr>
+    <tr><td><span class="dot" style="background:#ea580c"></span>Half day</td><td>Work</td><td>Pressed IN after the half-day limit.</td></tr>
+    <tr><td><span class="dot" style="background:#ca8a04"></span>Short hours</td><td>Work</td><td>Worked less than required, beyond the grace minutes. Set by the nightly job.</td></tr>
+    <tr><td><span class="dot" style="background:#6366f1"></span>Not approved</td><td>Work</td><td>Self-marked and waiting for a manager or HR to approve. Managers can edit only this status.</td></tr>
+    <tr><td><span class="dot" style="background:#dc2626"></span>Absent</td><td>Absence</td><td>Working day, nothing marked, no leave. Created by the nightly job and waits for review.</td></tr>
+    <tr><td><span class="dot" style="background:#b91c1c"></span>Not found present</td><td>Absence</td><td>Set by a manager or HR when the person marked but was not actually there.</td></tr>
+    <tr><td><span class="dot" style="background:#2563eb"></span>On leave</td><td>Leave</td><td>Approved leave covers the day.</td></tr>
+    <tr><td><span class="dot" style="background:#0891b2"></span>Comp off availed</td><td>Leave</td><td>A comp off day was taken.</td></tr>
+    <tr><td><span class="dot" style="background:#7c3aed"></span>Holiday</td><td>Off</td><td>The employee's holiday calendar has this date.</td></tr>
+    <tr><td><span class="dot" style="background:#6b7280"></span>Weekly off</td><td>Off</td><td>Their weekly off or roster says off.</td></tr>
+  </table>
+  <p>Managers may set only <b>Present, Absent and Not found present</b> by hand. The rest are worked out by the system or are HR-only.</p>
+</section>
+
+<section id="marking">
+  <h2>4. When an employee marks attendance</h2>
+  <p>The employee presses <b>IN</b> and <b>OUT</b> on Mark attendance. Every press is kept as a punch. The day's first IN and last OUT are copied onto the day. Worked time is the sum of each IN to the OUT after it.</p>
+  <table>
+    <tr><th>Rule</th><th>Result</th></tr>
+    <tr><td>A future date</td><td>Refused, always.</td></tr>
+    <tr><td>A past date</td><td>Refused unless the policy allows past-date self marking. Otherwise ask the manager or HR.</td></tr>
+    <tr><td>Today, after the cut-off time</td><td>Refused if the policy has a cut-off time and it has passed (in the employee's own timezone). HR can be exempt.</td></tr>
+    <tr><td>Employee has no linked record</td><td>"Your account is not linked to an active employee record": make sure the login belongs to an employee profile.</td></tr>
+    <tr><td>GPS or address</td><td>Optional, required, or not collected, as set in section 8.</td></tr>
+  </table>
+</section>
+
+<section id="late">
+  <h2>5. Late and half day</h2>
+  <p>Compared with the shift start (or the Ramadan start when it applies), at the first IN:</p>
+  <div class="flow">
+    <div><b>Up to "late minutes" after start: on time</b>This is the grace period. Nothing is recorded.</div>
+    <div><b>After that, up to "half-day minutes": Late</b>Only if the policy has <i>Late</i> switched on. If it is off, the day counts as on time.</div>
+    <div><b>Beyond "half-day minutes": Half day</b>Only if the policy has <i>Half day</i> switched on. If it is off, it falls back to Late (if on) or on time.</div>
+  </div>
+  <p><b>Example:</b> shift 09:00, late after 10 minutes, half day after 60 minutes. IN at 09:08 is on time. 09:40 is Late (40 minutes). 10:30 is Half day (90 minutes).</p>
+  <p>A <b>flexible</b> work schedule has no fixed start. If it has a latest start time, starting after it is Late; with no window nothing is ever late. The late and half-day statuses never overwrite statuses like On leave, Holiday or Absent.</p>
+  <p>Past dates marked by HR are not judged late unless the policy says <i>Apply late rules to past dates</i>.</p>
+</section>
+
+<section id="policy">
+  <h2>6. The attendance policy</h2>
+  <p>System settings → <b>Attendance configuration</b> → Policies → <b>Edit rules</b>. Every change raises the policy's version, and each processed day remembers the version used, so history stays explainable.</p>
+  <table>
+    <tr><th>Setting</th><th>What it does</th><th>Default</th></tr>
+    <tr><td>Late rule on</td><td>Turns the Late status on or off.</td><td>On</td></tr>
+    <tr><td>Half-day rule on</td><td>Turns the Half day status on or off.</td><td>On</td></tr>
+    <tr><td>Allow past-date self marking</td><td>Employees may mark for earlier dates themselves.</td><td>Off</td></tr>
+    <tr><td>Apply late rules to past dates</td><td>Past marks are judged late or half day too.</td><td>Off</td></tr>
+    <tr><td>Self-marking cut-off time</td><td>Latest local time (HH:mm) an employee can mark today. Empty means no limit.</td><td>Empty</td></tr>
+    <tr><td>HR exempt from cut-off</td><td>HR can mark or correct after the cut-off.</td><td>On</td></tr>
+    <tr><td>Managers edit only unapproved days</td><td>A manager cannot change a day once it is approved. Only HR can.</td><td>On</td></tr>
+    <tr><td>Requires approval</td><td>A self-marked day stays <i>Not approved</i> (or Late / Half day) until a manager or HR approves it. Off means a normal mark is Present at once.</td><td>On</td></tr>
+    <tr><td>Use Ramadan shift start</td><td>During a Ramadan period of the employee's country, the late check uses the Ramadan start time instead of the normal one.</td><td>Off</td></tr>
+    <tr><td>Short hours on, and grace minutes</td><td>A day with less worked time than required, by more than the grace, becomes Short hours.</td><td>On, 0</td></tr>
+    <tr><td>Overtime on, and after minutes</td><td>Worked time beyond required plus these minutes is counted as overtime.</td><td>Off, 0</td></tr>
+  </table>
+</section>
+
+<section id="assign">
+  <h2>7. Which policy applies to whom</h2>
+  <p>On the same page a policy has <b>assignments</b>: <b>one employee</b>, <b>a branch</b> or <b>a country</b>, with from and to dates. The <b>most specific</b> assignment in force wins: employee first, then branch, then country. A person no assignment reaches gets the default policy (Standard).</p>
+  <p><b>Example:</b> the default policy for everyone; a UAE policy assigned to country AE with a 10:00 cut-off and Ramadan start times; and one assignment on a single employee who is exempt from late rules. India employees use the default; UAE employees use the UAE policy; that one employee uses their own.</p>
+  <div class="note info">The default policy cannot be deleted, and you can have several policies at once. Policy changes apply to days marked after the change. Days already processed keep their stored policy version.</div>
+</section>
+
+<section id="settings">
+  <h2>8. Settings for everyone</h2>
+  <table>
+    <tr><th>Setting</th><th>Options</th></tr>
+    <tr><td>Mood question on IN</td><td>On or off. Options come from the parameter type "Mood".</td></tr>
+    <tr><td>GPS location</td><td>Not collected, optional, or required to mark.</td></tr>
+    <tr><td>Address</td><td>Not collected, optional, or required to mark.</td></tr>
+    <tr><td>Ramadan periods</td><td>A start and end date per country. Used only by policies with "Use Ramadan shift start" on.</td></tr>
+  </table>
+  <p>These are in System settings → Attendance configuration, with one <b>Save settings</b> button.</p>
+</section>
+
+<section id="schedule">
+  <h2>9. Work schedules, breaks and hours</h2>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td>Type</td><td><b>Fixed</b>: a start and end time. <b>Flexible</b>: only the required minutes, with an optional window for the start.</td></tr>
+    <tr><td>Required daily minutes</td><td>The time the person must work in a day. Short hours and overtime are measured against it.</td></tr>
+    <tr><td>Automatic break</td><td>Minus <i>break minutes</i> when the person worked at least <i>break after minutes</i>. Example: minus 60 after 300, so a 9-hour stay counts 8.</td></tr>
+  </table>
+  <p><b>Hours check (nightly):</b> net time = gross minus automatic break. Short = required minus net, counted only if beyond the grace. Overtime = net minus required minus the "after" minutes. Neither is counted on a holiday or weekly off.</p>
+  <p><b>Example:</b> required 480, break 60 after 300, grace 15. Someone in 09:00 and out 17:30 has 510 gross, 450 net: short by 30, beyond the grace, so the day becomes <b>Short hours</b>.</p>
+</section>
+
+<section id="offs">
+  <h2>10. Weekly off, holidays, roster</h2>
+  <p>For each day the system decides in this order, and the first one found wins:</p>
+  <div class="flow">
+    <div><b>1. Holiday</b>The employee's holiday calendar. A holiday can span a date range.</div>
+    <div><b>2. Roster entry</b>A specific shift or off for that employee on that date.</div>
+    <div><b>3. Roster pattern</b>A repeating shift pattern assigned to the employee.</div>
+    <div><b>4. Weekly off template</b>Fixed days (such as Saturday and Sunday), or rules like "2nd and 4th Saturday" or alternate weeks. Assigned with an effective date.</div>
+  </div>
+  <p>Holiday calendars apply by company, country or branch; the most specific one for the employee is used. If none of 2 to 4 applies, the day is "unknown" and the system will not mark it Absent.</p>
+</section>
+
+<section id="nightly">
+  <h2>11. The nightly job</h2>
+  <p>Every night at <b>02:00</b> the job processes the <b>last two finished days</b>. HR can also run it for a date range (up to 31 days, finished days only) from the attendance processing screen. It is safe to run again.</p>
+  <table>
+    <tr><th>Situation</th><th>Result</th></tr>
+    <tr><td>Day has an IN and an OUT</td><td>Worked, short and overtime minutes are filled in. Short hours may change the status.</td></tr>
+    <tr><td>Day has an IN but no OUT</td><td>Left alone, and shown in the <b>missing punch</b> report.</td></tr>
+    <tr><td>No punches, holiday</td><td>Holiday</td></tr>
+    <tr><td>No punches, weekly off</td><td>Weekly off (or On leave if leave covers it)</td></tr>
+    <tr><td>No punches, working day, approved leave</td><td>On leave</td></tr>
+    <tr><td>No punches, working day, no leave</td><td>Absent, waiting for review</td></tr>
+    <tr><td>No roster or weekly off at all</td><td>Left empty (nothing guessed)</td></tr>
+  </table>
+  <ul>
+    <li>It <b>never overwrites a day a person has approved or corrected</b>; it only refreshes the numbers.</li>
+    <li>It skips inactive employees and dates before joining.</li>
+    <li>Each run is recorded with counts of created, updated and skipped days and any errors.</li>
+    <li>The server must be running at 02:00. If it was off, run it by hand for the missed dates.</li>
+  </ul>
+</section>
+
+<section id="fix">
+  <h2>12. Corrections and approval</h2>
+  <ul>
+    <li><b>Approval.</b> With "Requires approval" on, a manager or HR approves the day (Team attendance). Approved days are locked for managers.</li>
+    <li><b>Regularization.</b> An employee asks to correct a day (forgot to punch, wrong time) with requested IN and OUT times and a reason. Approving applies the corrected times.</li>
+    <li><b>Manager edits.</b> Only for their own reports, only on unapproved days (if the policy says so), and only to Present, Absent or Not found present.</li>
+    <li><b>HR edits.</b> Any day, including adding a day with no record, even after the cut-off.</li>
+    <li>Leave approval marks the days On leave. Cancelling it removes them.</li>
+  </ul>
+</section>
+
+<section id="trouble">
+  <h2>13. When something looks wrong</h2>
+  <table>
+    <tr><th>Problem</th><th>Check</th></tr>
+    <tr><td>Everyone is Not approved</td><td>"Requires approval" is on, so a manager or HR must approve. Turn it off to make normal marks Present at once.</td></tr>
+    <tr><td>Nobody is ever Late</td><td>Late rule off in the policy; the shift's late minutes is too large; or the schedule is flexible with no start window.</td></tr>
+    <tr><td>Wrong late time in Ramadan</td><td>Policy has "Use Ramadan shift start" off, or no Ramadan period for the country and date.</td></tr>
+    <tr><td>Unmarked days stay empty, not Absent</td><td>The employee has no weekly off template or roster. Assign one.</td></tr>
+    <tr><td>Weekend shows Absent</td><td>The weekly off template is not assigned or its effective date is after that day.</td></tr>
+    <tr><td>Holiday not showing</td><td>The calendar's scope does not reach the employee's country or branch, or the date is outside the holiday's range.</td></tr>
+    <tr><td>"Cannot mark after HH:mm"</td><td>The cut-off time. Ask HR, or remove or change the cut-off.</td></tr>
+    <tr><td>Day not filled for yesterday</td><td>Check the processing runs list; the job may not have run. Run it by hand for that date.</td></tr>
+    <tr><td>Short hours when the person worked enough</td><td>The automatic break is taken off first. Check the break and the required minutes on the schedule.</td></tr>
+    <tr><td>Manager cannot edit a day</td><td>It is already approved, or not their direct report, or the policy locks approved days.</td></tr>
+  </table>
+</section>
+
+<section id="notyet">
+  <h2>14. Not built yet</h2>
+  <ul>
+    <li>Special periods by shift (for example Ramadan hours as a separate shift list). Today only one Ramadan start time per shift is used.</li>
+    <li>Biometric or device punches. Today marks come from the web app, managers, HR or the Excel import.</li>
+    <li>Geofencing (an allowed area for IN). GPS is collected but not checked against a place.</li>
+    <li>Payroll deductions for late, half day or absent. Attendance only records the day.</li>
+  </ul>
+</section>
+
+<footer>Generated from how the system works on 2026-11-17. If a screen or setting here does not match what you see, tell the person who maintains the system.</footer>
+</div>
+</body>
+</html>

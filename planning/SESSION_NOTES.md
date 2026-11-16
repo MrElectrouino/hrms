@@ -74,7 +74,7 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
 
 ### Leave
 - Leave types (create, edit, delete when unused), sandwich rule, leave year start month, comp-off, credit buckets with expiry (earliest expiry used first), ledger, accrual job (`@Cron 02:30`), applications with stored day-by-day calculation, approval recalculation, HR balance adjustments.
-- **Leave policies** (Administration, Leave policies): scope by country, branch, employee type or one employee; effective dates; statutory and company layers (employee gets the higher); per leave type: days per year, upfront or monthly credit, proration (none, completed months, started months, cut-off day, exact days), rounding (7 modes plus tie rule), min/max, service slabs with immediate or next-year timing. Used policies are locked (end them and start a new one). Accrual uses a covering policy, else the leave type's own setting.
+- **Leave policies** (Administration, Leave setup → Policies tab; Balances is the other tab): scope by country, branch, employee type or one employee; effective dates; statutory and company layers (employee gets the higher); per leave type: days per year, upfront or monthly credit, proration (none, completed months, started months, cut-off day, exact days), rounding (7 modes plus tie rule), min/max, service slabs with immediate or next-year timing. Used policies are locked (end them and start a new one). Accrual uses a covering policy, else the leave type's own setting.
 - Pure rules with tests: `src/leave/leave-rules.ts`, `entitlement-rules.ts`.
 
 ### Bulk update (Administration, Bulk update)
@@ -98,7 +98,7 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
 | System settings | `src/system-admin/` | `pages/system-settings.tsx`, `components/settings/*Panel.tsx` |
 | Branches | `src/branches/` | `pages/branches.tsx` |
 | Attendance | `src/attendance/`, `src/attendance-setup/` | `pages/attendance/*`, `pages/attendance-setup.tsx`, `components/attendance/*`, `components/settings/AttendanceConfigPanel.tsx` |
-| Leave | `src/leave/` | `pages/leave/*`, `pages/leave-policies.tsx`, `components/settings/LeaveConfigPanel.tsx` |
+| Leave | `src/leave/` | `pages/leave/*`, `pages/leave-setup.tsx` (tabs: `components/leave/LeavePoliciesPanel.tsx`, `LeaveBalancesPanel.tsx`), `components/settings/LeaveConfigPanel.tsx` |
 | Profile | `src/employee-profile/` | `pages/employee-profile/*`, `pages/profile-rules.tsx` |
 | Guards | `src/common/guards/` | |
 | Seed | `prisma/seed.ts`, `prisma/seed-demo.mjs` (14 demo people, local only, password `Demo@12345`, `--remove` to delete) | |
