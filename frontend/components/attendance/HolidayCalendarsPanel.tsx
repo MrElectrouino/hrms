@@ -40,7 +40,7 @@ export default function HolidayCalendarsPanel() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [form, setForm] = useState(blank);
-  const [hol, setHol] = useState({ date: '', name: '', holidayType: 'PUBLIC' });
+  const [hol, setHol] = useState({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -123,10 +123,11 @@ export default function HolidayCalendarsPanel() {
   const addHoliday = async () => {
     if (!selected) return;
     if (!hol.date || !hol.name.trim()) return setError('Date and name are required');
+    if (hol.endDate && hol.endDate < hol.date) return setError('The end date cannot be before the date');
     setError('');
     try {
-      await saveHoliday(selected.id, { date: hol.date, name: hol.name.trim(), holidayType: hol.holidayType });
-      setHol({ date: '', name: '', holidayType: 'PUBLIC' });
+      await saveHoliday(selected.id, { date: hol.date, endDate: hol.endDate || null, name: hol.name.trim(), holidayType: hol.holidayType });
+      setHol({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
       await open(selected.id);
       loadCalendars();
     } catch (e: any) {
@@ -217,8 +218,9 @@ export default function HolidayCalendarsPanel() {
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[9rem_1fr_9rem_auto]">
-                  <input type="date" aria-label="Date" className={`${fieldClass} !mt-0`} value={hol.date} onChange={(e) => setHol({ ...hol, date: e.target.value })} />
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[9rem_9rem_1fr_9rem_auto]">
+                  <input type="date" aria-label="Date" className={`${fieldClass} !mt-0`} value={hol.date} onChange={(e) => setHol({ ...hol, date: e.target.value, endDate: hol.endDate && hol.endDate < e.target.value ? '' : hol.endDate })} />
+                  <input type="date" aria-label="End date (optional)" title="End date (optional): for a holiday that lasts several days" className={`${fieldClass} !mt-0`} min={hol.date || undefined} value={hol.endDate} onChange={(e) => setHol({ ...hol, endDate: e.target.value })} />
                   <input aria-label="Holiday name" placeholder="Holiday name" className={`${fieldClass} !mt-0`} maxLength={120} value={hol.name} onChange={(e) => setHol({ ...hol, name: e.target.value })} />
                   <select aria-label="Type" className={`${fieldClass} !mt-0`} value={hol.holidayType} onChange={(e) => setHol({ ...hol, holidayType: e.target.value })}>
                     <option value="PUBLIC">Public</option><option value="COMPANY">Company</option><option value="OPTIONAL">Optional</option>
@@ -228,7 +230,7 @@ export default function HolidayCalendarsPanel() {
 
                 <table className="mt-4 min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <tr><th className="py-2">Date</th><th className="py-2">Holiday</th><th className="py-2">Type</th><th className="py-2" /></tr>
+                    <tr><th className="py-2">Date (and end date)</th><th className="py-2">Holiday</th><th className="py-2">Type</th><th className="py-2" /></tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {shown.length === 0 ? (
@@ -236,7 +238,7 @@ export default function HolidayCalendarsPanel() {
                     ) : (
                       shown.map((h) => (
                         <tr key={h.id}>
-                          <td className="py-2 font-mono text-[13px] text-gray-700">{h.date}</td>
+                          <td className="py-2 font-mono text-[13px] text-gray-700">{h.date}{h.endDate && h.endDate !== h.date ? ` to ${h.endDate}` : ''}</td>
                           <td className="py-2 text-gray-900">{h.name}</td>
                           <td className="py-2 text-gray-600">{h.holidayType.charAt(0) + h.holidayType.slice(1).toLowerCase()}</td>
                           <td className="py-2 text-right"><button type="button" onClick={() => delHoliday(h)} className="text-xs font-medium text-red-600 hover:text-red-800">Remove</button></td>
@@ -249,7 +251,7 @@ export default function HolidayCalendarsPanel() {
 
               <ExcelImport
                 title="Import holidays from Excel"
-                help="Columns: Date (YYYY-MM-DD), Name, Type (Public, Company or Optional; optional). A date that already exists is updated."
+                help="Columns: Date (YYYY-MM-DD), Name, Type (Public, Company or Optional; optional), End date (YYYY-MM-DD; optional, for a holiday that lasts several days). A date that already exists is updated."
                 templatePath="/attendance/holiday-calendars/template"
                 templateName="holidays-template.xlsx"
                 run={(file, commit) => importHolidays(selected.id, file, commit)}

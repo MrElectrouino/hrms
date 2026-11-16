@@ -1044,11 +1044,13 @@ model HolidayCalendar {
 }
 
 model Holiday {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   calendarId  Int
-  date        DateTime @db.Date
+  date        DateTime  @db.Date
+  /// Last day of a holiday that spans several days (inclusive). Empty = a single day.
+  endDate     DateTime? @db.Date
   name        String
-  holidayType String   @default("PUBLIC")
+  holidayType String    @default("PUBLIC")
 
   calendar HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
 

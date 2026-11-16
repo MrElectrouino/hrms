@@ -66,6 +66,10 @@ export class HolidayDto {
   @IsString()
   date: string;
 
+  /** Last day of the holiday (inclusive); leave out for a single day. */
+  @IsOptional() @IsString()
+  endDate?: string | null;
+
   @IsString() @IsNotEmpty() @MaxLength(120)
   name: string;
 

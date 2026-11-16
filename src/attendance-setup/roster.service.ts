@@ -69,9 +69,17 @@ export class RosterService {
     const levelCalendar = (scope: string) => candidateCalendars.find((c) => c.scope === scope)?.id ?? null;
     const calendarIds = new Set<number>([...candidateCalendars.map((c) => c.id), ...empCalendars.map((c) => c.calendarId)]);
     const holidays = calendarIds.size
-      ? await this.prisma.holiday.findMany({ where: { calendarId: { in: [...calendarIds] }, date: { gte: from, lte: to } } })
+      ? await this.prisma.holiday.findMany({
+          where: { calendarId: { in: [...calendarIds] }, date: { lte: to }, OR: [{ endDate: null, date: { gte: from } }, { endDate: { gte: from } }] },
+        })
       : [];
-    const holidayAt = new Map(holidays.map((h) => [`${h.calendarId}|${toIsoDate(h.date)}`, h]));
+    // A holiday of several days is looked up under each of its days that falls in the range.
+    const holidayAt = new Map<string, (typeof holidays)[number]>();
+    for (const h of holidays) {
+      const first = h.date > from ? h.date : from;
+      const finish = h.endDate && h.endDate < to ? h.endDate : h.endDate ? to : h.date;
+      for (let t = first.getTime(); t <= finish.getTime(); t += 86_400_000) holidayAt.set(`${h.calendarId}|${toIsoDate(new Date(t))}`, h);
+    }
     const entryAt = new Map(entries.map((e) => [toIsoDate(e.date), e]));
 
     const days = [];

@@ -10,6 +10,7 @@ import {
   parseIsoDate,
   toIsoDate,
   validateHolidayRows,
+  MAX_HOLIDAY_DAYS,
   validateSchedule,
 } from './attendance-logic';
 import {
@@ -174,19 +175,31 @@ export class AttendanceSetupService {
   async getCalendar(id: number) {
     const c = await this.prisma.holidayCalendar.findUnique({ where: { id }, include: { holidays: { orderBy: { date: 'asc' } } } });
     if (!c) throw new NotFoundException('Holiday calendar not found');
-    return { ...c, holidays: c.holidays.map((h) => ({ ...h, date: toIsoDate(h.date) })) };
+    return { ...c, holidays: c.holidays.map((h) => ({ ...h, date: toIsoDate(h.date), endDate: h.endDate ? toIsoDate(h.endDate) : null })) };
   }
 
   async saveHoliday(calendarId: number, dto: HolidayDto, user: CurrentUserPayload, ip?: string) {
     if (!(await this.prisma.holidayCalendar.findUnique({ where: { id: calendarId } }))) throw new NotFoundException('Holiday calendar not found');
     const date = mustDate(dto.date, 'Date');
+    const endDate = dto.endDate && dto.endDate !== dto.date ? mustDate(dto.endDate, 'End date') : null;
+    if (endDate) {
+      if (endDate < date) throw new BadRequestException('The end date cannot be before the date');
+      if ((endDate.getTime() - date.getTime()) / 86_400_000 + 1 > MAX_HOLIDAY_DAYS) throw new BadRequestException(`A holiday can last at most ${MAX_HOLIDAY_DAYS} days`);
+    }
+    // Two holidays in one calendar must not cover the same day.
+    const last = endDate ?? date;
+    const clash = await this.prisma.holiday.findFirst({
+      where: { calendarId, date: { not: date, lte: last }, OR: [{ endDate: { gte: date } }, { endDate: null, date: { gte: date } }] },
+      select: { name: true, date: true },
+    });
+    if (clash) throw new BadRequestException(`This overlaps "${clash.name}" (${toIsoDate(clash.date)}) in the same calendar`);
     const saved = await this.prisma.holiday.upsert({
       where: { calendarId_date: { calendarId, date } },
-      create: { calendarId, date, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
-      update: { name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
+      create: { calendarId, date, endDate, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
+      update: { endDate, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
     });
-    await this.log(user, 'HOLIDAY_SAVED', 'HolidayCalendar', calendarId, ip, { date: dto.date });
-    return { ...saved, date: toIsoDate(saved.date) };
+    await this.log(user, 'HOLIDAY_SAVED', 'HolidayCalendar', calendarId, ip, { date: dto.date, endDate: dto.endDate ?? null });
+    return { ...saved, date: toIsoDate(saved.date), endDate: saved.endDate ? toIsoDate(saved.endDate) : null };
   }
 
   async removeHoliday(calendarId: number, holidayId: number, user: CurrentUserPayload, ip?: string) {
@@ -197,7 +210,7 @@ export class AttendanceSetupService {
   }
 
   holidayTemplate() {
-    return buildTemplate('Holidays', ['Date', 'Name', 'Type'], ['2026-01-26', 'Republic Day', 'PUBLIC']);
+    return buildTemplate('Holidays', ['Date', 'Name', 'Type', 'End date'], ['2026-01-26', 'Republic Day', 'PUBLIC', '']);
   }
 
   /**
@@ -207,8 +220,8 @@ export class AttendanceSetupService {
   async importHolidays(calendarId: number, file: { buffer: Buffer; originalname: string; size: number }, commit: boolean, user: CurrentUserPayload, ip?: string) {
     if (!(await this.prisma.holidayCalendar.findUnique({ where: { id: calendarId } }))) throw new NotFoundException('Holiday calendar not found');
     if (file.size > IMPORT_MAX_BYTES) throw new BadRequestException('File must be 2 MB or smaller');
-    const sheet = await readSheet(file.buffer, ['Date', 'Name', 'Type']);
-    const { valid, errors } = validateHolidayRows(sheet.map((r) => ({ row: r.row, date: r.cells[0], name: r.cells[1], type: r.cells[2] })));
+    const sheet = await readSheet(file.buffer, ['Date', 'Name', 'Type'], ['End date']);
+    const { valid, errors } = validateHolidayRows(sheet.map((r) => ({ row: r.row, date: r.cells[0], name: r.cells[1], type: r.cells[2], endDate: r.cells[3] })));
 
     if (!commit) return { committed: false, totalRows: sheet.length, validRows: valid.length, errors, preview: valid.slice(0, 50) };
 
@@ -216,8 +229,8 @@ export class AttendanceSetupService {
       valid.map((v) =>
         this.prisma.holiday.upsert({
           where: { calendarId_date: { calendarId, date: parseIsoDate(v.date)! } },
-          create: { calendarId, date: parseIsoDate(v.date)!, name: v.name, holidayType: v.holidayType },
-          update: { name: v.name, holidayType: v.holidayType },
+          create: { calendarId, date: parseIsoDate(v.date)!, endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name, holidayType: v.holidayType },
+          update: { endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name, holidayType: v.holidayType },
         }),
       ),
     );

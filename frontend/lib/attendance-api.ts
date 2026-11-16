@@ -41,6 +41,8 @@ export interface HolidayCalendarPayload {
 export interface Holiday {
   id: number;
   date: string;
+  /** Last day of a holiday that lasts several days; empty for a single day. */
+  endDate?: string | null;
   name: string;
   holidayType: string;
 }
@@ -107,7 +109,7 @@ export const getHolidayCalendars = () => request<HolidayCalendar[]>('/attendance
 export const createHolidayCalendar = (p: HolidayCalendarPayload) => request<HolidayCalendar>('/attendance/holiday-calendars', { method: 'POST', body: json(p) });
 export const updateHolidayCalendar = (id: number, p: HolidayCalendarPayload) => request<HolidayCalendar>(`/attendance/holiday-calendars/${id}`, { method: 'PUT', body: json(p) });
 export const getHolidayCalendar = (id: number) => request<HolidayCalendar & { holidays: Holiday[] }>(`/attendance/holiday-calendars/${id}`);
-export const saveHoliday = (id: number, p: { date: string; name: string; holidayType?: string }) => request<Holiday>(`/attendance/holiday-calendars/${id}/holidays`, { method: 'POST', body: json(p) });
+export const saveHoliday = (id: number, p: { date: string; endDate?: string | null; name: string; holidayType?: string }) => request<Holiday>(`/attendance/holiday-calendars/${id}/holidays`, { method: 'POST', body: json(p) });
 export const removeHoliday = (id: number, holidayId: number) => request<null>(`/attendance/holiday-calendars/${id}/holidays/${holidayId}`, { method: 'DELETE' });
 
 export const getRosterPatterns = () => request<RosterPattern[]>('/attendance/roster-patterns');

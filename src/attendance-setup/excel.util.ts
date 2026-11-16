@@ -27,7 +27,7 @@ export interface SheetRow {
 }
 
 /** Reads the first sheet of an .xlsx file. Row 1 must be the header; returns the rows below it. */
-export async function readSheet(buffer: Buffer, expectedHeaders: string[]): Promise<SheetRow[]> {
+export async function readSheet(buffer: Buffer, expectedHeaders: string[], optionalHeaders: string[] = []): Promise<SheetRow[]> {
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buffer as unknown as ExcelJS.Buffer);
@@ -42,11 +42,17 @@ export async function readSheet(buffer: Buffer, expectedHeaders: string[]): Prom
   if (header.join('|') !== want.join('|')) {
     throw new BadRequestException(`Row 1 must be the header: ${expectedHeaders.join(', ')}. Download the template to start.`);
   }
+  // Optional trailing columns may be missing, but if present the header must match.
+  optionalHeaders.forEach((h, k) => {
+    const got = (cellText(ws.getRow(1).getCell(expectedHeaders.length + k + 1).value) ?? '').toLowerCase();
+    if (got && got !== h.toLowerCase()) throw new BadRequestException(`Column ${expectedHeaders.length + k + 1} must be "${h}" (or left out). Download the template to start.`);
+  });
+  const allHeaders = [...expectedHeaders, ...optionalHeaders];
   if (ws.rowCount - 1 > IMPORT_MAX_ROWS) throw new BadRequestException(`At most ${IMPORT_MAX_ROWS} rows per file`);
 
   const rows: SheetRow[] = [];
   for (let r = 2; r <= ws.rowCount; r++) {
-    const cells = expectedHeaders.map((_, i) => cellText(ws.getRow(r).getCell(i + 1).value));
+    const cells = allHeaders.map((_, i) => cellText(ws.getRow(r).getCell(i + 1).value));
     if (cells.every((c) => c === null)) continue; // blank line
     rows.push({ row: r, cells });
   }
