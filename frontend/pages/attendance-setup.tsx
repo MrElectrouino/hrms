@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import WorkSchedulesPanel from '../components/attendance/WorkSchedulesPanel';
+import WeeklyOffPanel from '../components/attendance/WeeklyOffPanel';
 import HolidayCalendarsPanel from '../components/attendance/HolidayCalendarsPanel';
 import RostersPanel from '../components/attendance/RostersPanel';
 import AssignmentsPanel from '../components/attendance/AssignmentsPanel';
 
-type Tab = 'schedules' | 'holidays' | 'roster' | 'assignments';
+type Tab = 'schedules' | 'weeklyoff' | 'holidays' | 'roster' | 'assignments';
 
 const TABS: { key: Tab; label: string; hint: string }[] = [
   { key: 'schedules', label: 'Work schedules', hint: 'Required hours, fixed or flexible start, breaks' },
+  { key: 'weeklyoff', label: 'Weekly off', hint: 'Templates of weekly off days' },
   { key: 'holidays', label: 'Holiday calendars', hint: 'Holidays by company, country or branch, and their order' },
   { key: 'roster', label: 'Roster', hint: 'Repeating shift patterns and Excel import' },
   { key: 'assignments', label: 'Assignments', hint: 'Give employees a schedule, roster and calendar' },
@@ -54,6 +56,7 @@ export default function AttendanceSetupPage() {
       </div>
 
       {tab === 'schedules' && <WorkSchedulesPanel />}
+      {tab === 'weeklyoff' && <WeeklyOffPanel />}
       {tab === 'holidays' && <HolidayCalendarsPanel />}
       {tab === 'roster' && <RostersPanel />}
       {tab === 'assignments' && <AssignmentsPanel />}

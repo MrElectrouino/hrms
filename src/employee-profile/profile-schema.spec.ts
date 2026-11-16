@@ -22,7 +22,6 @@ const LOOKUPS = { nationalities: ['Indian', 'Emirati'], departments: ['Sales', '
     'Notice Period': ['1 month', '2 months'],
     Grade: ['G3'],
     'Attendance Processing': ['Automatic'],
-    'Weekly Off': ['Saturday, Sunday'],
     'OT Configuration': ['None'],
     'Skill Proficiency': ['Beginner'],
     'Access Role': ['Employee'],

@@ -66,6 +66,7 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
 
 ### Attendance (generic, policy driven, works for any country)
 - Policies (assigned by employee, branch or country, versioned), one shared status list, punches, IP/GPS/address capture, mood log, work schedules (fixed or flexible), rosters with Excel import, holiday calendars by company/country/branch with an editable order, Ramadan periods per country, regularization (correction) requests with approval, reports, a nightly processing job (`@Cron 02:00`), late/half-day/short-hours/overtime rules.
+- **Weekly off templates** (Attendance setup, Weekly off): a table of named day sets (0 = Sunday ... 6 = Saturday). Given to employees on the profile (Attendance & Leave, Weekly off) or in Bulk update; stored as effective-dated rows (`employee_weekly_offs`) so history is kept. In day resolution a roster entry beats a roster pattern, which beats the template (`roster.source = 'TEMPLATE'`). Weekly off days are not marked absent and count in the leave sandwich rule. The old "Weekly Off" dropdown values were converted into templates and the parameter removed.
 - Pure rule code with tests: `src/attendance/attendance-rules.ts`, `hours-rules.ts`.
 - Timezone order: branch timezone, then branch country, then employee country, then Default Country, then UTC.
 

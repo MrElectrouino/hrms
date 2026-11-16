@@ -90,7 +90,7 @@ export interface Assignments {
 export interface ResolvedDay {
   date: string;
   holiday: { name: string; type: string; calendarLevel: HolidayLevel } | null;
-  roster: { source: 'ENTRY' | 'PATTERN' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null };
+  roster: { source: 'ENTRY' | 'PATTERN' | 'TEMPLATE' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null };
   workSchedule: { id: number; name: string; scheduleType: string } | null;
 }
 
@@ -150,3 +150,20 @@ export async function downloadFile(path: string, fileName: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+export interface WeeklyOffTemplate {
+  id: number;
+  name: string;
+  /** 0 = Sunday ... 6 = Saturday. */
+  days: number[];
+  daysText: string;
+  note: string | null;
+  isActive: boolean;
+  employeeCount: number;
+  everAssigned: boolean;
+}
+export type WeeklyOffPayload = { name: string; days: number[]; note?: string | null; isActive?: boolean };
+export const getWeeklyOffTemplates = () => request<WeeklyOffTemplate[]>('/attendance/weekly-off-templates');
+export const createWeeklyOffTemplate = (p: WeeklyOffPayload) => request<WeeklyOffTemplate>('/attendance/weekly-off-templates', { method: 'POST', body: json(p) });
+export const updateWeeklyOffTemplate = (id: number, p: WeeklyOffPayload) => request<WeeklyOffTemplate>(`/attendance/weekly-off-templates/${id}`, { method: 'PUT', body: json(p) });
+export const deleteWeeklyOffTemplate = (id: number) => request<null>(`/attendance/weekly-off-templates/${id}`, { method: 'DELETE' });

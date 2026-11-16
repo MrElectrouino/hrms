@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { assignWeeklyOff } from '../attendance-setup/weekly-off.util';
 import { AuditService } from '../common/services/audit.service';
 import { PiiService } from '../common/services/pii.service';
 import { UserType } from '../common/constants/user-types';
@@ -93,7 +94,7 @@ export class EmployeeProfileService {
    * and active employees for manager pickers (excluding the employee being edited).
    */
   private async lookups(excludeEmployeeId?: number, branchAccess?: number[] | null, country?: CountryCode): Promise<Lookups> {
-    const [languages, nationalities, noticeReasons, departments, employeeTypes, relationships, branches, employees, shifts, genericParams] = await Promise.all([
+    const [languages, nationalities, noticeReasons, departments, employeeTypes, relationships, branches, employees, shifts, genericParams, weeklyOffs] = await Promise.all([
       this.prisma.language.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
       this.prisma.parameter.findMany({
         where: { isVisible: true, parameterType: { name: 'Nationality' } },
@@ -137,6 +138,7 @@ export class EmployeeProfileService {
         orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }],
         select: { text: true, parameterType: { select: { name: true } } },
       }),
+      this.prisma.weeklyOffTemplate.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
     ]);
     const parameters: Record<string, string[]> = {};
     for (const p of genericParams) (parameters[p.parameterType.name] ??= []).push(p.text);
@@ -148,6 +150,7 @@ export class EmployeeProfileService {
       employeeTypes: employeeTypes.map((d) => d.text),
       relationships: relationships.map((d) => d.text),
       parameters,
+      weeklyOffs: weeklyOffs.map((w) => w.name),
       shifts: shifts.map((s) => ({ value: String(s.id), label: s.name })),
       branches: branches.map((b) => ({ value: String(b.id), label: b.name })),
       employees: employees.map((e) => ({
@@ -319,6 +322,14 @@ export class EmployeeProfileService {
       const raw = result.values.reportingManager;
       const managerId = raw ? Number(raw) : null;
       await this.prisma.employee.update({ where: { id: employeeId }, data: { reportingToId: managerId && managerId !== employeeId ? managerId : null } });
+    }
+
+    // Keep the weekly off assignment in step with the Attendance section (effective from today, earlier days keep their history).
+    if (sectionKey === 'attendance' && 'weeklyOff' in result.values) {
+      const name = result.values.weeklyOff;
+      const template = name ? await this.prisma.weeklyOffTemplate.findUnique({ where: { name: String(name) }, select: { id: true } }) : null;
+      const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+      await this.prisma.$transaction((tx) => assignWeeklyOff(tx, employeeId, template?.id ?? null, today));
     }
 
     // Keep the employee's shift column in step with the Attendance section.

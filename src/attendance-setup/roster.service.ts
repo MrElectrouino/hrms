@@ -51,7 +51,7 @@ export class RosterService {
 
     const overlap = { employeeId, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: from } }] };
     const country = await this.countryOf(employeeId);
-    const [order, schedules, patterns, entries, empCalendars, candidateCalendars] = await Promise.all([
+    const [order, schedules, patterns, entries, empCalendars, candidateCalendars, weeklyOffs] = await Promise.all([
       this.setup.getHolidayOrder(),
       this.prisma.employeeWorkSchedule.findMany({ where: overlap, include: { workSchedule: true } }),
       this.prisma.employeeRosterPattern.findMany({ where: overlap, include: { pattern: { include: { days: { include: { shift: { select: { id: true, name: true } } } } } } } }),
@@ -64,6 +64,7 @@ export class RosterService {
         },
         orderBy: { id: 'asc' },
       }),
+      this.prisma.employeeWeeklyOff.findMany({ where: overlap, include: { template: { select: { days: true } } } }),
     ]);
 
     const levelCalendar = (scope: string) => candidateCalendars.find((c) => c.scope === scope)?.id ?? null;
@@ -97,7 +98,7 @@ export class RosterService {
       const picked = pickHolidayCalendar(order, byLevel);
       const holiday = picked ? holidayAt.get(`${picked.calendarId}|${iso}`) : undefined;
 
-      let roster: { source: 'ENTRY' | 'PATTERN' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null } = { source: 'NONE', isWeeklyOff: false, shift: null };
+      let roster: { source: 'ENTRY' | 'PATTERN' | 'TEMPLATE' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null } = { source: 'NONE', isWeeklyOff: false, shift: null };
       const entry = entryAt.get(iso);
       if (entry) roster = { source: 'ENTRY', isWeeklyOff: entry.isWeeklyOff, shift: entry.shift };
       else {
@@ -106,6 +107,11 @@ export class RosterService {
           const day = pa.pattern.days.find((d) => d.dayIndex === cycleIndex(pa.anchorDate, date, pa.pattern.cycleDays));
           if (day) roster = { source: 'PATTERN', isWeeklyOff: day.isWeeklyOff, shift: day.shift };
         }
+      }
+      // No entry or pattern for the day: the weekly off template says which weekdays are off.
+      if (roster.source === 'NONE') {
+        const wo = weeklyOffs.find((a) => covers(a, date));
+        if (wo) roster = { source: 'TEMPLATE', isWeeklyOff: wo.template.days.includes(date.getUTCDay()), shift: null };
       }
 
       const sch = schedules.find((a) => covers(a, date));

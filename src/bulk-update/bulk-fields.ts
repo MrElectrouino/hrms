@@ -12,13 +12,15 @@ export interface BulkFieldDef {
   section: 'organization' | 'employment' | 'attendance';
   type: BulkFieldType;
   /** Where the options come from (select fields). */
-  source?: 'branches' | 'employees' | 'shifts' | { parameter: string };
+  source?: 'branches' | 'employees' | 'shifts' | 'weeklyOffs' | { parameter: string };
   /** The value cannot be cleared (the profile needs it). */
   required?: boolean;
   /** The employee record column that must stay in step with the profile value. */
   column?: 'branchId' | 'shiftId' | 'reportingToId' | 'designation';
   /** Keep the stored employee type (a parameter id) in step with the chosen text. */
   syncEmployeeType?: boolean;
+  /** Keep the employee's weekly off assignment in step (the value is a template name). */
+  syncWeeklyOff?: boolean;
 }
 
 export const BULK_FIELDS: BulkFieldDef[] = [
@@ -35,7 +37,7 @@ export const BULK_FIELDS: BulkFieldDef[] = [
   { key: 'attendanceApplicable', label: 'Attendance applicable', section: 'attendance', type: 'yn' },
   { key: 'attendanceProcessing', label: 'Attendance processing', section: 'attendance', type: 'select', source: { parameter: 'Attendance Processing' } },
   { key: 'roster', label: 'Roster group', section: 'attendance', type: 'select', source: { parameter: 'Roster' } },
-  { key: 'weeklyOff', label: 'Weekly off', section: 'attendance', type: 'select', source: { parameter: 'Weekly Off' } },
+  { key: 'weeklyOff', label: 'Weekly off', section: 'attendance', type: 'select', source: 'weeklyOffs', syncWeeklyOff: true },
   { key: 'otConfiguration', label: 'OT configuration', section: 'attendance', type: 'select', source: { parameter: 'OT Configuration' } },
 ];
 

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
+import { assignWeeklyOff } from '../attendance-setup/weekly-off.util';
 import { BULK_FIELDS, BulkChange, BulkFieldDef, MAX_BULK_EMPLOYEES, validateChanges } from './bulk-fields';
 
 type Option = { value: string; label: string };
@@ -20,7 +21,7 @@ export class BulkUpdateService {
   /** Every option list the bulk fields can use, from the same masters the profile form uses. */
   private async optionLists(user: CurrentUserPayload): Promise<Record<string, Option[]>> {
     const parameterTypes = [...new Set(BULK_FIELDS.map((f) => (typeof f.source === 'object' ? f.source.parameter : null)).filter((x): x is string => !!x))];
-    const [branches, shifts, employees, params] = await Promise.all([
+    const [branches, shifts, employees, params, weeklyOffs] = await Promise.all([
       this.prisma.branch.findMany({ where: { isActive: true, ...(user.branchAccess ? { id: { in: user.branchAccess } } : {}) }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], select: { id: true, name: true } }),
       this.prisma.shift.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
       this.prisma.employee.findMany({
@@ -29,11 +30,13 @@ export class BulkUpdateService {
         select: { id: true, employeeCode: true, profile: { select: { name: true, lastName: true } } },
       }),
       this.prisma.parameter.findMany({ where: { isVisible: true, parameterType: { name: { in: parameterTypes } } }, orderBy: [{ displayOrder: 'asc' }, { text: 'asc' }], select: { text: true, parameterType: { select: { name: true } } } }),
+      this.prisma.weeklyOffTemplate.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
     ]);
     const out: Record<string, Option[]> = {};
     for (const f of BULK_FIELDS) {
       if (f.type === 'yn') out[f.key] = [{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }];
       else if (f.source === 'branches') out[f.key] = branches.map((b) => ({ value: String(b.id), label: b.name }));
+      else if (f.source === 'weeklyOffs') out[f.key] = weeklyOffs.map((w) => ({ value: w.name, label: w.name }));
       else if (f.source === 'shifts') out[f.key] = shifts.map((s) => ({ value: String(s.id), label: s.name }));
       else if (f.source === 'employees') out[f.key] = employees.map((e) => ({ value: String(e.id), label: `${fullName(e.profile)} (${e.employeeCode})` }));
       else if (typeof f.source === 'object') out[f.key] = params.filter((p) => p.parameterType.name === (f.source as { parameter: string }).parameter).map((p) => ({ value: p.text, label: p.text }));
@@ -96,6 +99,7 @@ export class BulkUpdateService {
     }
     const typeIds = new Map((await this.prisma.parameter.findMany({ where: { parameterType: { name: 'Employee Type' } }, select: { id: true, text: true } })).map((p) => [p.text, p.id]));
 
+    const todayDate = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
     const defs = changes.map((c) => ({ def: BULK_FIELDS.find((f) => f.key === c.field) as BulkFieldDef, value: c.value === null || String(c.value).trim() === '' ? null : String(c.value).trim() }));
     const updated: number[] = [];
     const skipped: { employeeId: number; code: string; reason: string }[] = [];
@@ -134,6 +138,11 @@ export class BulkUpdateService {
             if (def.syncEmployeeType) columns.employeeTypeId = value ? typeIds.get(value) ?? null : null;
           }
           if (Object.keys(columns).length) await tx.employee.update({ where: { id: e.id }, data: columns });
+          for (const { def, value } of defs) {
+            if (!def.syncWeeklyOff) continue;
+            const template = value ? await tx.weeklyOffTemplate.findUnique({ where: { name: value }, select: { id: true } }) : null;
+            await assignWeeklyOff(tx, e.id, template?.id ?? null, todayDate);
+          }
         });
         updated.push(e.id);
       } catch (err) {

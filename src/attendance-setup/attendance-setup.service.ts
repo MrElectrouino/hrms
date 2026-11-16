@@ -22,6 +22,8 @@ import {
   RosterPatternDto,
   WorkScheduleDto,
 } from './dto/attendance.dto';
+import { AssignWeeklyOffDto, WeeklyOffTemplateDto } from './dto/weekly-off.dto';
+import { assignWeeklyOff, describeDays, validateDays } from './weekly-off.util';
 import { IMPORT_MAX_BYTES, buildTemplate, readSheet } from './excel.util';
 
 const HOLIDAY_ORDER_KEY = 'holiday_calendar_order';
@@ -384,6 +386,71 @@ export class AttendanceSetupService {
     );
     await this.log(user, 'HOLIDAY_CALENDAR_ASSIGNED', 'Employee', employeeId, ip, { calendarId: cal.id, from: dto.effectiveFrom });
     return created;
+  }
+
+  /* ------------------------------------------------------------------ weekly off templates */
+
+  async listWeeklyOffTemplates() {
+    const rows = await this.prisma.weeklyOffTemplate.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }], include: { _count: { select: { assignments: true } } } });
+    const today = new Date(`${toIsoDate(new Date())}T00:00:00Z`);
+    const current = await this.prisma.employeeWeeklyOff.groupBy({ by: ['templateId'], _count: { _all: true }, where: { effectiveFrom: { lte: today }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }] } });
+    const now = new Map(current.map((c) => [c.templateId, c._count._all]));
+    return rows.map(({ _count, ...t }) => ({ ...t, daysText: describeDays(t.days), employeeCount: now.get(t.id) ?? 0, everAssigned: _count.assignments > 0 }));
+  }
+
+  private weeklyOffData(dto: WeeklyOffTemplateDto) {
+    const days = [...new Set(dto.days)].sort((a, b) => a - b);
+    const problems = validateDays(days);
+    if (problems.length) throw new BadRequestException(problems[0]);
+    return { name: dto.name.trim(), days, note: dto.note?.trim() || null, isActive: dto.isActive ?? true };
+  }
+
+  async createWeeklyOffTemplate(dto: WeeklyOffTemplateDto, user: CurrentUserPayload, ip?: string) {
+    const data = this.weeklyOffData(dto);
+    try {
+      const created = await this.prisma.weeklyOffTemplate.create({ data });
+      await this.log(user, 'WEEKLY_OFF_TEMPLATE_CREATED', 'WeeklyOffTemplate', created.id, ip);
+      return created;
+    } catch (e) {
+      return this.conflict(e, 'A weekly off template with this name');
+    }
+  }
+
+  async updateWeeklyOffTemplate(id: number, dto: WeeklyOffTemplateDto, user: CurrentUserPayload, ip?: string) {
+    if (!(await this.prisma.weeklyOffTemplate.findUnique({ where: { id }, select: { id: true } }))) throw new NotFoundException('Weekly off template not found');
+    const data = this.weeklyOffData(dto);
+    try {
+      const updated = await this.prisma.weeklyOffTemplate.update({ where: { id }, data });
+      await this.log(user, 'WEEKLY_OFF_TEMPLATE_UPDATED', 'WeeklyOffTemplate', id, ip);
+      return updated;
+    } catch (e) {
+      return this.conflict(e, 'A weekly off template with this name');
+    }
+  }
+
+  /** A template that has ever been assigned is kept (history depends on it): switch it off instead. */
+  async deleteWeeklyOffTemplate(id: number, user: CurrentUserPayload, ip?: string) {
+    const t = await this.prisma.weeklyOffTemplate.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!t) throw new NotFoundException('Weekly off template not found');
+    if ((await this.prisma.employeeWeeklyOff.count({ where: { templateId: id } })) > 0) {
+      throw new ConflictException(`"${t.name}" is, or was, assigned to employees, so it cannot be deleted. Switch it off instead.`);
+    }
+    await this.prisma.weeklyOffTemplate.delete({ where: { id } });
+    await this.log(user, 'WEEKLY_OFF_TEMPLATE_DELETED', 'WeeklyOffTemplate', id, ip, { name: t.name });
+  }
+
+  /** Gives one employee a weekly off template from a date (default today), or removes it with templateId null. */
+  async assignWeeklyOff(employeeId: number, dto: AssignWeeklyOffDto, user: CurrentUserPayload, ip?: string) {
+    await this.assertEmployee(employeeId);
+    const from = mustDate(dto.effectiveFrom ?? toIsoDate(new Date()), 'Effective from');
+    const templateId = dto.templateId ?? null;
+    if (templateId !== null) {
+      const t = await this.prisma.weeklyOffTemplate.findUnique({ where: { id: templateId }, select: { isActive: true } });
+      if (!t || !t.isActive) throw new BadRequestException('Choose an active weekly off template');
+    }
+    const changed = await this.prisma.$transaction((tx) => assignWeeklyOff(tx, employeeId, templateId, from));
+    await this.log(user, 'WEEKLY_OFF_ASSIGNED', 'Employee', employeeId, ip, { templateId, from: toIsoDate(from) });
+    return { changed };
   }
 
   /** Removes an assignment of the given kind (work-schedule | roster-pattern | holiday-calendar). */

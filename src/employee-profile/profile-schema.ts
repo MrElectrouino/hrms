@@ -42,7 +42,7 @@ export interface FieldDef {
   /** Render a Yes/No field as a checkbox (stored as "Yes" / "No"). */
   display?: 'checkbox';
   /** Options come from a master table at request time (see Lookups). */
-  optionsSource?: 'languages' | 'nationalities' | 'employees' | 'noticeReasons' | 'departments' | 'branches' | 'employeeTypes' | 'relationships' | 'shifts';
+  optionsSource?: 'languages' | 'nationalities' | 'employees' | 'noticeReasons' | 'departments' | 'branches' | 'employeeTypes' | 'relationships' | 'shifts' | 'weeklyOffs';
   /** Options come from the parameter type with this name (Masters > Parameters). */
   optionsParameter?: string;
   /** Show this field only when another field in the same section equals a value; hidden fields are not stored or required. */
@@ -70,6 +70,8 @@ export interface Lookups {
   relationships?: string[];
   /** Options by parameter type name, for fields with `optionsParameter`. */
   parameters?: Record<string, string[]>;
+  /** Names of the active weekly off templates (Attendance setup > Weekly off). */
+  weeklyOffs?: string[];
   /** Active shifts (value = shift id). */
   shifts?: OptionItem[];
   /** Active branches the account may use (value = branch id). */
@@ -326,7 +328,7 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('attendanceProcessing', 'Attendance processing', 'select', { optionsParameter: 'Attendance Processing' }),
           F('shift', 'Shift', 'select', { optionsSource: 'shifts' }),
           F('roster', 'Roster', 'select', { optionsParameter: 'Roster' }),
-          F('weeklyOff', 'Weekly off', 'select', { optionsParameter: 'Weekly Off' }),
+          F('weeklyOff', 'Weekly off', 'select', { optionsSource: 'weeklyOffs' }),
           F('otConfiguration', 'OT configuration', 'select', { optionsParameter: 'OT Configuration' }),
         ] },
       ],

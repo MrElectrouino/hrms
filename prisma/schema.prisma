@@ -609,6 +609,7 @@ model Employee {
   rosterPatterns    EmployeeRosterPattern[]
   rosterEntries     RosterEntry[]
   holidayCalendars  EmployeeHolidayCalendar[]
+  weeklyOffs        EmployeeWeeklyOff[]
   attendance        Attendance[]
   regularizations   AttendanceRegularization[]
   leaveApplications LeaveApplication[]
@@ -1645,4 +1646,37 @@ model Branch {
 
   @@index([countryCode])
   @@map("branches")
+}
+
+/// A named set of weekly off days, for example "Saturday and Sunday" or "Friday only".
+/// days: 0 = Sunday ... 6 = Saturday.
+model WeeklyOffTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  days      Int[]
+  note      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  assignments EmployeeWeeklyOff[]
+
+  @@map("weekly_off_templates")
+}
+
+/// Which weekly off template an employee follows, from when. A roster entry or roster pattern still wins for the days it covers.
+model EmployeeWeeklyOff {
+  id            Int       @id @default(autoincrement())
+  employeeId    Int
+  templateId    Int
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  employee Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  template WeeklyOffTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([employeeId, effectiveFrom])
+  @@index([templateId])
+  @@map("employee_weekly_offs")
 }
