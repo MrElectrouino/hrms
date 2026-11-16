@@ -63,6 +63,8 @@ export interface CreateUserPayload {
   /** Leave out to have a temporary password generated (returned once). */
   password?: string;
   userTypeId: number;
+  /** Used for password reset emails. */
+  email?: string;
   /** Make the account for this existing person (employee) instead of a new blank profile. */
   profileId?: number;
   allBranches?: boolean;
@@ -70,6 +72,8 @@ export interface CreateUserPayload {
 }
 
 export interface UpdateUserPayload {
+  /** Email on the account's profile (password reset emails). An empty text clears it. */
+  email?: string;
   userTypeId?: number;
   isActive?: boolean;
   allBranches?: boolean;

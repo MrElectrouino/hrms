@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsBoolean, IsArray, ArrayUnique } from 'class-validator';
+import { IsInt, IsOptional, IsBoolean, IsArray, ArrayUnique, IsEmail, MaxLength, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class UpdateUserDto {
@@ -10,6 +10,12 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** Email on the account's profile, used for password reset emails. An empty text clears it. */
+  @ValidateIf((o) => o.email !== undefined && o.email !== '')
+  @IsEmail()
+  @MaxLength(120)
+  email?: string;
 
   /** true = every branch; false = only branchIds. System Admin only. */
   @IsOptional()

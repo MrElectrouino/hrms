@@ -1,4 +1,5 @@
 import {
+  IsEmail,
   IsString,
   IsNotEmpty,
   IsOptional,
@@ -32,6 +33,12 @@ export class CreateUserDto {
   @Type(() => Number)
   @IsInt()
   userTypeId: number;
+
+  /** Used for password reset emails. Optional. */
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(120)
+  email?: string;
 
   @Type(() => Number)
   @IsOptional()

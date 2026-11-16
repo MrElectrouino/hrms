@@ -182,7 +182,7 @@ export class UsersService {
       }
     } else {
       const profile = await this.prisma.profile.create({
-        data: { name: username, isSiteAccess: true },
+        data: { name: username, isSiteAccess: true, email: dto.email?.trim().toLowerCase() || null },
       });
       profileId = profile.id;
     }
@@ -219,7 +219,10 @@ export class UsersService {
     }
 
     // An account for an existing person needs site access switched on, or sign-in is refused.
-    if (dto.profileId) await this.prisma.profile.update({ where: { id: dto.profileId }, data: { isSiteAccess: true } });
+    if (dto.profileId) {
+      const email = dto.email?.trim().toLowerCase();
+      await this.prisma.profile.update({ where: { id: dto.profileId }, data: { isSiteAccess: true, ...(email ? { email } : {}) } });
+    }
 
     await this.audit.log({
       actorProfileId: actor.profileId,
@@ -275,8 +278,10 @@ export class UsersService {
           this.prisma.userBranch.createMany({ data: branchChange.branchIds.map((branchId) => ({ userId: id, branchId })) }),
         ]
       : [];
+    const emailOps = dto.email !== undefined ? [this.prisma.profile.update({ where: { id: target.profileId }, data: { email: dto.email.trim().toLowerCase() || null } })] : [];
     const results = await this.prisma.$transaction([
       ...branchOps,
+      ...emailOps,
       this.prisma.user.update({ where: { id }, data, select: userSelect }),
       ...(deactivates
         ? [
@@ -287,7 +292,7 @@ export class UsersService {
           ]
         : []),
     ]);
-    const updated = results[branchOps.length] as Prisma.UserGetPayload<{ select: typeof userSelect }>;
+    const updated = results[branchOps.length + emailOps.length] as Prisma.UserGetPayload<{ select: typeof userSelect }>;
 
     await this.audit.log({
       actorProfileId: actor.profileId,

@@ -38,6 +38,7 @@ export default function UsersPage() {
   // Create form state
   const [form, setForm] = useState({
     profileId: '',
+    email: '',
     username: '',
     password: '',
     userTypeId: '',
@@ -47,6 +48,7 @@ export default function UsersPage() {
 
   // Edit form state
   const [editForm, setEditForm] = useState({
+    email: '',
     userTypeId: '',
     isActive: true,
     allBranches: true,
@@ -80,6 +82,7 @@ export default function UsersPage() {
   const openEdit = (u: User) => {
     setEditingUser(u);
     setEditForm({
+      email: u.profile?.email ?? '',
       userTypeId: String(u.userTypeId || ''),
       isActive: u.isActive,
       allBranches: u.allBranches ?? true,
@@ -93,12 +96,13 @@ export default function UsersPage() {
       const created = await createUser({
         username: form.username,
         ...(form.profileId ? { profileId: Number(form.profileId) } : {}),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
         ...(form.password ? { password: form.password } : {}),
         userTypeId: parseInt(form.userTypeId, 10),
         ...(isSystemAdmin && parseInt(form.userTypeId, 10) !== UserType.SystemAdmin ? { allBranches: form.allBranches, branchIds: form.branchIds } : {}),
       });
       setShowCreate(false);
-      setForm({ profileId: '', username: '', password: '', userTypeId: '', allBranches: true, branchIds: [] });
+      setForm({ profileId: '', email: '', username: '', password: '', userTypeId: '', allBranches: true, branchIds: [] });
       if (created.data.temporaryPassword) { setCopied(false); setShown({ username: form.username.trim().toLowerCase(), password: created.data.temporaryPassword, reset: false }); }
       loadUsers();
       getLoginCandidates().then((res) => setCandidates(res.data)).catch(() => {});
@@ -110,7 +114,7 @@ export default function UsersPage() {
   /** Open the create form for an employee who is waiting for a login, with their details filled in. */
   const startFor = (c: LoginCandidate) => {
     const match = userTypes.find((t) => t.name.toLowerCase() === (c.accessRole ?? '').toLowerCase());
-    setForm({ profileId: String(c.profileId), username: c.username, password: '', userTypeId: match ? String(match.id) : String(userTypes.find((t) => t.id === UserType.Executive)?.id ?? ''), allBranches: true, branchIds: [] });
+    setForm({ profileId: String(c.profileId), email: '', username: c.username, password: '', userTypeId: match ? String(match.id) : String(userTypes.find((t) => t.id === UserType.Executive)?.id ?? ''), allBranches: true, branchIds: [] });
     setShowCreate(true);
   };
 
@@ -119,6 +123,7 @@ export default function UsersPage() {
     if (!editingUser) return;
     try {
       await updateUser(editingUser.id, {
+        email: editForm.email.trim(),
         userTypeId: editForm.userTypeId ? parseInt(editForm.userTypeId, 10) : undefined,
         isActive: editForm.isActive,
         ...(isSystemAdmin && editingUser.userTypeId !== UserType.SystemAdmin ? { allBranches: editForm.allBranches, branchIds: editForm.branchIds } : {}),
@@ -326,6 +331,17 @@ export default function UsersPage() {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="font-normal text-gray-400">(optional)</span></label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">Where the password reset link is sent. Leave empty to use the email on the employee's profile.</p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="font-normal text-gray-400">(optional)</span></label>
                 <input
                   type="password"
@@ -386,6 +402,17 @@ export default function UsersPage() {
             <form onSubmit={handleUpdate} className="space-y-4">
               <div className="text-sm text-gray-500 mb-2">
                 Username: <span className="font-medium text-gray-900">{editingUser.username}</span>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">Where the password reset link is sent.</p>
               </div>
 
               <div>
