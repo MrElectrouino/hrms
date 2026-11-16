@@ -122,7 +122,9 @@ export default function AttendanceConfigPanel() {
     if (editing.id === null && !f.code?.trim()) return setError('A code is required');
     setSaving(true);
     try {
-      const payload = { ...f, selfMarkCutoffTime: f.selfMarkCutoffTime || null };
+      // Send only the fields the server accepts (a saved policy also carries id, version, dates and assignments).
+      const KEYS = ['code', 'name', 'isActive', 'lateEnabled', 'halfDayEnabled', 'allowPastDateSelfMarking', 'applyLateRulesToPastDates', 'cutoffExemptHr', 'managerEditsOnlyUnapproved', 'requiresApproval', 'useRamadanShiftStart', 'shortHoursEnabled', 'shortHoursGraceMinutes', 'overtimeEnabled', 'overtimeAfterMinutes'] as const;
+      const payload = { ...Object.fromEntries(KEYS.filter((k) => (f as any)[k] !== undefined).map((k) => [k, (f as any)[k]])), selfMarkCutoffTime: f.selfMarkCutoffTime || null } as PolicyPayload;
       if (editing.id === null) await createPolicy(payload);
       else await updatePolicy(editing.id, payload);
       setEditing(null);

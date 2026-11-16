@@ -118,7 +118,13 @@ export const getLeaveConfig = () => request<{ types: LeaveType[]; settings: Leav
 export const createLeaveType = (p: LeaveTypePayload) => request<LeaveType>('/leave-config/types', { method: 'POST', body: json(p) });
 export const deleteLeaveType = (id: number) => request<null>(`/leave-config/types/${id}`, { method: 'DELETE' });
 export const updateLeaveType = (id: number, p: LeaveTypePayload) => request<LeaveType>(`/leave-config/types/${id}`, { method: 'PUT', body: json(p) });
-export const saveLeaveSettings = (p: LeaveSettings) => request<LeaveSettings>('/leave-config/settings', { method: 'PUT', body: json(p) });
+export const saveLeaveSettings = (p: LeaveSettings) => {
+  const { sandwichEnabled, sandwichWeeklyOffs, sandwichHolidays, sandwichRequireBothSides, leaveYearStartMonth, compOffEnabled, compOffCreditDays, compOffExpiryDays, compOffMinWorkedMinutes } = p;
+  return request<LeaveSettings>('/leave-config/settings', {
+    method: 'PUT',
+    body: json({ sandwichEnabled, sandwichWeeklyOffs, sandwichHolidays, sandwichRequireBothSides, leaveYearStartMonth, compOffEnabled, compOffCreditDays, compOffExpiryDays, compOffMinWorkedMinutes }),
+  });
+};
 
 export const REASON_TEXT: Record<CalcDay['reason'], string> = {
   LEAVE: 'Leave',
