@@ -173,7 +173,7 @@ export class EmployeesService {
         create: { parameterId: type.id, lastNumber: 1 },
         update: { lastNumber: { increment: 1 } },
       });
-      const code = `${prefix}-${String(seq.lastNumber).padStart(4, '0')}`;
+      const code = `${prefix}${String(seq.lastNumber).padStart(4, '0')}`;
       if (!(await tx.employee.findUnique({ where: { employeeCode: code }, select: { id: true } }))) {
         return { code, parameterId: type.id };
       }
