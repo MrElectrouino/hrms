@@ -387,12 +387,14 @@ export class AttendanceService {
         },
       });
       // The manager decides this at the moment of approval; no nightly scan picks it up later.
-      const compOffGranted = dto.compOffEligible ? await this.grantCompOffIfEligible(tx, employeeId, dateStr, finalStatus, workedMinutes, user.profileId) : false;
-      return { record: updated, compOffGranted };
+      // Ticked: credit it (once). Explicitly un-ticked on a day that has one: take it back, if it has not been used.
+      const compOffGranted = dto.compOffEligible === true ? await this.grantCompOffIfEligible(tx, employeeId, dateStr, finalStatus, workedMinutes, user.profileId) : false;
+      const compOffRemoved = dto.compOffEligible === false ? await this.revokeCompOff(tx, employeeId, dateStr, user.profileId) : false;
+      return { record: updated, compOffGranted, compOffRemoved };
     });
 
-    await this.audit.log({ actorProfileId: user.profileId, action: 'ATTENDANCE_EDITED', entityType: 'Attendance', entityId: String(saved.record.id), ipAddress: ip, metadata: { employeeId, date: dateStr, status: finalStatus, by: actor, compOffGranted: saved.compOffGranted } });
-    return { ...this.present(await this.prisma.attendance.findUniqueOrThrow({ where: { id: saved.record.id }, include: { status: true } })), compOffGranted: saved.compOffGranted };
+    await this.audit.log({ actorProfileId: user.profileId, action: 'ATTENDANCE_EDITED', entityType: 'Attendance', entityId: String(saved.record.id), ipAddress: ip, metadata: { employeeId, date: dateStr, status: finalStatus, by: actor, compOffGranted: saved.compOffGranted, compOffRemoved: saved.compOffRemoved } });
+    return { ...this.present(await this.prisma.attendance.findUniqueOrThrow({ where: { id: saved.record.id }, include: { status: true } })), compOffGranted: saved.compOffGranted, compOffRemoved: saved.compOffRemoved };
   }
 
   /**
@@ -406,6 +408,8 @@ export class AttendanceService {
     if (!workedMinutes || workedMinutes < settings.compOffMinWorkedMinutes) return false;
     const type = await tx.leaveType.findFirst({ where: { isCompOff: true, isActive: true } });
     if (!type) return false;
+    // Already credited for this day (for example approved again): nothing to do. Checked first, because a failed insert would abort the whole transaction.
+    if (await tx.leaveCredit.findFirst({ where: { employeeId, source: 'COMP_OFF', sourceRef: dateStr }, select: { id: true } })) return false;
     const todayStr = new Date().toISOString().slice(0, 10);
     const quantity = Number(settings.compOffCreditDays);
     const expiresOnStr = compOffExpiry(todayStr, settings.compOffExpiryDays);
@@ -430,6 +434,21 @@ export class AttendanceService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return false; // already credited for this day
       throw err;
     }
+  }
+
+  /**
+   * Takes back a comp off that was given by mistake. Only possible while none of it has been used:
+   * if some was taken as leave, the leave must be cancelled first. The ledger keeps a line for it.
+   */
+  private async revokeCompOff(tx: Prisma.TransactionClient, employeeId: number, dateStr: string, byProfileId: number): Promise<boolean> {
+    const credit = await tx.leaveCredit.findFirst({ where: { employeeId, source: 'COMP_OFF', sourceRef: dateStr }, include: { allocations: { select: { id: true } } } });
+    if (!credit) return false;
+    if (credit.allocations.length > 0 || Number(credit.remaining) < Number(credit.quantity)) {
+      throw new BadRequestException(`The comp off for ${dateStr} has already been used as leave, so it cannot be removed here. Cancel that leave first, or take the remaining days away on Leave setup → Balances.`);
+    }
+    await tx.leaveCredit.delete({ where: { id: credit.id } });
+    await tx.leaveTransaction.create({ data: { employeeId, leaveTypeId: credit.leaveTypeId, kind: 'ADJUSTMENT', days: -Number(credit.quantity), note: `Comp off for ${dateStr} removed`, createdById: byProfileId } });
+    return true;
   }
 
   /* ------------------------------------------------------------------ reading */
@@ -476,6 +495,11 @@ export class AttendanceService {
       include: { status: true, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } },
     });
     const zones = await this.timeZones([...new Set(rows.map((r) => r.employeeId))]);
+    // Days that already carry a comp off credit, so the approve popup can show the box ticked.
+    const compOff = rows.length
+      ? await this.prisma.leaveCredit.findMany({ where: { source: 'COMP_OFF', employeeId: { in: [...new Set(rows.map((r) => r.employeeId))] }, sourceRef: { in: [...new Set(rows.map((r) => toIsoDate(r.date)))] } }, select: { employeeId: true, sourceRef: true } })
+      : [];
+    const hasCompOff = new Set(compOff.map((c) => `${c.employeeId}:${c.sourceRef}`));
     const hm = (d: Date | null, tz: string) => {
       if (!d) return null;
       const m = localParts(d, tz).minutes;
@@ -485,6 +509,7 @@ export class AttendanceService {
       const tz = zones.get(r.employeeId) ?? 'UTC';
       return {
         ...this.present(r),
+        hasCompOff: hasCompOff.has(`${r.employeeId}:${toIsoDate(r.date)}`),
         timeZone: tz,
         inLocal: hm(r.firstInAt, tz),
         outLocal: hm(r.lastOutAt, tz),

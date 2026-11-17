@@ -21,6 +21,10 @@ interface Target {
   remarks: string;
   isNew: boolean;
   compOffEligible: boolean;
+  /** Comp off was already given for this day: the box starts ticked, and un-ticking takes it back. */
+  hadCompOff: boolean;
+  /** The day's status as it is now, to know whether comp off can apply. */
+  currentStatus: string;
 }
 
 /** Managers approve and correct their team's unapproved days. HR can correct any day or add a missing one. */
@@ -77,8 +81,8 @@ export default function TeamAttendancePage() {
   const label = new Date(Date.UTC(month.y, month.m, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const shiftMonth = (d: number) => setMonth((p) => { const n = new Date(Date.UTC(p.y, p.m + d, 1)); return { y: n.getUTCFullYear(), m: n.getUTCMonth() }; });
 
-  const open = (r: AttendanceRow) => { setError(''); setEdit({ employeeId: r.employeeId, employeeName: `${r.employeeName} (${r.employeeCode})`, date: r.date, inTime: r.inLocal ?? '', outTime: r.outLocal ?? '', statusCode: '', remarks: '', isNew: false, compOffEligible: false }); };
-  const openNew = () => { setError(''); setEmpSearch(''); setEdit({ employeeId: 0, employeeName: '', date: new Date().toISOString().slice(0, 10), inTime: '', outTime: '', statusCode: '', remarks: '', isNew: true, compOffEligible: false }); };
+  const open = (r: AttendanceRow) => { setError(''); setEdit({ employeeId: r.employeeId, employeeName: `${r.employeeName} (${r.employeeCode})`, date: r.date, inTime: r.inLocal ?? '', outTime: r.outLocal ?? '', statusCode: '', remarks: '', isNew: false, compOffEligible: r.hasCompOff, hadCompOff: r.hasCompOff, currentStatus: r.statusCode }); };
+  const openNew = () => { setError(''); setEmpSearch(''); setEdit({ employeeId: 0, employeeName: '', date: new Date().toISOString().slice(0, 10), inTime: '', outTime: '', statusCode: '', remarks: '', isNew: true, compOffEligible: false, hadCompOff: false, currentStatus: '' }); };
 
   // Approving opens the same popup as Edit, so the manager can check the times and comp off before confirming.
   const approve = (r: AttendanceRow) => open(r);
@@ -98,9 +102,10 @@ export default function TeamAttendancePage() {
         ...(edit.isNew && edit.outTime ? { outTime: edit.outTime } : {}),
         ...(edit.statusCode ? { statusCode: edit.statusCode } : {}),
         ...(edit.remarks.trim() ? { remarks: edit.remarks.trim() } : {}),
-        compOffEligible: edit.compOffEligible,
+        // Only send the box when it can apply: ticked to give it, un-ticked to take back one that was given.
+        ...(compOffApplies ? { compOffEligible: edit.compOffEligible } : {}),
       });
-      setNotice(result.data.compOffGranted ? 'Attendance saved and approved. Comp off credited.' : 'Attendance saved and approved');
+      setNotice(result.data.compOffGranted ? 'Attendance saved and approved. Comp off credited.' : result.data.compOffRemoved ? 'Attendance saved. Comp off removed.' : 'Attendance saved and approved');
       setEdit(null);
       await load();
     } catch (e: any) {
@@ -110,6 +115,8 @@ export default function TeamAttendancePage() {
     }
   };
 
+  // Comp off applies to a day worked on a holiday or weekly off, or to a day that already has one (so it can be taken back).
+  const compOffApplies = !!edit && (edit.hadCompOff || ['WORKED_ON_HOLIDAY', 'WORKED_ON_WEEKLY_OFF'].includes(edit.statusCode || edit.currentStatus));
   const allowed = statuses.filter((s) => s.isActive && (isHr || MANAGER_STATUSES.includes(s.code)));
 
   return (
@@ -206,9 +213,18 @@ export default function TeamAttendancePage() {
             <label className="block text-sm font-medium text-gray-700">OUT time<input type="time" className={fieldClass} value={edit.outTime} onChange={(e) => setEdit({ ...edit, outTime: e.target.value })} /></label>
           </div>
           <p className="-mt-2 text-xs text-gray-500">Times are in the employee's own timezone. Late and half day are worked out again from the IN time.</p>
-          <label className="flex items-start gap-3 text-sm text-gray-700">
-            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={edit.compOffEligible} onChange={(e) => setEdit({ ...edit, compOffEligible: e.target.checked })} />
-            <span><span className="font-medium">Eligible for comp off</span><span className="block text-xs text-gray-500">Only applies when the day worked out to "Worked on holiday" or "Worked on weekly off". Credited the moment you approve.</span></span>
+          <label className={`flex items-start gap-3 text-sm ${compOffApplies ? 'text-gray-700' : 'text-gray-400'}`}>
+            <input type="checkbox" disabled={!compOffApplies} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50" checked={compOffApplies && edit.compOffEligible} onChange={(e) => setEdit({ ...edit, compOffEligible: e.target.checked })} />
+            <span>
+              <span className="font-medium">Eligible for comp off</span>
+              <span className="block text-xs text-gray-500">
+                {edit.hadCompOff
+                  ? 'Comp off was given for this day. Un-tick it and save to take it back (only if it has not been used).'
+                  : compOffApplies
+                    ? 'Credited the moment you approve.'
+                    : 'Only for a day worked on a holiday or weekly off. Set the status to "Worked on holiday" or "Worked on weekly off" first.'}
+              </span>
+            </span>
           </label>
           <label className="block text-sm font-medium text-gray-700">Status
             <Select className={fieldClass} value={edit.statusCode} onChange={(e) => setEdit({ ...edit, statusCode: e.target.value })}>

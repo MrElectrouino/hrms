@@ -17,6 +17,7 @@ export interface AttendanceRecord {
   remarks: string | null;
   /** Only set on the response to an edit/approve call. */
   compOffGranted?: boolean;
+  compOffRemoved?: boolean;
 }
 
 export interface AttendanceRow extends AttendanceRecord {
@@ -25,6 +26,8 @@ export interface AttendanceRow extends AttendanceRecord {
   outLocal: string | null;
   employeeCode: string;
   employeeName: string;
+  /** A comp off credit already exists for this day. */
+  hasCompOff: boolean;
 }
 
 export interface TodayState {
