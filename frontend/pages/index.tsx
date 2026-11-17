@@ -161,7 +161,9 @@ export default function DashboardPage() {
   const mine = dash?.mine ?? null;
   const charts = dash?.charts ?? null;
   const isHr = dash?.role === 'HR';
-  const pct = team && team.total > 0 ? Math.round(((team.present + team.onLeave) / team.total) * 1000) / 10 : null;
+  const expected = team ? team.total - team.offToday : 0;
+  const allOff = !!team && team.total > 0 && expected <= 0;
+  const pct = team && expected > 0 ? Math.min(100, Math.round(((team.present + team.onLeave) / expected) * 1000) / 10) : null;
   const myBalance = mine ? mine.balances.reduce((s, b) => s + b.balance, 0) : 0;
 
   // Headcount chart: six month-end points drawn on the same 720x205 canvas as before.
@@ -312,8 +314,8 @@ export default function DashboardPage() {
           spark={{ d: 'M0 46 C18 40 28 50 46 40 S76 22 94 30 S112 14 120 16', stroke: '#3b82f6', fill: '#2563eb' }}
         />
         <Metric label={team ? 'On Leave Today' : 'Next Leave'} value={team ? team.onLeave : mine?.nextLeave ? mine.nextLeave.from : 'None'} icon={CalendarCheckIcon} tone="green" spark={{ d: 'M0 52 C20 46 34 50 50 40 S80 30 96 32 S110 18 120 12', stroke: '#34c77a', fill: '#16a34a' }} />
-        <Metric label={team ? 'Attendance Rate' : 'My Day'} value={team ? (pct === null ? '—' : `${pct}%`) : mine?.attendance ? mine.attendance.statusName : 'Not marked'} icon={ClockIcon} tone="indigo" spark={{ d: 'M0 52 C20 50 34 44 52 40 S84 36 98 26 S112 12 120 8', stroke: '#a078f0', fill: '#4f46e5' }} />
-        <Metric label={team ? 'Pending Approvals' : 'Pending Requests'} value={team ? team.leaveWaiting + team.correctionsWaiting : mine?.pendingLeave ?? 0} icon={DocIcon} tone="orange" spark={{ d: 'M0 14 C20 20 34 26 52 26 S84 34 98 40 S112 44 120 48', stroke: '#ffab5a', fill: '#ea580c' }} />
+        <Metric label={team ? 'Attendance Rate' : 'My Day'} value={team ? (allOff ? 'Off today' : pct === null ? '—' : `${pct}%`) : mine?.attendance ? mine.attendance.statusName : 'Not marked'} icon={ClockIcon} tone="indigo" spark={{ d: 'M0 52 C20 50 34 44 52 40 S84 36 98 26 S112 12 120 8', stroke: '#a078f0', fill: '#4f46e5' }} />
+        <Metric label={team ? 'Pending Approvals' : 'Pending Requests'} value={team ? team.leaveWaiting + team.correctionsWaiting + team.attendanceToApprove : mine?.pendingLeave ?? 0} icon={DocIcon} tone="orange" spark={{ d: 'M0 14 C20 20 34 26 52 26 S84 34 98 40 S112 44 120 48', stroke: '#ffab5a', fill: '#ea580c' }} />
       </section>
 
       {/* ============ Overview + quick actions ============ */}

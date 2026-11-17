@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { forgotPassword } from '../lib/api';
 import { brandLogoSrc, useBranding } from '../lib/branding';
+import Modal from '../components/Modal';
 
 const EyeIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
@@ -169,53 +170,50 @@ export default function LoginPage() {
       </div>
 
       {showForgot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
-          <div className="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-6 shadow-lg">
-            <h2 id="forgot-title" className="text-base font-semibold text-gray-900">Reset your password</h2>
-            <p className="mt-1 text-sm text-gray-500">Enter your email and we will send a reset link if the account exists.</p>
+        <Modal title="Reset your password" size="sm" busy={resetLoading} onClose={() => setShowForgot(false)}>
+        <p className="text-sm text-gray-500">Enter your email and we will send a reset link if the account exists.</p>
 
-            {resetMessage && (
-              <div
-                className={`mt-4 rounded-lg border px-3 py-2.5 text-sm ${resetOk ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}
-              >
-                {resetMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleForgot} className="mt-4 space-y-4">
-              <div>
-                <label htmlFor="reset-email" className="mb-1.5 block text-sm font-medium text-gray-700">
-                  Email
-                </label>
-                <input
-                  id="reset-email"
-                  type="email"
-                  required
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="you@company.com"
-                  className={inputClass}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowForgot(false)}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={resetLoading}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-                >
-                  {resetLoading ? 'Sending…' : 'Send reset link'}
-                </button>
-              </div>
-            </form>
+        {resetMessage && (
+          <div
+            className={`mt-4 rounded-lg border px-3 py-2.5 text-sm ${resetOk ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}
+          >
+            {resetMessage}
           </div>
-        </div>
+        )}
+
+        <form onSubmit={handleForgot} className="mt-4 space-y-4">
+          <div>
+            <label htmlFor="reset-email" className="mb-1.5 block text-sm font-medium text-gray-700">
+              Email
+            </label>
+            <input
+              id="reset-email"
+              type="email"
+              required
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+              placeholder="you@company.com"
+              className={inputClass}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowForgot(false)}
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={resetLoading}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+            >
+              {resetLoading ? 'Sending…' : 'Send reset link'}
+            </button>
+          </div>
+        </form>
+        </Modal>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { Parameter, createParameter, getParameterTypes, listParameters, updateParameter } from '../lib/api';
+import { Parameter, createParameter, deleteMaster, getParameterTypes, listParameters, updateParameter } from '../lib/api';
+import Select from './Select';
 
 type Row = Parameter & { displayOrder?: number; isVisible?: boolean };
 
@@ -85,6 +86,19 @@ export default function ParametersPanel() {
     }
   };
 
+  const remove = async (r: Row) => {
+    if (!window.confirm(`Delete "${r.text}" permanently? This cannot be undone. If it is in use you will be told to hide it instead.`)) return;
+    setError('');
+    setNotice('');
+    try {
+      await deleteMaster('parameters', r.id);
+      setNotice(`"${r.text}" deleted`);
+      await load(typeId!);
+    } catch (e: any) {
+      setError(e.message || 'Could not delete');
+    }
+  };
+
   const toggle = async (r: Row) => {
     setError('');
     setNotice('');
@@ -113,9 +127,9 @@ export default function ParametersPanel() {
 
       <label className="block max-w-xs text-sm font-medium text-gray-700">
         Parameter type
-        <select className={field} value={typeId ?? ''} onChange={(e) => { setTypeId(Number(e.target.value)); setNotice(''); setError(''); }}>
+        <Select className={field} value={typeId ?? ''} onChange={(e) => { setTypeId(Number(e.target.value)); setNotice(''); setError(''); }}>
           {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+        </Select>
       </label>
 
       {isEmployeeType && (
@@ -162,6 +176,7 @@ export default function ParametersPanel() {
                       <button type="button" onClick={() => toggle(r)} className={`text-xs font-medium ${visible ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'}`}>
                         {visible ? 'Hide' : 'Show'}
                       </button>
+                      <button type="button" onClick={() => remove(r)} className="ml-4 text-xs font-medium text-red-600 hover:text-red-800">Delete</button>
                     </td>
                   </tr>
                 );

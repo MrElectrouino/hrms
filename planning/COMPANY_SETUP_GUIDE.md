@@ -2,7 +2,7 @@
 
 A step by step guide to install the HRMS on a computer and configure it for one company. Written from what the application does today (2026-11-15). Where something is not built yet, it says so.
 
-Who does what: **System Admin** can open every screen below. **HR Admin** can open Administration, Attendance setup, Branches, Masters, Users, Menus & rights and Leave policies, but not System settings.
+Who does what: **System Admin** can open every screen below. **HR Admin** can open Administration, Attendance setup, Branches, Masters, Users, Menus & rights and Leave setup, but not System settings.
 
 ---
 
@@ -60,6 +60,7 @@ Copy `.env.example` to `.env` in the project root and fill it. These are the val
 | `APP_TIMEZONE` | `Asia/Dubai` (or your business timezone) |
 | `DOCUMENT_STORAGE_PATH` | `./private-storage/documents` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM` | for password-reset email. Leave `SMTP_HOST` empty in development and the email is written to the log instead |
+| `DEV_MAIL_REDIRECT_TO` | A test mailbox. **Outside production, every email goes to this address** instead of the real recipient (subject shows `[DEV → original]`). Ignored when `NODE_ENV=production`. Leave empty to send normally |
 
 Keep the PII values safe. They encrypt national ID numbers and similar personal data. **If you lose them, that data in any existing database can no longer be read.**
 
@@ -140,7 +141,7 @@ Add each place the company works from. For each: name, code (short, unique), **c
 
 ### B5. Users and access (Administration)
 
-1. **Users.** Create accounts for HR Admins, Managers and Executives. A user is linked to a person (profile). Choose the user type: Executive, Manager, System Admin or HR Admin. Give an HR Admin access to **all branches** or only chosen branches.
+1. **Users.** The easiest way: on the employee, open the **System Access** tab and set **Login enabled** to Yes. The employee then appears on the Users page under **Employees waiting for a login**; click **Create login**, check the username and user type, and save. A random temporary password is generated and shown **once**: note it down and give it to the employee, who must choose their own at the first sign-in. (You can also type a password yourself. **Reset Password** generates a new temporary one the same way.) Create accounts for HR Admins, Managers and Executives. A user is linked to a person (profile). Choose the user type: Executive, Manager, System Admin or HR Admin. Give an HR Admin access to **all branches** or only chosen branches.
 2. **Menus & rights.** Adjust which menu items each user type (or a single user) can open.
 3. **Modules** (System Admin). Switch modules on or off. Leave and Attendance are on. Payroll and the others are not built.
 
@@ -150,8 +151,9 @@ Start with **Attendance setup**:
 
 1. **Work schedules.** Required hours per day, fixed or flexible start, break rules.
 2. **Holiday calendars.** Create a calendar per company, per country or per branch (for example one for the India branch, one for the Dubai branch). Add holidays one by one or with the Excel import. Use **Save order** to decide which calendar wins when several apply.
-3. **Roster.** Repeating shift patterns (weekly offs and shifts per weekday) and Excel import of dated rosters.
-4. **Assignments.** Give each employee a schedule, roster and calendar (or assign in bulk).
+3. **Weekly off.** Create templates of weekly off days (for example "Saturday, Sunday", "Friday only"): name it and choose, for each weekday, working day, off every week, off in some weeks of the month (for example the 2nd and 4th Saturday) or off every other week (from a start date). Give a template to employees on their profile (Attendance & Leave, Weekly off) or in bulk under Administration, Bulk update. The change takes effect from today and earlier days keep their old weekly off. A roster entry or pattern still wins for the days it covers.
+4. **Roster.** Repeating shift patterns (weekly offs and shifts per weekday) and Excel import of dated rosters.
+5. **Assignments.** Give each employee a schedule, roster and calendar (or assign in bulk).
 
 Then **System settings → Attendance configuration**:
 
@@ -162,18 +164,23 @@ Then **System settings → Attendance configuration**:
 
 Timezone rule: the branch's own timezone, then the branch's country, then the employee's country, then the Default Country, then UTC.
 
-### B7. Leave (System settings, Leave configuration, and Administration, Leave policies)
+### B7. Leave (System settings, Leave configuration, and Administration, Leave setup)
 
 1. **Leave configuration → leave types.** The starters were deleted. Add your types (Annual, Sick, Casual, Unpaid and so on): paid or not, tracks a balance or not, half-day allowed, negative balance allowed, document needed (and after how many days), maximum days per request, takes part in the sandwich rule, is comp-off. A type that has been used cannot be deleted, only switched off.
 2. **Leave configuration → settings.** Leave year start month, the sandwich rule (weekly offs and holidays, both sides or either side), and comp-off (credit days, expiry days, minimum minutes worked).
-3. **Leave policies** (Administration). Create a policy per group of people: who it applies to (country, branch, employee type or one employee), start and end dates, statutory or company, and for each leave type the days per year, whether credited upfront or monthly, how joiners part-way through the year are prorated, rounding, minimum and maximum, and optional length-of-service slabs. The "Check an employee" box shows which policy applies and how the days were worked out, without saving anything. A policy that has produced entitlements is locked: end it and start a new one to change a rule.
-4. **Credits are created by the nightly accrual job** (02:30) or manually from Leave configuration (Run accrual). Running it twice does not double-credit.
+3. **Leave setup → Policies** (Administration). Create a policy per group of people: who it applies to (country, branch, employee type or one employee), start and end dates, statutory or company, and for each leave type the days per year, whether credited upfront or monthly, how joiners part-way through the year are prorated, rounding, minimum and maximum, and optional length-of-service slabs. The "Check an employee" box shows which policy applies and how the days were worked out, without saving anything. A policy that has produced entitlements is locked: end it and start a new one to change a rule.
+4. **Credits are created by the nightly accrual job** (02:30) or manually with **Credit leave now** in Leave configuration. Running it twice does not double-credit. A leave type with no policy and no accrual of its own credits nothing, which is the usual reason an employee cannot apply.
+5. **Leave setup → Balances** (Administration). Choose one employee to see their balances and history, or several to add or take away the same days from all of them, with a reason. Use it for opening balances when going live part-way through the year. Do not also let a policy credit the same year-to-date days.
+
+Full step-by-step guides with examples: `planning/Leave_Setup_Guide.html` (leave) and `planning/Attendance_Setup_Guide.html` (attendance policy and rules).
 
 Not built yet: probation lock, carry-forward, lapse and encashment at year end, exit settlement, leave across two leave years. These wait for the business answers in `planning/leave_entitlement_requirements.md`, section 13.
 
 ### B8. Add employees
 
 Employees → Add employee (the full profile form). Choose the **employee type** (this makes the employee code), the **branch**, the **country of employment** (this chooses the profile layout), reporting manager, shift, dates, and the rest. Then create the employee's **user account** (B5) so they can log in. An Excel import for employees is not built yet.
+
+To change the same thing for many employees later (move a group to another branch or department, give them a new shift or manager), use **Administration → Bulk update**: choose branches and employees, tick the fields, review and update. Personal details, pay and dates are not offered there.
 
 ---
 
@@ -185,7 +192,7 @@ Log in as each kind of user and test:
 |---|---|
 | Employee | Dashboard shows own day and leave. Mark attendance (IN, then OUT). Apply for leave and see the day count. |
 | Manager | Team attendance. Approve a correction request. Approve or reject team leave. |
-| HR Admin | Branch switcher limits what is shown. Add an adjustment in Leave, Balances. Reports. |
+| HR Admin | Branch switcher limits what is shown. Add an adjustment in Leave setup, Balances. Reports. |
 | System Admin | System settings sections save. Notification bell shows licence expiry when due. |
 
 Also check: a holiday shows as a holiday on the attendance and leave calendars, a late mark follows the policy, the nightly job run (Attendance configuration, Processing) marks absent days.
@@ -232,7 +239,8 @@ Never edit a migration that has already been applied. Add a new one.
 | Login page on every page | You are signed out. Sign in again |
 | "Your account is not linked to an active employee record" on Mark attendance | The `admin` account is not an employee. Use an employee login, or link the account to an employee |
 | "No attendance policy applies to this employee" | Create a policy and assign it to the employee's country, branch or the employee (B6) |
-| Leave policy preview says no policy covers the employee | Check scope and dates; employee type and country come from the employee's profile (Organization tab) |
+| Leave setup → Policies, "Check an employee" says no policy covers the employee | Check scope and dates; employee type and country come from the employee's profile (Organization tab) |
+| Password reset email does not arrive | Check the server log for "no active account with site access has this email". The email must be on the account (Users, Edit), the employee profile (work, personal or official email) and the person needs site access. In development all mail goes to `DEV_MAIL_REDIRECT_TO` |
 | Default Country dropdown is empty | Add the country first (B1, Countries) |
 | Branch country dropdown is empty | Same: add countries first |
 | Page shows old data after a code change | Restart the API (and the frontend dev server) |

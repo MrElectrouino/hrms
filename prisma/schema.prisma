@@ -609,6 +609,7 @@ model Employee {
   rosterPatterns    EmployeeRosterPattern[]
   rosterEntries     RosterEntry[]
   holidayCalendars  EmployeeHolidayCalendar[]
+  weeklyOffs        EmployeeWeeklyOff[]
   attendance        Attendance[]
   regularizations   AttendanceRegularization[]
   leaveApplications LeaveApplication[]
@@ -1044,11 +1045,13 @@ model HolidayCalendar {
 }
 
 model Holiday {
-  id          Int      @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   calendarId  Int
-  date        DateTime @db.Date
+  date        DateTime  @db.Date
+  /// Last day of a holiday that spans several days (inclusive). Empty = a single day.
+  endDate     DateTime? @db.Date
   name        String
-  holidayType String   @default("PUBLIC")
+  holidayType String    @default("PUBLIC")
 
   calendar HolidayCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
 
@@ -1643,4 +1646,40 @@ model Branch {
 
   @@index([countryCode])
   @@map("branches")
+}
+
+/// A named set of weekly off days, for example "Saturday and Sunday" or "Friday only".
+/// days: 0 = Sunday ... 6 = Saturday.
+model WeeklyOffTemplate {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  /// Weekdays that are off every week.
+  days      Int[]
+  /// Weekdays that are off only some weeks: [{ day, kind: "WEEKS", weeks: [2, 4] }] (1-5, -1 = last) or [{ day, kind: "ALTERNATE", anchor: "YYYY-MM-DD" }].
+  rules     Json     @default("[]")
+  note      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  assignments EmployeeWeeklyOff[]
+
+  @@map("weekly_off_templates")
+}
+
+/// Which weekly off template an employee follows, from when. A roster entry or roster pattern still wins for the days it covers.
+model EmployeeWeeklyOff {
+  id            Int       @id @default(autoincrement())
+  employeeId    Int
+  templateId    Int
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  employee Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  template WeeklyOffTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([employeeId, effectiveFrom])
+  @@index([templateId])
+  @@map("employee_weekly_offs")
 }

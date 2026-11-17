@@ -1,4 +1,5 @@
 import {
+  IsEmail,
   IsString,
   IsNotEmpty,
   IsOptional,
@@ -19,18 +20,25 @@ export class CreateUserDto {
   @MaxLength(50)
   username: string;
 
+  /** Leave out to have a random temporary password generated (returned once in the response). */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MinLength(8)
   @MaxLength(128)
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/, {
     message: 'Password must contain upper, lower, digit, and special characters',
   })
-  password: string;
+  password?: string;
 
   @Type(() => Number)
   @IsInt()
   userTypeId: number;
+
+  /** Used for password reset emails. Optional. */
+  @IsOptional()
+  @IsEmail()
+  @MaxLength(120)
+  email?: string;
 
   @Type(() => Number)
   @IsOptional()

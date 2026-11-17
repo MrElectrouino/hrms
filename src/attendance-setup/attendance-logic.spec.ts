@@ -105,3 +105,20 @@ describe('roster import rows', () => {
     expect(r.errors[2].message).toMatch(/Duplicate/);
   });
 });
+
+describe('holidays that last several days', () => {
+  const row = (n: number, date: string, endDate: string | null) => ({ row: n, date, name: 'Eid', type: null, endDate });
+  it('accepts an end date on or after the date', () => {
+    const r = validateHolidayRows([row(2, '2026-03-20', '2026-03-22'), row(3, '2026-04-01', '2026-04-01'), row(4, '2026-05-01', null)]);
+    expect(r.errors).toEqual([]);
+    expect(r.valid.map((v) => v.endDate)).toEqual(['2026-03-22', null, null]);
+  });
+  it('rejects an end date before the date, a bad end date and a very long holiday', () => {
+    const r = validateHolidayRows([row(2, '2026-03-20', '2026-03-19'), row(3, '2026-03-20', 'soon'), row(4, '2026-01-01', '2026-03-01')]);
+    expect(r.errors.map((e) => e.message)).toEqual([
+      expect.stringMatching(/before the date/),
+      expect.stringMatching(/real date/),
+      expect.stringMatching(/at most 31 days/),
+    ]);
+  });
+});

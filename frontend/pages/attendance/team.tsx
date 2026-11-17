@@ -5,6 +5,7 @@ import { AttendanceRow, AttendanceStatus, editAttendance, getStatuses, getTeamAt
 import { UserType } from '../../lib/user-types';
 import StatusBadge from '../../components/StatusBadge';
 import Drawer, { fieldClass } from '../../components/Drawer';
+import Select from '../../components/Select';
 
 const monthStart = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}-01`;
 const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
@@ -195,10 +196,10 @@ export default function TeamAttendancePage() {
                 <input type="search" className={fieldClass} placeholder="Name or code…" value={empSearch} onChange={(e) => setEmpSearch(e.target.value)} />
               </label>
               <label className="block text-sm font-medium text-gray-700">Employee
-                <select className={fieldClass} value={edit.employeeId || ''} onChange={(e) => setEdit({ ...edit, employeeId: Number(e.target.value) })}>
+                <Select className={fieldClass} value={edit.employeeId || ''} onChange={(e) => setEdit({ ...edit, employeeId: Number(e.target.value) })}>
                   <option value="">Select…</option>
                   {emps.map((e) => <option key={e.id} value={e.id}>{[e.profile?.name, e.profile?.lastName].filter(Boolean).join(' ')} ({e.employeeCode})</option>)}
-                </select>
+                </Select>
               </label>
               <label className="block text-sm font-medium text-gray-700">Date
                 <input type="date" className={fieldClass} value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} />
@@ -213,10 +214,10 @@ export default function TeamAttendancePage() {
           </div>
           <p className="-mt-2 text-xs text-gray-500">Times are in the employee's own timezone. Late and half day are worked out again from the IN time.</p>
           <label className="block text-sm font-medium text-gray-700">Status
-            <select className={fieldClass} value={edit.statusCode} onChange={(e) => setEdit({ ...edit, statusCode: e.target.value })}>
+            <Select className={fieldClass} value={edit.statusCode} onChange={(e) => setEdit({ ...edit, statusCode: e.target.value })}>
               <option value="">Work it out from the times</option>
               {allowed.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}
-            </select>
+            </Select>
           </label>
           <label className="block text-sm font-medium text-gray-700">Remarks
             <input className={fieldClass} maxLength={150} value={edit.remarks} onChange={(e) => setEdit({ ...edit, remarks: e.target.value })} placeholder="Optional" />

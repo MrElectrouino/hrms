@@ -60,14 +60,20 @@ export interface User {
 
 export interface CreateUserPayload {
   username: string;
-  password: string;
+  /** Leave out to have a temporary password generated (returned once). */
+  password?: string;
   userTypeId: number;
+  /** Used for password reset emails. */
+  email?: string;
+  /** Make the account for this existing person (employee) instead of a new blank profile. */
   profileId?: number;
   allBranches?: boolean;
   branchIds?: number[];
 }
 
 export interface UpdateUserPayload {
+  /** Email on the account's profile (password reset emails). An empty text clears it. */
+  email?: string;
   userTypeId?: number;
   isActive?: boolean;
   allBranches?: boolean;
@@ -392,8 +398,25 @@ export async function getUsers(params?: Record<string, string | number | boolean
   return request<User[]>(`/users${query}`);
 }
 
+export interface LoginCandidate {
+  profileId: number;
+  employeeId: number;
+  code: string;
+  name: string;
+  branchName: string | null;
+  designation: string | null;
+  /** From the employee's System Access tab, or the employee code. */
+  username: string;
+  accessRole: string | null;
+}
+
+/** Employees marked "Login enabled" on their System Access tab who have no account yet. */
+export async function getLoginCandidates() {
+  return request<LoginCandidate[]>('/users/candidates');
+}
+
 export async function createUser(payload: CreateUserPayload) {
-  return request<User>('/users', {
+  return request<User & { temporaryPassword?: string }>('/users', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -412,10 +435,11 @@ export async function deactivateUser(id: number) {
   });
 }
 
-export async function resetUserPassword(id: number, newPassword: string) {
-  return request<null>(`/users/${id}/reset-password`, {
+/** Without a password, one is generated and returned once. */
+export async function resetUserPassword(id: number, newPassword?: string) {
+  return request<{ temporaryPassword?: string }>(`/users/${id}/reset-password`, {
     method: 'POST',
-    body: JSON.stringify({ newPassword }),
+    body: JSON.stringify(newPassword ? { newPassword } : {}),
   });
 }
 
@@ -506,6 +530,10 @@ export async function createSite(payload: MasterItemPayload) {
 }
 export async function updateSite(id: number, payload: Partial<MasterItemPayload>) {
   return request<MasterItem>(`/masters/sites/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+}
+/** Permanent delete of a master or dropdown value. Refused by the server while it is in use. */
+export async function deleteMaster(kind: 'sites' | 'languages' | 'shifts' | 'document-types' | 'parameters', id: number) {
+  return request<null>(`/masters/${kind}/${id}/permanent`, { method: 'DELETE' });
 }
 export async function deactivateSite(id: number) {
   return request<MasterItem>(`/masters/sites/${id}`, { method: 'DELETE' });
@@ -768,6 +796,10 @@ export async function createCustomField(payload: CreateCustomFieldPayload) {
   return request<CustomFieldAdmin>('/custom-fields', { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export async function deleteCustomField(code: string) {
+  return request<null>(`/custom-fields/${code}`, { method: 'DELETE' });
+}
+
 export async function updateCustomField(code: string, payload: { isActive?: boolean; label?: string; isRequired?: boolean; placeholder?: string }) {
   return request<CustomFieldAdmin>(`/custom-fields/${code}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
@@ -863,6 +895,22 @@ export interface SystemConfigurationPayload {
 
 export async function getSystemConfigurations() {
   return request<SystemConfigurationItem[]>('/system-configurations');
+}
+
+export interface EmailStatus {
+  configured: boolean;
+  host: string;
+  port: number;
+  from: string;
+  environment: string;
+  /** Set in development: every email goes here instead of the real recipient. */
+  redirectedTo: string | null;
+}
+export async function getEmailStatus() {
+  return request<EmailStatus>('/system-configurations/email/status');
+}
+export async function sendTestEmail(to: string) {
+  return request<{ requestedFor: string; deliveredTo: string; redirected: boolean }>('/system-configurations/email/test', { method: 'POST', body: JSON.stringify({ to }) });
 }
 
 export async function createSystemConfiguration(payload: SystemConfigurationPayload) {

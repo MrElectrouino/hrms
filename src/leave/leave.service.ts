@@ -277,9 +277,22 @@ export class LeaveService {
     };
   }
 
-  async mine(user: CurrentUserPayload) {
+  /** The employee's own applications, newest first. Optional filters: status, leave type, and dates (any overlap with from..to). */
+  async mine(user: CurrentUserPayload, filters: { status?: string; leaveTypeId?: number; from?: string; to?: string } = {}) {
     const employeeId = await this.myEmployeeId(user);
-    const rows = await this.prisma.leaveApplication.findMany({ where: { employeeId }, orderBy: { createdAt: 'desc' }, take: 100, include: this.include });
+    const where: Prisma.LeaveApplicationWhereInput = { employeeId };
+    if (filters.status) {
+      if (!['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'].includes(filters.status)) throw new BadRequestException('Unknown status');
+      where.status = filters.status;
+    }
+    if (filters.leaveTypeId) where.leaveTypeId = filters.leaveTypeId;
+    const from = filters.from ? parseIsoDate(filters.from) : null;
+    const to = filters.to ? parseIsoDate(filters.to) : null;
+    if ((filters.from && !from) || (filters.to && !to)) throw new BadRequestException('Dates must be real dates (YYYY-MM-DD)');
+    if (from && to && to < from) throw new BadRequestException('The end date cannot be before the start date');
+    if (from) where.toDate = { gte: from };
+    if (to) where.fromDate = { lte: to };
+    const rows = await this.prisma.leaveApplication.findMany({ where, orderBy: [{ createdAt: 'desc' }], take: 300, include: this.include });
     return rows.map((r) => this.present(r));
   }
 

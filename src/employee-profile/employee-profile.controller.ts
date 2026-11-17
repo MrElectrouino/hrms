@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Ip, Param, Patch, Post, Put, Query, UseGuards, ParseIntPipe } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Ip, Param, Patch, Post, Put, Query, UseGuards, ParseIntPipe } from '@nestjs/common';
 import { CreateSalaryTemplateDto, UpdateSalaryTemplateDto } from './dto/salary-template.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -93,6 +93,13 @@ export class EmployeeProfileController {
   @Roles(UserType.SystemAdmin)
   async createCustomField(@Body() dto: CreateCustomFieldDto, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
     return this.ok(await this.service.createCustomField(dto, user, ip), 'Custom field created');
+  }
+
+  @Delete('custom-fields/:code')
+  @Roles(UserType.SystemAdmin)
+  async deleteCustomField(@Param('code') code: string, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    await this.service.deleteCustomField(code, user, ip);
+    return this.ok(null, 'Custom field deleted');
   }
 
   @Patch('custom-fields/:code')

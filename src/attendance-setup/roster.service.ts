@@ -15,6 +15,7 @@ import {
 } from './attendance-logic';
 import { RosterEntryDto } from './dto/attendance.dto';
 import { IMPORT_MAX_BYTES, buildTemplate, readSheet } from './excel.util';
+import { WeeklyOffRule, isWeeklyOffDay } from './weekly-off.util';
 
 const MAX_RANGE_DAYS = 62;
 
@@ -51,7 +52,7 @@ export class RosterService {
 
     const overlap = { employeeId, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: from } }] };
     const country = await this.countryOf(employeeId);
-    const [order, schedules, patterns, entries, empCalendars, candidateCalendars] = await Promise.all([
+    const [order, schedules, patterns, entries, empCalendars, candidateCalendars, weeklyOffs] = await Promise.all([
       this.setup.getHolidayOrder(),
       this.prisma.employeeWorkSchedule.findMany({ where: overlap, include: { workSchedule: true } }),
       this.prisma.employeeRosterPattern.findMany({ where: overlap, include: { pattern: { include: { days: { include: { shift: { select: { id: true, name: true } } } } } } } }),
@@ -64,14 +65,23 @@ export class RosterService {
         },
         orderBy: { id: 'asc' },
       }),
+      this.prisma.employeeWeeklyOff.findMany({ where: overlap, include: { template: { select: { days: true, rules: true } } } }),
     ]);
 
     const levelCalendar = (scope: string) => candidateCalendars.find((c) => c.scope === scope)?.id ?? null;
     const calendarIds = new Set<number>([...candidateCalendars.map((c) => c.id), ...empCalendars.map((c) => c.calendarId)]);
     const holidays = calendarIds.size
-      ? await this.prisma.holiday.findMany({ where: { calendarId: { in: [...calendarIds] }, date: { gte: from, lte: to } } })
+      ? await this.prisma.holiday.findMany({
+          where: { calendarId: { in: [...calendarIds] }, date: { lte: to }, OR: [{ endDate: null, date: { gte: from } }, { endDate: { gte: from } }] },
+        })
       : [];
-    const holidayAt = new Map(holidays.map((h) => [`${h.calendarId}|${toIsoDate(h.date)}`, h]));
+    // A holiday of several days is looked up under each of its days that falls in the range.
+    const holidayAt = new Map<string, (typeof holidays)[number]>();
+    for (const h of holidays) {
+      const first = h.date > from ? h.date : from;
+      const finish = h.endDate && h.endDate < to ? h.endDate : h.endDate ? to : h.date;
+      for (let t = first.getTime(); t <= finish.getTime(); t += 86_400_000) holidayAt.set(`${h.calendarId}|${toIsoDate(new Date(t))}`, h);
+    }
     const entryAt = new Map(entries.map((e) => [toIsoDate(e.date), e]));
 
     const days = [];
@@ -89,7 +99,7 @@ export class RosterService {
       const picked = pickHolidayCalendar(order, byLevel);
       const holiday = picked ? holidayAt.get(`${picked.calendarId}|${iso}`) : undefined;
 
-      let roster: { source: 'ENTRY' | 'PATTERN' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null } = { source: 'NONE', isWeeklyOff: false, shift: null };
+      let roster: { source: 'ENTRY' | 'PATTERN' | 'TEMPLATE' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null } = { source: 'NONE', isWeeklyOff: false, shift: null };
       const entry = entryAt.get(iso);
       if (entry) roster = { source: 'ENTRY', isWeeklyOff: entry.isWeeklyOff, shift: entry.shift };
       else {
@@ -98,6 +108,11 @@ export class RosterService {
           const day = pa.pattern.days.find((d) => d.dayIndex === cycleIndex(pa.anchorDate, date, pa.pattern.cycleDays));
           if (day) roster = { source: 'PATTERN', isWeeklyOff: day.isWeeklyOff, shift: day.shift };
         }
+      }
+      // No entry or pattern for the day: the weekly off template says which weekdays are off.
+      if (roster.source === 'NONE') {
+        const wo = weeklyOffs.find((a) => covers(a, date));
+        if (wo) roster = { source: 'TEMPLATE', isWeeklyOff: isWeeklyOffDay({ days: wo.template.days, rules: wo.template.rules as unknown as WeeklyOffRule[] }, date), shift: null };
       }
 
       const sch = schedules.find((a) => covers(a, date));

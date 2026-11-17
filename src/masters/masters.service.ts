@@ -17,6 +17,7 @@ import { UpdateShiftDto } from './dto/update-shift.dto';
 import { CreateDocumentTypeDto } from './dto/create-document-type.dto';
 import { UpdateDocumentTypeDto } from './dto/update-document-type.dto';
 import { CreateParameterDto, UpdateParameterDto } from './dto/parameter.dto';
+import { timeOfDay } from './time-of-day';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -66,6 +67,76 @@ export class MastersService {
     const updated = await this.prisma.site.update({ where: { id }, data: { isActive: false } });
     await this.auditMaster('SITE_DEACTIVATED', id, actorProfileId, ip);
     return updated;
+  }
+
+  /* ------------------------------------------------------------------ permanent delete */
+
+  /** How many employee profiles mention this text (profile dropdown values are stored as text). */
+  private async textInProfiles(text: string): Promise<number> {
+    const r = await this.prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM employee_profile_sections WHERE strpos(data::text, '"' || ${text} || '"') > 0`;
+    return r[0]?.n ?? 0;
+  }
+
+  private inUse(what: string): never {
+    throw new ConflictException(`${what} is in use, so it cannot be deleted. Deactivate (or hide) it instead.`);
+  }
+
+  async deleteSite(id: number, actorProfileId?: number, ip?: string) {
+    const item = await this.prisma.site.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!item) throw new NotFoundException('Site not found');
+    if ((await this.prisma.employee.count({ where: { siteId: id } })) > 0) this.inUse(`The site "${item.name}"`);
+    await this.prisma.site.delete({ where: { id } });
+    await this.auditMaster('SITE_DELETED', id, actorProfileId, ip, { name: item.name });
+  }
+
+  async deleteLanguage(id: number, actorProfileId?: number, ip?: string) {
+    const item = await this.prisma.language.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!item) throw new NotFoundException('Language not found');
+    if ((await this.textInProfiles(item.name)) > 0) this.inUse(`The language "${item.name}"`);
+    await this.prisma.language.delete({ where: { id } });
+    await this.auditMaster('LANGUAGE_DELETED', id, actorProfileId, ip, { name: item.name });
+  }
+
+  async deleteShift(id: number, actorProfileId?: number, ip?: string) {
+    const item = await this.prisma.shift.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!item) throw new NotFoundException('Shift not found');
+    const [employees, days, entries, attendance] = await Promise.all([
+      this.prisma.employee.count({ where: { shiftId: id } }),
+      this.prisma.rosterPatternDay.count({ where: { shiftId: id } }),
+      this.prisma.rosterEntry.count({ where: { shiftId: id } }),
+      this.prisma.attendance.count({ where: { shiftId: id } }),
+    ]);
+    if (employees + days + entries + attendance > 0) this.inUse(`The shift "${item.name}"`);
+    await this.prisma.shift.delete({ where: { id } });
+    await this.auditMaster('SHIFT_DELETED', id, actorProfileId, ip, { name: item.name });
+  }
+
+  async deleteDocumentType(id: number, actorProfileId?: number, ip?: string) {
+    const item = await this.prisma.documentType.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!item) throw new NotFoundException('Document type not found');
+    const [documents, files] = await Promise.all([this.prisma.document.count({ where: { documentTypeId: id } }), this.prisma.storedFile.count({ where: { fileTypeId: id } })]);
+    if (documents + files > 0) this.inUse(`The document type "${item.name}"`);
+    try {
+      await this.prisma.documentType.delete({ where: { id } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') this.inUse(`The document type "${item.name}"`);
+      throw e;
+    }
+    await this.auditMaster('DOCUMENT_TYPE_DELETED', id, actorProfileId, ip, { name: item.name });
+  }
+
+  /** A dropdown value. Refused while a profile still points at it (by link or by its text). */
+  async deleteParameter(id: number, actorProfileId?: number, ip?: string) {
+    const item = await this.prisma.parameter.findUnique({ where: { id }, select: { id: true, text: true, parameterType: { select: { name: true } } } });
+    if (!item) throw new NotFoundException('Option not found');
+    if ((await this.textInProfiles(item.text)) > 0) this.inUse(`"${item.text}"`);
+    try {
+      await this.prisma.parameter.delete({ where: { id } });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2003') this.inUse(`"${item.text}"`);
+      throw e;
+    }
+    await this.auditMaster('PARAMETER_DELETED', id, actorProfileId, ip, { name: item.text, type: item.parameterType.name });
   }
 
   async findOneSite(id: number) {
@@ -376,15 +447,15 @@ export class MastersService {
   private buildShiftData(dto: CreateShiftDto | UpdateShiftDto): any {
     const data: any = {};
     if (dto.name !== undefined) data.name = dto.name.trim();
-    if (dto.startTime !== undefined) data.startTime = new Date(`1970-01-01T${dto.startTime}`);
-    if (dto.endTime !== undefined) data.endTime = new Date(`1970-01-01T${dto.endTime}`);
+    if (dto.startTime !== undefined) data.startTime = timeOfDay(dto.startTime);
+    if (dto.endTime !== undefined) data.endTime = timeOfDay(dto.endTime);
     if ('lateMinutes' in dto && dto.lateMinutes !== undefined) data.lateMinutes = dto.lateMinutes;
     if ('halfDayMinutes' in dto && dto.halfDayMinutes !== undefined)
       data.halfDayMinutes = dto.halfDayMinutes;
     if (dto.altStartTime !== undefined)
-      data.altStartTime = dto.altStartTime ? new Date(`1970-01-01T${dto.altStartTime}`) : null;
+      data.altStartTime = dto.altStartTime ? timeOfDay(dto.altStartTime) : null;
     if (dto.altEndTime !== undefined)
-      data.altEndTime = dto.altEndTime ? new Date(`1970-01-01T${dto.altEndTime}`) : null;
+      data.altEndTime = dto.altEndTime ? timeOfDay(dto.altEndTime) : null;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     return data;
   }

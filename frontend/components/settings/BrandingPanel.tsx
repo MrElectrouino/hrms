@@ -12,6 +12,7 @@ import {
   uploadBrandingFavicon,
   uploadBrandingLogo,
 } from '../../lib/api';
+import Select from '../Select';
 
 export default function BrandingPanel() {
   const { isAuthenticated, user } = useAuth();
@@ -203,10 +204,10 @@ export default function BrandingPanel() {
           {formats.time && (
             <label className="block text-sm font-medium text-gray-700">
               Time format
-              <select className={inputClass} value={formats.time.value} onChange={(e) => setFormats((f) => (f.time ? { ...f, time: { ...f.time, value: e.target.value } } : f))}>
+              <Select className={inputClass} value={formats.time.value} onChange={(e) => setFormats((f) => (f.time ? { ...f, time: { ...f.time, value: e.target.value } } : f))}>
                 <option value="12">12-hour (3:30 PM)</option>
                 <option value="24">24-hour (15:30)</option>
-              </select>
+              </Select>
             </label>
           )}
           {formats.number && (

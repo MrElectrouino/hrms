@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import { getEmployees, getSites, getParameters, Employee } from '../lib/api';
+import Select from '../components/Select';
 
 type SortKey = 'name' | 'employeeCode' | 'dateOfJoining';
 type Option = { id: number; label: string };
@@ -115,7 +116,7 @@ export default function EmployeesPage() {
     if (router.query.search) router.replace('/employees', undefined, { shallow: true });
   };
 
-  const onFilter = (setter: (v: any) => void) => (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const onFilter = (setter: (v: any) => void) => (e: { target: { value: string } }) => {
     setter(e.target.value);
     setPage(1);
   };
@@ -160,23 +161,23 @@ export default function EmployeesPage() {
           onChange={(e) => setSearchInput(e.target.value)}
           className="flex-1 min-w-[220px] max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
         />
-        <select aria-label="Department" value={department} onChange={onFilter(setDepartment)} className={selectClass}>
+        <Select aria-label="Department" value={department} onChange={onFilter(setDepartment)} className={selectClass}>
           <option value="">All departments</option>
           {departments.map((o) => <option key={o.id} value={o.label}>{o.label}</option>)}
-        </select>
-        <select aria-label="Site" value={siteId} onChange={onFilter(setSiteId)} className={selectClass}>
+        </Select>
+        <Select aria-label="Site" value={siteId} onChange={onFilter(setSiteId)} className={selectClass}>
           <option value="">All sites</option>
           {sites.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
-        <select aria-label="Employee type" value={employeeTypeId} onChange={onFilter(setEmployeeTypeId)} className={selectClass}>
+        </Select>
+        <Select aria-label="Employee type" value={employeeTypeId} onChange={onFilter(setEmployeeTypeId)} className={selectClass}>
           <option value="">All types</option>
           {employeeTypes.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
-        <select aria-label="Status" value={status} onChange={onFilter(setStatus)} className={selectClass}>
+        </Select>
+        <Select aria-label="Status" value={status} onChange={onFilter(setStatus)} className={selectClass}>
           <option value="">All statuses</option>
           <option value="true">Active</option>
           <option value="false">Inactive</option>
-        </select>
+        </Select>
         {hasFilters && (
           <button onClick={clearFilters} className="px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800">
             Clear filters
@@ -244,13 +245,13 @@ export default function EmployeesPage() {
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2">
               Rows
-              <select
+              <Select
                 value={pageSize}
                 onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
                 className="px-2 py-1 border border-gray-300 rounded bg-white"
               >
                 {[25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
+              </Select>
             </label>
             <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">Previous</button>
             <button disabled={page >= pagination.totalPages} onClick={() => setPage(page + 1)} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50">Next</button>

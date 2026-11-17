@@ -22,7 +22,6 @@ const LOOKUPS = { nationalities: ['Indian', 'Emirati'], departments: ['Sales', '
     'Notice Period': ['1 month', '2 months'],
     Grade: ['G3'],
     'Attendance Processing': ['Automatic'],
-    'Weekly Off': ['Saturday, Sunday'],
     'OT Configuration': ['None'],
     'Skill Proficiency': ['Beginner'],
     'Access Role': ['Employee'],
@@ -190,12 +189,12 @@ describe('Dropdowns from master data', () => {
   });
 
   it('Reporting manager is a dropdown of employees, stored by employee id', () => {
-    const f = fields('organization').find((x) => x.key === 'reportingManager')!;
+    const f = fields('employment').find((x) => x.key === 'reportingManager')!;
     expect(f.type).toBe('select');
     expect(f.optionItems).toEqual([{ value: '2', label: 'Neha Kulkarni (IN-00002)' }]);
-    const org = { legalEntityCountry: 'IN', department: 'Sales', designation: 'Associate' };
-    expect(validateSection(section('IN', 'organization'), 'IN', { ...org, reportingManager: '2' }).errors).toEqual([]);
-    expect(validateSection(section('IN', 'organization'), 'IN', { ...org, reportingManager: '99' }).errors[0].field).toBe('reportingManager');
+    const emp = { employmentType: 'Permanent', employmentStatus: 'Active', dateOfJoining: '2024-01-01' };
+    expect(validateSection(section('IN', 'employment'), 'IN', { ...emp, reportingManager: '2' }).errors).toEqual([]);
+    expect(validateSection(section('IN', 'employment'), 'IN', { ...emp, reportingManager: '99' }).errors[0].field).toBe('reportingManager');
   });
 });
 

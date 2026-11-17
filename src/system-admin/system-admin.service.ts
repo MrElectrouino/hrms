@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
 import { FileStorageService, UploadedFileLike } from '../common/services/file-storage.service';
+import { EmailService } from '../common/services/email.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { CreateSystemConfigurationDto, UpdateSystemConfigurationDto } from './dto/system-configuration.dto';
 import { CreateCountryDto, UpdateCountryDto } from './dto/country.dto';
@@ -35,7 +36,34 @@ export class SystemAdminService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly storage: FileStorageService,
+    private readonly email: EmailService,
   ) {}
+
+  /* -------------------------------------------------------------- email test */
+
+  emailStatus() {
+    return this.email.status();
+  }
+
+  /** Sends a short test message and says exactly where it went (in development it is redirected). */
+  async sendTestEmail(to: string, user: CurrentUserPayload, ip: string) {
+    const status = this.email.status();
+    if (!status.configured) throw new BadRequestException('Email is not set up: SMTP_HOST is empty in the server settings (.env), so messages are only written to the log.');
+    try {
+      await this.email.send({
+        to,
+        subject: 'HRMS test email',
+        text: 'This is a test email from the HRMS. If you can read this, email sending works.',
+        html: '<p>This is a test email from the HRMS. If you can read this, email sending works.</p>',
+      });
+    } catch (e) {
+      const err = e as { code?: string; responseCode?: number; response?: string; message?: string };
+      const why = [err.code, err.responseCode, (err.response ?? err.message ?? '').toString().split('\n')[0]].filter(Boolean).join(' | ');
+      throw new BadRequestException(`The mail server refused it: ${why.slice(0, 300)}`);
+    }
+    await this.audit.log({ actorProfileId: user.profileId, action: 'email.test_sent', entityType: 'email', entityId: 'test', ipAddress: ip, metadata: { requestedFor: to, deliveredTo: status.redirectedTo ?? to } });
+    return { requestedFor: to, deliveredTo: status.redirectedTo ?? to, redirected: status.redirectedTo !== null };
+  }
 
   async listConfigurations() {
     return this.prisma.systemConfiguration.findMany({ orderBy: { id: 'asc' } });

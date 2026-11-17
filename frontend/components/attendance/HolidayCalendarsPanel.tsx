@@ -12,11 +12,13 @@ import {
   importHolidays,
   removeHoliday,
   saveHoliday,
+  updateHoliday,
   saveHolidayOrder,
   updateHolidayCalendar,
 } from '../../lib/attendance-api';
 import Drawer, { fieldClass } from '../Drawer';
 import ExcelImport from '../ExcelImport';
+import Select from '../Select';
 
 const COUNTRIES: [string, string][] = [['IN', 'India'], ['AE', 'UAE'], ['GB', 'United Kingdom'], ['US', 'United States']];
 const LEVEL_LABEL: Record<HolidayLevel, { name: string; hint: string }> = {
@@ -40,7 +42,9 @@ export default function HolidayCalendarsPanel() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [form, setForm] = useState(blank);
-  const [hol, setHol] = useState({ date: '', name: '', holidayType: 'PUBLIC' });
+  const [hol, setHol] = useState({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
+  /** The holiday being changed; null when adding a new one. */
+  const [editingHol, setEditingHol] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -123,15 +127,28 @@ export default function HolidayCalendarsPanel() {
   const addHoliday = async () => {
     if (!selected) return;
     if (!hol.date || !hol.name.trim()) return setError('Date and name are required');
+    if (hol.endDate && hol.endDate < hol.date) return setError('The end date cannot be before the date');
     setError('');
     try {
-      await saveHoliday(selected.id, { date: hol.date, name: hol.name.trim(), holidayType: hol.holidayType });
-      setHol({ date: '', name: '', holidayType: 'PUBLIC' });
+      const payload = { date: hol.date, endDate: hol.endDate || null, name: hol.name.trim(), holidayType: hol.holidayType };
+      if (editingHol === null) await saveHoliday(selected.id, payload);
+      else await updateHoliday(selected.id, editingHol, payload);
+      setHol({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
+      setEditingHol(null);
       await open(selected.id);
       loadCalendars();
     } catch (e: any) {
       setError(e.message || 'Could not save the holiday');
     }
+  };
+  const startEditHoliday = (h: Holiday) => {
+    setHol({ date: h.date, endDate: h.endDate && h.endDate !== h.date ? h.endDate : '', name: h.name, holidayType: h.holidayType });
+    setEditingHol(h.id);
+    setError('');
+  };
+  const cancelEditHoliday = () => {
+    setHol({ date: '', endDate: '', name: '', holidayType: 'PUBLIC' });
+    setEditingHol(null);
   };
   const delHoliday = async (h: Holiday) => {
     if (!selected || !window.confirm(`Remove ${h.name} (${h.date})?`)) return;
@@ -210,25 +227,27 @@ export default function HolidayCalendarsPanel() {
                     <p className="text-xs text-gray-500">{scopeText(selected)}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
+                    <Select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
                       {years.map((y) => <option key={y} value={y}>{y}</option>)}
-                    </select>
+                    </Select>
                     <button type="button" onClick={() => startEdit(selected)} className="text-sm font-medium text-blue-600 hover:text-blue-800">Edit calendar</button>
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[9rem_1fr_9rem_auto]">
-                  <input type="date" aria-label="Date" className={`${fieldClass} !mt-0`} value={hol.date} onChange={(e) => setHol({ ...hol, date: e.target.value })} />
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[9rem_9rem_1fr_9rem_auto_auto]">
+                  <input type="date" aria-label="Date" className={`${fieldClass} !mt-0`} value={hol.date} onChange={(e) => setHol({ ...hol, date: e.target.value, endDate: hol.endDate && hol.endDate < e.target.value ? '' : hol.endDate })} />
+                  <input type="date" aria-label="End date (optional)" title="End date (optional): for a holiday that lasts several days" className={`${fieldClass} !mt-0`} min={hol.date || undefined} value={hol.endDate} onChange={(e) => setHol({ ...hol, endDate: e.target.value })} />
                   <input aria-label="Holiday name" placeholder="Holiday name" className={`${fieldClass} !mt-0`} maxLength={120} value={hol.name} onChange={(e) => setHol({ ...hol, name: e.target.value })} />
-                  <select aria-label="Type" className={`${fieldClass} !mt-0`} value={hol.holidayType} onChange={(e) => setHol({ ...hol, holidayType: e.target.value })}>
+                  <Select aria-label="Type" className={`${fieldClass} !mt-0`} value={hol.holidayType} onChange={(e) => setHol({ ...hol, holidayType: e.target.value })}>
                     <option value="PUBLIC">Public</option><option value="COMPANY">Company</option><option value="OPTIONAL">Optional</option>
-                  </select>
-                  <button type="button" onClick={addHoliday} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Add</button>
+                  </Select>
+                  <button type="button" onClick={addHoliday} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">{editingHol === null ? 'Add' : 'Save'}</button>
+                  {editingHol !== null && <button type="button" onClick={cancelEditHoliday} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>}
                 </div>
 
                 <table className="mt-4 min-w-full divide-y divide-gray-200 text-sm">
                   <thead className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                    <tr><th className="py-2">Date</th><th className="py-2">Holiday</th><th className="py-2">Type</th><th className="py-2" /></tr>
+                    <tr><th className="py-2">Date (and end date)</th><th className="py-2">Holiday</th><th className="py-2">Type</th><th className="py-2" /></tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {shown.length === 0 ? (
@@ -236,10 +255,10 @@ export default function HolidayCalendarsPanel() {
                     ) : (
                       shown.map((h) => (
                         <tr key={h.id}>
-                          <td className="py-2 font-mono text-[13px] text-gray-700">{h.date}</td>
+                          <td className="py-2 font-mono text-[13px] text-gray-700">{h.date}{h.endDate && h.endDate !== h.date ? ` to ${h.endDate}` : ''}</td>
                           <td className="py-2 text-gray-900">{h.name}</td>
                           <td className="py-2 text-gray-600">{h.holidayType.charAt(0) + h.holidayType.slice(1).toLowerCase()}</td>
-                          <td className="py-2 text-right"><button type="button" onClick={() => delHoliday(h)} className="text-xs font-medium text-red-600 hover:text-red-800">Remove</button></td>
+                          <td className="whitespace-nowrap py-2 text-right"><button type="button" onClick={() => startEditHoliday(h)} className="mr-3 text-xs font-medium text-blue-600 hover:text-blue-800">Edit</button><button type="button" onClick={() => delHoliday(h)} className="text-xs font-medium text-red-600 hover:text-red-800">Remove</button></td>
                         </tr>
                       ))
                     )}
@@ -249,7 +268,7 @@ export default function HolidayCalendarsPanel() {
 
               <ExcelImport
                 title="Import holidays from Excel"
-                help="Columns: Date (YYYY-MM-DD), Name, Type (Public, Company or Optional; optional). A date that already exists is updated."
+                help="Columns: Date (YYYY-MM-DD), Name, Type (Public, Company or Optional; optional), End date (YYYY-MM-DD; optional, for a holiday that lasts several days). A date that already exists is updated."
                 templatePath="/attendance/holiday-calendars/template"
                 templateName="holidays-template.xlsx"
                 run={(file, commit) => importHolidays(selected.id, file, commit)}
@@ -276,25 +295,25 @@ export default function HolidayCalendarsPanel() {
             <input className={fieldClass} maxLength={100} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </label>
           <label className="block text-sm font-medium text-gray-700">Applies to
-            <select className={fieldClass} value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}>
+            <Select className={fieldClass} value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}>
               <option value="COMPANY">The whole company</option>
               <option value="COUNTRY">A country</option>
               <option value="BRANCH">A branch</option>
-            </select>
+            </Select>
           </label>
           {form.scope === 'COUNTRY' && (
             <label className="block text-sm font-medium text-gray-700">Country
-              <select className={fieldClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
+              <Select className={fieldClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
                 {COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
-              </select>
+              </Select>
             </label>
           )}
           {form.scope === 'BRANCH' && (
             <label className="block text-sm font-medium text-gray-700">Branch
-              <select className={fieldClass} value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
+              <Select className={fieldClass} value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
                 <option value="">Select…</option>
                 {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
+              </Select>
             </label>
           )}
           <label className="flex items-center gap-2 text-sm text-gray-700">

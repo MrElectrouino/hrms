@@ -10,6 +10,8 @@ const FUTURE = new Date('2026-11-03T09:00:00Z');
 function makePrisma() {
   return {
     user: { findUnique: jest.fn(), update: jest.fn().mockResolvedValue({}) },
+    // the personal / official email on the employee profile is looked up with raw SQL
+    $queryRaw: jest.fn().mockResolvedValue([]),
     userActivity: {
       findUnique: jest.fn().mockResolvedValue(null),
       upsert: jest.fn().mockResolvedValue({}),
@@ -341,6 +343,19 @@ describe('AuthService.forgotPassword', () => {
 
     expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
     expect(email.send).not.toHaveBeenCalled();
+  });
+
+  it('finds the account by the personal or official email on the employee profile', async () => {
+    const { service, prisma, email } = makeService();
+    prisma.user.findFirst = jest.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(activeUser(null as unknown as string));
+    prisma.$queryRaw = jest.fn().mockResolvedValue([{ employeeId: 12 }]);
+
+    await service.forgotPassword('Asha@Example.test');
+
+    expect(prisma.$queryRaw).toHaveBeenCalled();
+    expect(email.send).toHaveBeenCalledTimes(1);
+    expect(email.send.mock.calls[0][0].to).toBe('asha@example.test');
+    expect(email.send.mock.calls[0][0].html).toContain('<a href="https://hrms.example.test/reset-password?token=');
   });
 
   it('invalidates earlier links, stores only a hash, and emails the new link', async () => {

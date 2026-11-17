@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How leave gets added, and what to set up</title>
+<style>
+  :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --soft:#f3f4f6; --brand:#2563eb; --brand-soft:#eff6ff; --ok:#15803d; --ok-soft:#f0fdf4; --warn:#b45309; --warn-soft:#fffbeb; --bad:#b91c1c; --bad-soft:#fef2f2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); background:#f9fafb; }
+  .wrap { max-width:980px; margin:0 auto; padding:32px 20px 80px; }
+  header { padding:28px 0 8px; }
+  h1 { font-size:2rem; line-height:1.2; margin:0 0 8px; }
+  .lead { color:var(--muted); font-size:1.05rem; margin:0; }
+  nav.toc { background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin:24px 0; }
+  nav.toc strong { display:block; margin-bottom:6px; }
+  nav.toc ol { margin:0; padding-left:20px; columns:2; column-gap:32px; }
+  nav.toc li { margin:3px 0; }
+  a { color:var(--brand); text-decoration:none; } a:hover { text-decoration:underline; }
+  section { background:#fff; border:1px solid var(--line); border-radius:12px; padding:24px; margin:20px 0; }
+  h2 { font-size:1.4rem; margin:0 0 4px; }
+  h3 { font-size:1.05rem; margin:22px 0 6px; }
+  p { margin:8px 0; }
+  .note { border-radius:10px; padding:12px 14px; margin:14px 0; font-size:.95rem; }
+  .info { background:var(--brand-soft); border:1px solid #bfdbfe; }
+  .good { background:var(--ok-soft); border:1px solid #bbf7d0; }
+  .warn { background:var(--warn-soft); border:1px solid #fde68a; }
+  .bad  { background:var(--bad-soft); border:1px solid #fecaca; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:.93rem; }
+  th, td { text-align:left; padding:9px 11px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { background:var(--soft); font-size:.78rem; text-transform:uppercase; letter-spacing:.04em; color:#374151; }
+  td code, p code, li code { background:var(--soft); padding:1px 6px; border-radius:5px; font-size:.88em; }
+  .steps { counter-reset:s; list-style:none; padding:0; margin:12px 0; }
+  .steps > li { counter-increment:s; position:relative; padding:10px 12px 10px 52px; margin:8px 0; border:1px solid var(--line); border-radius:10px; }
+  .steps > li::before { content:counter(s); position:absolute; left:12px; top:10px; width:28px; height:28px; border-radius:50%; background:var(--brand); color:#fff; font-weight:600; display:flex; align-items:center; justify-content:center; font-size:.9rem; }
+  .steps b.where { display:block; font-weight:600; }
+  .pill { display:inline-block; border-radius:999px; padding:1px 9px; font-size:.78rem; font-weight:600; }
+  .p-ok { background:var(--ok-soft); color:var(--ok); border:1px solid #bbf7d0; }
+  .p-no { background:var(--bad-soft); color:var(--bad); border:1px solid #fecaca; }
+  .flow { display:grid; gap:10px; margin:14px 0; }
+  .flow div { border:1px solid var(--line); border-radius:10px; padding:10px 14px; background:var(--soft); }
+  .flow div b { display:block; }
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:14px; background:#fff; }
+  .card h3 { margin-top:0; }
+  .num { font-variant-numeric:tabular-nums; }
+  footer { color:var(--muted); font-size:.85rem; margin-top:30px; text-align:center; }
+  @media (max-width:640px) { nav.toc ol { columns:1; } h1 { font-size:1.6rem; } section { padding:18px; } }
+  @media print { body { background:#fff; } section, nav.toc { break-inside:avoid; border-color:#ccc; } .wrap { padding:0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>How leave gets added, and what to set up</h1>
+  <p class="lead">A step-by-step guide for the live (production) database: where the days come from, which settings decide it, and what to do on day one. Written for HR and System Admin, in plain words.</p>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#short">The short answer</a></li>
+    <li><a href="#job">The nightly job</a></li>
+    <li><a href="#which">Which rule applies to an employee</a></li>
+    <li><a href="#setup">What to set up, in order</a></li>
+    <li><a href="#types">Leave type settings</a></li>
+    <li><a href="#policy">Leave policy settings</a></li>
+    <li><a href="#examples">Worked examples</a></li>
+    <li><a href="#golive">Going live part-way through the year</a></li>
+    <li><a href="#manual">Adding or removing days by hand</a></li>
+    <li><a href="#compoff">Comp off</a></li>
+    <li><a href="#use">How the days are used</a></li>
+    <li><a href="#expiry">When days disappear</a></li>
+    <li><a href="#trouble">If an employee has no balance</a></li>
+    <li><a href="#notyet">Not built yet</a></li>
+  </ol>
+</nav>
+
+<section id="short">
+  <h2>1. The short answer</h2>
+  <p>Leave is <b>never added just because someone joined</b>. Days appear in an employee's balance in only three ways:</p>
+  <table>
+    <tr><th>Way</th><th>What adds the days</th><th>You control it in</th></tr>
+    <tr><td><b>Automatic credit</b></td><td>A job that runs every night, and the button <i>Credit leave now</i>. It gives each employee the days their <b>leave policy</b> says (or, if no policy covers them, the leave type's own setting).</td><td>Administration → <b>Leave setup</b> → <b>Policies</b>, and System settings → <b>Leave configuration</b></td></tr>
+    <tr><td><b>By hand</b></td><td>HR adds (or takes away) days for one employee, with a reason. Used for opening balances and corrections.</td><td>Administration → <b>Leave setup</b> → <b>Balances</b></td></tr>
+    <tr><td><b>Comp off</b></td><td>Working on a weekly off or a holiday, when the day is approved and enough time was worked.</td><td>System settings → Leave configuration → <b>Leave year and comp off</b></td></tr>
+  </table>
+  <div class="note warn"><b>If a leave type has no policy and its own setting is "No accrual", nobody ever gets days for it.</b> This is the most common reason an employee cannot apply: the <b>Send for approval</b> button stays off because the balance is zero.</div>
+</section>
+
+<section id="job">
+  <h2>2. The nightly job</h2>
+  <p>Every night at <b>02:30 (server time)</b> the system does three things, in this order:</p>
+  <div class="flow">
+    <div><b>1. Expire old balance</b>Any credit past its expiry date is closed, and the ledger records what expired.</div>
+    <div><b>2. Check comp off</b>Gives comp off for approved days worked on a weekly off or holiday (only if comp off is switched on).</div>
+    <div><b>3. Credit leave</b>Credits the leave year (for "upfront" types) or each month so far (for "monthly" types) to every active employee who has joined.</div>
+  </div>
+  <ul>
+    <li><b>Safe to repeat.</b> Each credit carries a unique reference (employee, leave type, month or year). Running the job twice, or pressing <i>Credit leave now</i> several times, never credits the same days twice.</li>
+    <li><b>It catches up.</b> If a month was missed, for example the server was off or the policy was created late, the next run credits the missed months of the current leave year.</li>
+    <li><b>Run it yourself</b> at any time: System settings → Leave configuration → <b>Credit leave now</b>. It tells you how many credits were added and how many were already done.</li>
+    <li>The server must be running at 02:30 for the automatic run. If it was off, the next night (or the button) catches up.</li>
+  </ul>
+</section>
+
+<section id="which">
+  <h2>3. Which rule applies to an employee</h2>
+  <p>For each employee and each leave type, the job asks these questions in order:</p>
+  <div class="flow">
+    <div><b>Is the employee active, and has their joining date passed?</b>If not, nothing is credited.</div>
+    <div><b>Does a leave policy cover them for this leave type?</b>A policy covers someone when its dates include today and its scope matches them (see below). If yes, the policy decides everything: days per year, when they are credited, joiners, rounding, service slabs.</div>
+    <div><b>No policy?</b>The leave type's own setting is used: <code>No accrual</code> (nothing), <code>Annual</code> (the whole year on day one) or <code>Monthly</code> (a twelfth each month), with its "days per year".</div>
+  </div>
+  <h3>How a policy finds the employee (its "scope")</h3>
+  <table>
+    <tr><th>Policy field</th><th>Matches this on the employee</th><th>Where that comes from</th></tr>
+    <tr><td>Country</td><td>Country of employment</td><td>Employee profile → <b>Organization</b> tab</td></tr>
+    <tr><td>Branch</td><td>Branch</td><td>Employee profile → Organization tab</td></tr>
+    <tr><td>Employee type</td><td>Employment type</td><td>Employee profile → <b>Employment</b> tab</td></tr>
+    <tr><td>Employee</td><td>That one person</td><td>(an exception for one employee)</td></tr>
+  </table>
+  <p>Leave a scope field empty to mean "anyone". If several policies match, the <b>most specific one wins</b> (one employee, then a branch, then employee type, then country, then everyone). A <b>statutory</b> policy (required by law) and a <b>company</b> policy can both apply; the employee gets the <b>higher</b> number.</p>
+  <div class="note info">If an employee's Organization tab has no <b>Country of employment</b>, or their Employment tab has no <b>Employment type</b>, a policy scoped to that country or type will not match them.</div>
+</section>
+
+<section id="setup">
+  <h2>4. What to set up, in order</h2>
+  <p>Do these once, in this order. Each needs the one before it.</p>
+  <ol class="steps">
+    <li><b class="where">Countries and branches</b>System settings → <b>Countries</b>: add your countries. Administration → <b>Branches</b>: add each branch and choose its country.</li>
+    <li><b class="where">Employee details</b>On every employee's profile set the <b>Country of employment</b> and <b>Branch</b> (Organization tab), and the <b>Employment type</b> and <b>Date of joining</b> (Employment tab). Bulk update can set branch and employment type for many people at once.</li>
+    <li><b class="where">Leave year</b>System settings → <b>Leave configuration</b> → <i>Leave year starts in</i>. Choose January for a calendar year, April for April–March, and so on. All balances and expiry follow this.</li>
+    <li><b class="where">Leave types</b>Same page → <b>Add leave type</b>. Create Annual, Casual, Medical, Unpaid and so on (settings in section 5). <b>Leave "Comp off" unticked</b> unless the type is only earned by working on off days.</li>
+    <li><b class="where">Leave policies</b>Administration → <b>Leave setup</b> → <b>Policies</b> → <b>New policy</b>. Choose who it applies to, the start date, and add each leave type with its days per year and how it is credited (settings in section 6). Create one policy per group that has different rules, for example one per country.</li>
+    <li><b class="where">Check one employee</b>On the Leave setup → Policies tab, use <b>Check an employee</b>: choose an employee, a leave type and the leave year start. It shows which policy applies and how the days were worked out, month by month, without saving anything. If it says "No policy covers this employee", fix the scope or the employee's details.</li>
+    <li><b class="where">Credit leave</b>System settings → Leave configuration → <b>Credit leave now</b> (or wait for 02:30). Then open Administration → <b>Leave setup</b> → <b>Balances</b> for an employee to see the days.</li>
+    <li><b class="where">Test as an employee</b>Sign in as an employee, open <b>My leave</b>, and apply. The balance cards show what is available, and the dialog counts the days before you send.</li>
+  </ol>
+</section>
+
+<section id="types">
+  <h2>5. Leave type settings</h2>
+  <p>System settings → Leave configuration → <b>Add leave type</b> (or Edit). Deleting is only possible while a type has never been used.</p>
+  <table>
+    <tr><th>Setting</th><th>What it does</th></tr>
+    <tr><td>Paid</td><td>Marks the type as paid or unpaid (for reports and payroll later).</td></tr>
+    <tr><td>Keeps a balance</td><td>On: days are counted against a balance. Off: leave is recorded but there is no limit (for example unpaid leave).</td></tr>
+    <tr><td>Accrual and days per year</td><td>The type's <b>own</b> rule, used only when <b>no leave policy covers the employee</b>: <code>No accrual</code>, <code>Annual</code> (all at the start of the leave year) or <code>Monthly</code> (a twelfth each month).</td></tr>
+    <tr><td>Allow half day</td><td>Employees may take a single day as the first or second half.</td></tr>
+    <tr><td>Allow negative balance</td><td>Employees may apply for more days than they have. Off by default.</td></tr>
+    <tr><td>Needs a document</td><td>A reminder only: whether a document is expected, and after how many days.</td></tr>
+    <tr><td>Maximum days per request</td><td>The longest single request allowed.</td></tr>
+    <tr><td>Sandwich leave</td><td>Whether this type takes part in the sandwich rule (off days between two leave days count as leave). Also needs the organization switch below the types.</td></tr>
+    <tr><td><b>Comp off</b></td><td>The type is earned only by comp off. It is <b>left out of leave policies</b> and not credited yearly. Tick it only for a real comp off type.</td></tr>
+  </table>
+  <p>The same page has <b>Leave year and comp off</b> and the <b>sandwich leave</b> switch with its options (weekly offs, holidays, both sides or either side).</p>
+</section>
+
+<section id="policy">
+  <h2>6. Leave policy settings</h2>
+  <p>Administration → <b>Leave setup</b> → <b>Policies</b>. A policy has who it applies to, its dates, and a rule for each leave type.</p>
+  <h3>The policy</h3>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td>Kind</td><td><b>Company benefit</b>, or <b>Statutory</b> (required by law). If both apply to someone, they get the higher amount.</td></tr>
+    <tr><td>Applies to</td><td>Country, branch, employee type or one employee. Empty means everyone. See section 3.</td></tr>
+    <tr><td>From / Until</td><td>When the policy is in force. Leave "Until" empty for open-ended. The policy in force <b>today</b> is the one used.</td></tr>
+    <tr><td>Priority</td><td>Breaks a tie between equally specific policies.</td></tr>
+    <tr><td>Switched on</td><td>Off hides the policy from calculations.</td></tr>
+  </table>
+  <h3>The rule for each leave type in the policy</h3>
+  <table>
+    <tr><th>Field</th><th>Meaning</th></tr>
+    <tr><td>Days per year</td><td>The full yearly amount. Half days are fine (for example 1.5).</td></tr>
+    <tr><td>Credited</td><td><b>Whole year on the first day</b> (upfront), <b>A share each month</b>, or <b>Not credited automatically</b> (you add days by hand).</td></tr>
+    <tr><td>Joining part-way through the year</td><td><b>No proration</b> (full year), <b>Completed months</b> (only full months after joining), <b>Started months</b> (the joining month counts), <b>Cut-off day</b> (the joining month counts if they joined by that day), or <b>Exact calendar days</b>.</td></tr>
+    <tr><td>Rounding</td><td>None, down, up, nearest, nearest half day, up to a half day, down to a half day. "Exactly halfway rounds" up or down.</td></tr>
+    <tr><td>At least / At most</td><td>A floor and a ceiling after rounding.</td></tr>
+    <tr><td>Length of service</td><td>Optional slabs: for example 21 days for the first 60 months, then 30 days. A new slab starts <b>as soon as the milestone is reached</b>, or <b>from the next leave year</b>.</td></tr>
+  </table>
+  <div class="note info">A policy that has already produced credits is <b>locked</b>: you can rename it, end it with an end date or switch it off, but not change its rules. To change a rule, end the policy and start a new one. This keeps earlier calculations explainable.</div>
+</section>
+
+<section id="examples">
+  <h2>7. Worked examples</h2>
+  <div class="cols">
+    <div class="card">
+      <h3>Annual leave, 24 days, monthly</h3>
+      <p>Calendar year, <i>Completed months</i>, no rounding. An employee who joined <b>16 July</b> earns the full months August to December: <span class="num">5 × 2 = <b>10 days</b></span>. Credits appear as 2 days each on 1 August, 1 September, and so on, as the nightly job runs.</p>
+    </div>
+    <div class="card">
+      <h3>Sick leave, 12 days, upfront</h3>
+      <p><i>Credited: whole year on the first day</i>. Someone employed on 1 January gets <b>12 days</b> at once. A joiner in July with <i>Completed months</i> gets <span class="num">6 / 12 × 12 = <b>6 days</b></span> on the first run after they join.</p>
+    </div>
+    <div class="card">
+      <h3>Joined 16 July, 24 days a year</h3>
+      <p>Completed months: <b>10</b>. Started months: <b>12</b>. Exact days (169 of 365): <b>11.11</b>. With <i>Always up to a half day</i> that 11.11 becomes <b>11.5</b>. Pick the method your company policy uses.</p>
+    </div>
+    <div class="card">
+      <h3>April–March year</h3>
+      <p>Leave year starts in April. A joiner on 1 July with 24 days a year and <i>Completed months</i> earns July to March: <span class="num">9 × 2 = <b>18 days</b></span>.</p>
+    </div>
+  </div>
+  <p>The page <b>Check an employee</b> (Leave setup → Policies) shows this working for a real employee before you rely on it.</p>
+</section>
+
+<section id="golive">
+  <h2>8. Going live part-way through the year</h2>
+  <p>When you start using the system in, say, September, employees already have leave from earlier in the year. There are two honest ways to do it. <b>Pick one, not both.</b></p>
+  <div class="cols">
+    <div class="card">
+      <h3>A. Let the policy catch up</h3>
+      <p>Create the leave policies. The first run credits <b>every month of the current leave year so far</b> (from the year start, or the joining date for later joiners). This gives the full year-to-date entitlement. Then, if someone's real balance differs because they already took leave, <b>add or take away the difference by hand</b> with the reason "Opening balance adjustment".</p>
+      <p><span class="pill p-ok">Recommended</span> when you want entitlements calculated by the system.</p>
+    </div>
+    <div class="card">
+      <h3>B. Type the real balances in</h3>
+      <p>Enter each employee's actual balance by hand (Leave setup → Balances tab), with the reason "Opening balance". <b>Do not</b> create a policy for those leave types until the <b>next leave year</b> starts, otherwise the first run also credits the year-to-date days and the balance is counted twice.</p>
+      <p><span class="pill p-ok">Good</span> when you only have a spreadsheet of final balances.</p>
+    </div>
+  </div>
+  <div class="note warn"><b>Check before you press "Credit leave now" the first time.</b> Use <i>Check an employee</i> for two or three people to see the total the policy will give. Credits are written to a ledger and can be corrected by an adjustment, but it is easier not to need one.</div>
+</section>
+
+<section id="manual">
+  <h2>9. Adding or removing days by hand</h2>
+  <ol class="steps">
+    <li><b class="where">Open the page</b>Administration → <b>Leave setup</b> → <b>Balances</b> (HR Admin or System Admin).</li>
+    <li><b class="where">Choose the employee</b>Use the Employees list (it has a search box). You can tick several employees to give them all the same days at once.</li>
+    <li><b class="where">Fill "Add or take away days"</b>Pick the leave type, type the days (use a minus sign to take days away, for example <code>-2</code>), write a <b>reason</b> (required), and optionally an <b>Expires</b> date.</li>
+    <li><b class="where">Save</b>The balance card and the ledger below update at once. Every change is recorded with who, when and why.</li>
+  </ol>
+  <ul>
+    <li>Days you take away use the balance that expires <b>soonest</b> first.</li>
+    <li>A manual adjustment works for any type that keeps a balance, including a comp off type.</li>
+    <li>Set <b>Expires</b> to the last day of the leave year if the days should not outlive it. Without an expiry date, the days stay until used.</li>
+  </ul>
+</section>
+
+<section id="compoff">
+  <h2>10. Comp off</h2>
+  <p>System settings → Leave configuration → <b>Leave year and comp off</b>.</p>
+  <table>
+    <tr><th>Setting</th><th>Meaning</th></tr>
+    <tr><td>Earn comp off for working on a weekly off or holiday</td><td>The switch. Off means nothing is earned.</td></tr>
+    <tr><td>Days credited</td><td>How many days one qualifying day gives (for example 1, or 0.5).</td></tr>
+    <tr><td>Expires after (days)</td><td>How long the comp off stays usable. Empty means it never expires.</td></tr>
+    <tr><td>Minimum worked (minutes)</td><td>The day must have at least this much worked time.</td></tr>
+  </table>
+  <p>You also need a leave type with <b>Comp off</b> ticked to receive the credit. The credit is made when the attendance day is <b>approved</b>, by the nightly job or <b>Check comp off now</b>. A comp off credit is not taken back automatically if the attendance is later changed.</p>
+</section>
+
+<section id="use">
+  <h2>11. How the days are used</h2>
+  <ol class="steps">
+    <li><b class="where">Apply</b>The employee chooses type and dates on <b>My leave → Apply for leave</b>. The system counts the days (weekly offs, holidays and the sandwich rule included) and checks the balance. <i>Send for approval</i> is only available if the balance covers it, unless the type allows negative balance.</li>
+    <li><b class="where">Waiting</b>The days are <b>reserved</b> (shown as "waiting approval") so they cannot be used twice.</li>
+    <li><b class="where">Decision</b>The reporting manager, or HR, approves or rejects (Leave Management → <b>Team leave</b>). The days are counted again at approval. Approval takes the days from the balance (the soonest-expiring first) and marks the dates on attendance.</li>
+    <li><b class="where">Cancel</b>A waiting or future approved leave can be cancelled; the days go back to the balance.</li>
+  </ol>
+  <div class="note info">Approval needs the employee to have a <b>reporting manager</b> (Employee profile → Employment tab → Reporting). HR can always decide.</div>
+</section>
+
+<section id="expiry">
+  <h2>12. When days disappear</h2>
+  <p>Credits made by a policy or by a leave type's own setting <b>expire on the last day of the leave year</b>. The nightly job then closes them and writes an "Expired" line in the ledger, so the employee can see what was lost.</p>
+  <div class="note bad"><b>There is no carry-forward yet.</b> Unused days do not move into the next year, and they are not paid out. If your policy lets people carry days forward, tell HR to add the carried days by hand at the start of the new year, with an expiry date, until carry-forward is built.</div>
+</section>
+
+<section id="trouble">
+  <h2>13. If an employee has no balance</h2>
+  <p>Check these in order:</p>
+  <table>
+    <tr><th>Check</th><th>What you will see, and the fix</th></tr>
+    <tr><td>Is there a policy rule for the type?</td><td>A leave type set to <i>No accrual</i> with no policy gives nothing. Add the type to a policy, or give the type its own accrual setting.</td></tr>
+    <tr><td>Is the type marked <b>Comp off</b>?</td><td>A comp off type is skipped by policies and yearly credit. Edit the type and untick Comp off if it is a normal type such as Casual leave.</td></tr>
+    <tr><td>Does the policy match the employee?</td><td>Use <b>Check an employee</b>. If it says no policy covers them, check the policy's country, branch and employee type against the employee's Organization and Employment tabs, and its start date.</td></tr>
+    <tr><td>Is the leave year right?</td><td>Leave configuration → Leave year starts in. The year shown by <i>Check an employee</i> must contain today.</td></tr>
+    <tr><td>Has the credit run?</td><td>Press <b>Credit leave now</b>. The message says how many credits were added. "0 credited, N already done" means they were created earlier.</td></tr>
+    <tr><td>Is the employee active, with a past joining date?</td><td>Inactive employees, or employees whose joining date is in the future, are skipped.</td></tr>
+    <tr><td>Did the policy produce 0 days?</td><td>Joining on the last day of a month with <i>Completed months</i> can give 0. Use a minimum ("At least"), or another proration method.</td></tr>
+    <tr><td>Is the policy switched off or ended?</td><td>Its "Switched on" box and its end date.</td></tr>
+  </table>
+  <p>The quickest fix for one person is a <b>manual adjustment</b> (section 9). Fix the cause too, or the next employee will have the same problem.</p>
+</section>
+
+<section id="notyet">
+  <h2>14. Not built yet</h2>
+  <p>These are not in the system today, so plan around them:</p>
+  <ul>
+    <li>Carry-forward of unused days into the next year, and paying out (encashment) of unused days.</li>
+    <li>Probation rules (days locked until confirmation).</li>
+    <li>End-of-service settlement of unused leave.</li>
+    <li>A leave request that crosses two leave years is counted against one balance, not split.</li>
+    <li>Recalculating a whole year when a policy changes in the middle of it. Create a new policy from the change date instead.</li>
+    <li>Payroll. Leave only records the days.</li>
+  </ul>
+  <p>The full list of business questions behind these is in <code>planning/leave_entitlement_requirements.md</code>.</p>
+</section>
+
+<footer>Generated from how the system works on 2026-11-17. If a screen or setting here does not match what you see, tell the person who maintains the system.</footer>
+</div>
+</body>
+</html>

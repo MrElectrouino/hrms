@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { getDocuments, createDocument, attachDocumentFile, getDocumentTypes, getEmployees, Document, DocumentTypeItem, Employee } from '../lib/api';
+import Select from '../components/Select';
+import Modal from '../components/Modal';
 
 export default function DocumentsPage() {
   const { isAuthenticated } = useAuth();
@@ -169,26 +171,24 @@ export default function DocumentsPage() {
       )}
 
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 my-8">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Create Document</h3>
+        <Modal title="Create Document" size="md" onClose={() => setShowCreate(false)}>
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <input type="search" placeholder="Search employee…" value={employeeSearch} onChange={(e) => setEmployeeSearch(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                  <select required aria-label="Employee" value={form.profileId} onChange={(e) => setForm({ ...form, profileId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                  <Select required aria-label="Employee" value={form.profileId} onChange={(e) => setForm({ ...form, profileId: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">Select employee…</option>
                     {employees.map((emp) => (
                       <option key={emp.id} value={emp.profileId}>
                         {[emp.profile?.name, emp.profile?.lastName].filter(Boolean).join(' ')} ({emp.employeeCode})
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
-                <select required aria-label="Document type" value={form.documentTypeId} onChange={(e) => setForm({ ...form, documentTypeId: e.target.value })} className="self-end px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                <Select required aria-label="Document type" value={form.documentTypeId} onChange={(e) => setForm({ ...form, documentTypeId: e.target.value })} className="self-end px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Document Type</option>
                   {documentTypes.map((dt) => <option key={dt.id} value={dt.id}>{dt.name}{dt.hasExpiry ? ' (expires)' : ''}</option>)}
-                </select>
+                </Select>
               </div>
               <input placeholder="Document Title" value={form.documentTitle} onChange={(e) => setForm({ ...form, documentTitle: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
               {needsDates && (
@@ -225,8 +225,7 @@ export default function DocumentsPage() {
                 <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">Create</button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

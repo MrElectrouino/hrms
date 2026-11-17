@@ -63,10 +63,10 @@ export function statusWhenHoursOk(current: string, requiresApprovalPending: bool
 export type Expectation = 'HOLIDAY' | 'WEEKLY_OFF' | 'WORK' | 'UNKNOWN';
 
 /**
- * Was the person expected to work? A holiday wins. A roster entry or pattern says work or off.
+ * Was the person expected to work? A holiday wins. A roster entry, a roster pattern or a weekly off template says work or off.
  * With no roster at all we cannot tell, so we do not guess: nothing is marked absent.
  */
-export function expectation(day: { isHoliday: boolean; rosterSource: 'ENTRY' | 'PATTERN' | 'NONE'; isWeeklyOff: boolean }): Expectation {
+export function expectation(day: { isHoliday: boolean; rosterSource: 'ENTRY' | 'PATTERN' | 'TEMPLATE' | 'NONE'; isWeeklyOff: boolean }): Expectation {
   if (day.isHoliday) return 'HOLIDAY';
   if (day.rosterSource === 'NONE') return 'UNKNOWN';
   return day.isWeeklyOff ? 'WEEKLY_OFF' : 'WORK';

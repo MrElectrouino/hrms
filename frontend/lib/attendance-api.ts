@@ -41,6 +41,8 @@ export interface HolidayCalendarPayload {
 export interface Holiday {
   id: number;
   date: string;
+  /** Last day of a holiday that lasts several days; empty for a single day. */
+  endDate?: string | null;
   name: string;
   holidayType: string;
 }
@@ -83,12 +85,13 @@ export interface Assignments {
   workSchedules: AssignmentRow[];
   rosterPatterns: AssignmentRow[];
   holidayCalendars: AssignmentRow[];
+  weeklyOffs: AssignmentRow[];
 }
 
 export interface ResolvedDay {
   date: string;
   holiday: { name: string; type: string; calendarLevel: HolidayLevel } | null;
-  roster: { source: 'ENTRY' | 'PATTERN' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null };
+  roster: { source: 'ENTRY' | 'PATTERN' | 'TEMPLATE' | 'NONE'; isWeeklyOff: boolean; shift: { id: number; name: string } | null };
   workSchedule: { id: number; name: string; scheduleType: string } | null;
 }
 
@@ -107,7 +110,8 @@ export const getHolidayCalendars = () => request<HolidayCalendar[]>('/attendance
 export const createHolidayCalendar = (p: HolidayCalendarPayload) => request<HolidayCalendar>('/attendance/holiday-calendars', { method: 'POST', body: json(p) });
 export const updateHolidayCalendar = (id: number, p: HolidayCalendarPayload) => request<HolidayCalendar>(`/attendance/holiday-calendars/${id}`, { method: 'PUT', body: json(p) });
 export const getHolidayCalendar = (id: number) => request<HolidayCalendar & { holidays: Holiday[] }>(`/attendance/holiday-calendars/${id}`);
-export const saveHoliday = (id: number, p: { date: string; name: string; holidayType?: string }) => request<Holiday>(`/attendance/holiday-calendars/${id}/holidays`, { method: 'POST', body: json(p) });
+export const saveHoliday = (id: number, p: { date: string; endDate?: string | null; name: string; holidayType?: string }) => request<Holiday>(`/attendance/holiday-calendars/${id}/holidays`, { method: 'POST', body: json(p) });
+export const updateHoliday = (id: number, holidayId: number, p: { date: string; endDate?: string | null; name: string; holidayType?: string }) => request<Holiday>(`/attendance/holiday-calendars/${id}/holidays/${holidayId}`, { method: 'PUT', body: json(p) });
 export const removeHoliday = (id: number, holidayId: number) => request<null>(`/attendance/holiday-calendars/${id}/holidays/${holidayId}`, { method: 'DELETE' });
 
 export const getRosterPatterns = () => request<RosterPattern[]>('/attendance/roster-patterns');
@@ -119,8 +123,9 @@ export const updateRosterPattern = (id: number, p: { name: string; cycleDays: nu
 export const getAssignments = (employeeId: number) => request<Assignments>(`/attendance/employees/${employeeId}/assignments`);
 export const assignWorkSchedule = (employeeId: number, p: { workScheduleId: number; effectiveFrom: string }) => request<unknown>(`/attendance/employees/${employeeId}/work-schedule`, { method: 'POST', body: json(p) });
 export const assignRosterPattern = (employeeId: number, p: { patternId: number; effectiveFrom: string; anchorDate?: string }) => request<unknown>(`/attendance/employees/${employeeId}/roster-pattern`, { method: 'POST', body: json(p) });
+export const assignWeeklyOffTemplate = (employeeId: number, p: { templateId: number | null; effectiveFrom: string }) => request<unknown>(`/attendance/employees/${employeeId}/weekly-off`, { method: 'POST', body: json(p) });
 export const assignHolidayCalendar = (employeeId: number, p: { calendarId: number; effectiveFrom: string }) => request<unknown>(`/attendance/employees/${employeeId}/holiday-calendar`, { method: 'POST', body: json(p) });
-export const removeAssignment = (employeeId: number, kind: 'work-schedule' | 'roster-pattern' | 'holiday-calendar', id: number) =>
+export const removeAssignment = (employeeId: number, kind: 'work-schedule' | 'roster-pattern' | 'holiday-calendar' | 'weekly-off', id: number) =>
   request<null>(`/attendance/employees/${employeeId}/assignments/${kind}/${id}`, { method: 'DELETE' });
 export const getEmployeeCalendar = (employeeId: number, from: string, to: string) =>
   request<{ employeeId: number; country: string; holidayOrder: HolidayLevel[]; days: ResolvedDay[] }>(`/attendance/employees/${employeeId}/calendar?from=${from}&to=${to}`);
@@ -148,3 +153,24 @@ export async function downloadFile(path: string, fileName: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
+
+/** A weekday that is off only some weeks: the chosen occurrences in the month (1-5, -1 = last), or every other week from a date. */
+export type WeeklyOffRule = { day: number; kind: 'WEEKS'; weeks: number[] } | { day: number; kind: 'ALTERNATE'; anchor: string };
+
+export interface WeeklyOffTemplate {
+  id: number;
+  name: string;
+  /** Weekdays off every week: 0 = Sunday ... 6 = Saturday. */
+  days: number[];
+  rules: WeeklyOffRule[];
+  daysText: string;
+  note: string | null;
+  isActive: boolean;
+  employeeCount: number;
+  everAssigned: boolean;
+}
+export type WeeklyOffPayload = { name: string; days: number[]; rules?: WeeklyOffRule[]; note?: string | null; isActive?: boolean };
+export const getWeeklyOffTemplates = () => request<WeeklyOffTemplate[]>('/attendance/weekly-off-templates');
+export const createWeeklyOffTemplate = (p: WeeklyOffPayload) => request<WeeklyOffTemplate>('/attendance/weekly-off-templates', { method: 'POST', body: json(p) });
+export const updateWeeklyOffTemplate = (id: number, p: WeeklyOffPayload) => request<WeeklyOffTemplate>(`/attendance/weekly-off-templates/${id}`, { method: 'PUT', body: json(p) });
+export const deleteWeeklyOffTemplate = (id: number) => request<null>(`/attendance/weekly-off-templates/${id}`, { method: 'DELETE' });

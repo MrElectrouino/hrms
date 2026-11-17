@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { CustomFieldAdmin, createCustomField, getCustomFieldDefinitions, updateCustomField } from '../lib/api';
+import { CustomFieldAdmin, createCustomField, deleteCustomField, getCustomFieldDefinitions, updateCustomField } from '../lib/api';
+import Select from '../components/Select';
 
 const TABS = [
   ['personal', 'Personal'],
@@ -77,6 +78,17 @@ export default function CustomFieldsPage() {
     }
   };
 
+  const remove = async (f: CustomFieldAdmin) => {
+    if (!window.confirm(`Delete the custom field "${f.label}"? This cannot be undone. If employees already have a value in it you will be told to deactivate it instead.`)) return;
+    setError('');
+    try {
+      await deleteCustomField(f.code);
+      load();
+    } catch (err: any) {
+      setError(err.message || 'Could not delete the field');
+    }
+  };
+
   const toggle = async (f: CustomFieldAdmin) => {
     setError('');
     try {
@@ -149,6 +161,7 @@ export default function CustomFieldsPage() {
                     <button type="button" onClick={() => toggle(f)} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50">
                       {f.isActive ? 'Deactivate' : 'Activate'}
                     </button>
+                    <button type="button" onClick={() => remove(f)} className="ml-2 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 shadow-sm hover:bg-red-50">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -166,9 +179,9 @@ export default function CustomFieldsPage() {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Profile tab</label>
-            <select className={inputClass} value={form.tabKey} onChange={(e) => setForm({ ...form, tabKey: e.target.value })}>
+            <Select className={inputClass} value={form.tabKey} onChange={(e) => setForm({ ...form, tabKey: e.target.value })}>
               {TABS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Section name</label>
@@ -176,9 +189,9 @@ export default function CustomFieldsPage() {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Field type</label>
-            <select className={inputClass} value={form.fieldType} onChange={(e) => setForm({ ...form, fieldType: e.target.value })}>
+            <Select className={inputClass} value={form.fieldType} onChange={(e) => setForm({ ...form, fieldType: e.target.value })}>
               {TYPES.map((t) => <option key={t}>{t}</option>)}
-            </select>
+            </Select>
           </div>
           {OPTIONS_REQUIRED.includes(form.fieldType) && (
             <div>
@@ -192,16 +205,16 @@ export default function CustomFieldsPage() {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Applies to</label>
-            <select className={inputClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
+            <Select className={inputClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
               {COUNTRIES.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
-            </select>
+            </Select>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Required</label>
-            <select className={inputClass} value={form.isRequired ? 'Yes' : 'No'} onChange={(e) => setForm({ ...form, isRequired: e.target.value === 'Yes' })}>
+            <Select className={inputClass} value={form.isRequired ? 'Yes' : 'No'} onChange={(e) => setForm({ ...form, isRequired: e.target.value === 'Yes' })}>
               <option>No</option>
               <option>Yes</option>
-            </select>
+            </Select>
           </div>
           <div className="md:col-span-2">
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Help text</label>

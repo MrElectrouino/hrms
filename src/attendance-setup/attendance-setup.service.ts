@@ -10,6 +10,7 @@ import {
   parseIsoDate,
   toIsoDate,
   validateHolidayRows,
+  MAX_HOLIDAY_DAYS,
   validateSchedule,
 } from './attendance-logic';
 import {
@@ -21,6 +22,8 @@ import {
   RosterPatternDto,
   WorkScheduleDto,
 } from './dto/attendance.dto';
+import { AssignWeeklyOffDto, WeeklyOffTemplateDto } from './dto/weekly-off.dto';
+import { WeeklyOffRule, assignWeeklyOff, describeTemplate, validateTemplate } from './weekly-off.util';
 import { IMPORT_MAX_BYTES, buildTemplate, readSheet } from './excel.util';
 
 const HOLIDAY_ORDER_KEY = 'holiday_calendar_order';
@@ -174,19 +177,52 @@ export class AttendanceSetupService {
   async getCalendar(id: number) {
     const c = await this.prisma.holidayCalendar.findUnique({ where: { id }, include: { holidays: { orderBy: { date: 'asc' } } } });
     if (!c) throw new NotFoundException('Holiday calendar not found');
-    return { ...c, holidays: c.holidays.map((h) => ({ ...h, date: toIsoDate(h.date) })) };
+    return { ...c, holidays: c.holidays.map((h) => ({ ...h, date: toIsoDate(h.date), endDate: h.endDate ? toIsoDate(h.endDate) : null })) };
   }
 
   async saveHoliday(calendarId: number, dto: HolidayDto, user: CurrentUserPayload, ip?: string) {
     if (!(await this.prisma.holidayCalendar.findUnique({ where: { id: calendarId } }))) throw new NotFoundException('Holiday calendar not found');
     const date = mustDate(dto.date, 'Date');
+    const endDate = dto.endDate && dto.endDate !== dto.date ? mustDate(dto.endDate, 'End date') : null;
+    if (endDate) {
+      if (endDate < date) throw new BadRequestException('The end date cannot be before the date');
+      if ((endDate.getTime() - date.getTime()) / 86_400_000 + 1 > MAX_HOLIDAY_DAYS) throw new BadRequestException(`A holiday can last at most ${MAX_HOLIDAY_DAYS} days`);
+    }
+    // Two holidays in one calendar must not cover the same day.
+    const last = endDate ?? date;
+    const clash = await this.prisma.holiday.findFirst({
+      where: { calendarId, date: { not: date, lte: last }, OR: [{ endDate: { gte: date } }, { endDate: null, date: { gte: date } }] },
+      select: { name: true, date: true },
+    });
+    if (clash) throw new BadRequestException(`This overlaps "${clash.name}" (${toIsoDate(clash.date)}) in the same calendar`);
     const saved = await this.prisma.holiday.upsert({
       where: { calendarId_date: { calendarId, date } },
-      create: { calendarId, date, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
-      update: { name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
+      create: { calendarId, date, endDate, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
+      update: { endDate, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' },
     });
-    await this.log(user, 'HOLIDAY_SAVED', 'HolidayCalendar', calendarId, ip, { date: dto.date });
-    return { ...saved, date: toIsoDate(saved.date) };
+    await this.log(user, 'HOLIDAY_SAVED', 'HolidayCalendar', calendarId, ip, { date: dto.date, endDate: dto.endDate ?? null });
+    return { ...saved, date: toIsoDate(saved.date), endDate: saved.endDate ? toIsoDate(saved.endDate) : null };
+  }
+
+  /** Change one holiday (including its date). */
+  async updateHoliday(calendarId: number, holidayId: number, dto: HolidayDto, user: CurrentUserPayload, ip?: string) {
+    const current = await this.prisma.holiday.findFirst({ where: { id: holidayId, calendarId } });
+    if (!current) throw new NotFoundException('Holiday not found');
+    const date = mustDate(dto.date, 'Date');
+    const endDate = dto.endDate && dto.endDate !== dto.date ? mustDate(dto.endDate, 'End date') : null;
+    if (endDate) {
+      if (endDate < date) throw new BadRequestException('The end date cannot be before the date');
+      if ((endDate.getTime() - date.getTime()) / 86_400_000 + 1 > MAX_HOLIDAY_DAYS) throw new BadRequestException(`A holiday can last at most ${MAX_HOLIDAY_DAYS} days`);
+    }
+    const last = endDate ?? date;
+    const clash = await this.prisma.holiday.findFirst({
+      where: { calendarId, id: { not: holidayId }, date: { lte: last }, OR: [{ endDate: { gte: date } }, { endDate: null, date: { gte: date } }] },
+      select: { name: true, date: true },
+    });
+    if (clash) throw new BadRequestException(`This overlaps "${clash.name}" (${toIsoDate(clash.date)}) in the same calendar`);
+    const saved = await this.prisma.holiday.update({ where: { id: holidayId }, data: { date, endDate, name: dto.name.trim(), holidayType: dto.holidayType ?? 'PUBLIC' } });
+    await this.log(user, 'HOLIDAY_UPDATED', 'HolidayCalendar', calendarId, ip, { from: toIsoDate(current.date), date: dto.date, endDate: dto.endDate ?? null });
+    return { ...saved, date: toIsoDate(saved.date), endDate: saved.endDate ? toIsoDate(saved.endDate) : null };
   }
 
   async removeHoliday(calendarId: number, holidayId: number, user: CurrentUserPayload, ip?: string) {
@@ -197,7 +233,7 @@ export class AttendanceSetupService {
   }
 
   holidayTemplate() {
-    return buildTemplate('Holidays', ['Date', 'Name', 'Type'], ['2026-01-26', 'Republic Day', 'PUBLIC']);
+    return buildTemplate('Holidays', ['Date', 'Name', 'Type', 'End date'], ['2026-01-26', 'Republic Day', 'PUBLIC', '']);
   }
 
   /**
@@ -207,8 +243,8 @@ export class AttendanceSetupService {
   async importHolidays(calendarId: number, file: { buffer: Buffer; originalname: string; size: number }, commit: boolean, user: CurrentUserPayload, ip?: string) {
     if (!(await this.prisma.holidayCalendar.findUnique({ where: { id: calendarId } }))) throw new NotFoundException('Holiday calendar not found');
     if (file.size > IMPORT_MAX_BYTES) throw new BadRequestException('File must be 2 MB or smaller');
-    const sheet = await readSheet(file.buffer, ['Date', 'Name', 'Type']);
-    const { valid, errors } = validateHolidayRows(sheet.map((r) => ({ row: r.row, date: r.cells[0], name: r.cells[1], type: r.cells[2] })));
+    const sheet = await readSheet(file.buffer, ['Date', 'Name', 'Type'], ['End date']);
+    const { valid, errors } = validateHolidayRows(sheet.map((r) => ({ row: r.row, date: r.cells[0], name: r.cells[1], type: r.cells[2], endDate: r.cells[3] })));
 
     if (!commit) return { committed: false, totalRows: sheet.length, validRows: valid.length, errors, preview: valid.slice(0, 50) };
 
@@ -216,8 +252,8 @@ export class AttendanceSetupService {
       valid.map((v) =>
         this.prisma.holiday.upsert({
           where: { calendarId_date: { calendarId, date: parseIsoDate(v.date)! } },
-          create: { calendarId, date: parseIsoDate(v.date)!, name: v.name, holidayType: v.holidayType },
-          update: { name: v.name, holidayType: v.holidayType },
+          create: { calendarId, date: parseIsoDate(v.date)!, endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name, holidayType: v.holidayType },
+          update: { endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name, holidayType: v.holidayType },
         }),
       ),
     );
@@ -290,16 +326,18 @@ export class AttendanceSetupService {
   /* ------------------------------------------------------------------ employee assignments (effective-dated) */
 
   async listAssignments(employeeId: number) {
-    const [schedules, patterns, calendars] = await Promise.all([
+    const [schedules, patterns, calendars, weeklyOffs] = await Promise.all([
       this.prisma.employeeWorkSchedule.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { workSchedule: { select: { id: true, name: true, code: true } } } }),
       this.prisma.employeeRosterPattern.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { pattern: { select: { id: true, name: true, cycleDays: true } } } }),
       this.prisma.employeeHolidayCalendar.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { calendar: { select: { id: true, name: true } } } }),
+      this.prisma.employeeWeeklyOff.findMany({ where: { employeeId }, orderBy: { effectiveFrom: 'desc' }, include: { template: { select: { id: true, name: true } } } }),
     ]);
     const f = (d: Date | null) => (d ? toIsoDate(d) : null);
     return {
       workSchedules: schedules.map((a) => ({ id: a.id, ref: a.workSchedule, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
       rosterPatterns: patterns.map((a) => ({ id: a.id, ref: a.pattern, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo), anchorDate: f(a.anchorDate) })),
       holidayCalendars: calendars.map((a) => ({ id: a.id, ref: a.calendar, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
+      weeklyOffs: weeklyOffs.map((a) => ({ id: a.id, ref: a.template, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
     };
   }
 
@@ -373,15 +411,103 @@ export class AttendanceSetupService {
     return created;
   }
 
-  /** Removes an assignment of the given kind (work-schedule | roster-pattern | holiday-calendar). */
+  /* ------------------------------------------------------------------ weekly off templates */
+
+  async listWeeklyOffTemplates() {
+    const rows = await this.prisma.weeklyOffTemplate.findMany({ orderBy: [{ isActive: 'desc' }, { name: 'asc' }], include: { _count: { select: { assignments: true } } } });
+    const today = new Date(`${toIsoDate(new Date())}T00:00:00Z`);
+    const current = await this.prisma.employeeWeeklyOff.groupBy({ by: ['templateId'], _count: { _all: true }, where: { effectiveFrom: { lte: today }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }] } });
+    const now = new Map(current.map((c) => [c.templateId, c._count._all]));
+    return rows.map(({ _count, ...t }) => ({ ...t, daysText: describeTemplate({ days: t.days, rules: t.rules as unknown as WeeklyOffRule[] }), employeeCount: now.get(t.id) ?? 0, everAssigned: _count.assignments > 0 }));
+  }
+
+  private weeklyOffData(dto: WeeklyOffTemplateDto) {
+    const days = [...new Set(dto.days)].sort((a, b) => a - b);
+    const rules: WeeklyOffRule[] = (dto.rules ?? []).map((r) => (r.kind === 'WEEKS' ? { day: r.day, kind: 'WEEKS', weeks: [...new Set(r.weeks ?? [])] } : { day: r.day, kind: 'ALTERNATE', anchor: r.anchor ?? '' }));
+    const problems = validateTemplate(days, rules);
+    if (problems.length) throw new BadRequestException(problems[0]);
+    return { name: dto.name.trim(), days, rules: rules as unknown as Prisma.InputJsonValue, note: dto.note?.trim() || null, isActive: dto.isActive ?? true };
+  }
+
+  async createWeeklyOffTemplate(dto: WeeklyOffTemplateDto, user: CurrentUserPayload, ip?: string) {
+    const data = this.weeklyOffData(dto);
+    try {
+      const created = await this.prisma.weeklyOffTemplate.create({ data });
+      await this.log(user, 'WEEKLY_OFF_TEMPLATE_CREATED', 'WeeklyOffTemplate', created.id, ip);
+      return created;
+    } catch (e) {
+      return this.conflict(e, 'A weekly off template with this name');
+    }
+  }
+
+  async updateWeeklyOffTemplate(id: number, dto: WeeklyOffTemplateDto, user: CurrentUserPayload, ip?: string) {
+    if (!(await this.prisma.weeklyOffTemplate.findUnique({ where: { id }, select: { id: true } }))) throw new NotFoundException('Weekly off template not found');
+    const data = this.weeklyOffData(dto);
+    try {
+      const updated = await this.prisma.weeklyOffTemplate.update({ where: { id }, data });
+      await this.log(user, 'WEEKLY_OFF_TEMPLATE_UPDATED', 'WeeklyOffTemplate', id, ip);
+      return updated;
+    } catch (e) {
+      return this.conflict(e, 'A weekly off template with this name');
+    }
+  }
+
+  /** A template that has ever been assigned is kept (history depends on it): switch it off instead. */
+  async deleteWeeklyOffTemplate(id: number, user: CurrentUserPayload, ip?: string) {
+    const t = await this.prisma.weeklyOffTemplate.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!t) throw new NotFoundException('Weekly off template not found');
+    if ((await this.prisma.employeeWeeklyOff.count({ where: { templateId: id } })) > 0) {
+      throw new ConflictException(`"${t.name}" is, or was, assigned to employees, so it cannot be deleted. Switch it off instead.`);
+    }
+    await this.prisma.weeklyOffTemplate.delete({ where: { id } });
+    await this.log(user, 'WEEKLY_OFF_TEMPLATE_DELETED', 'WeeklyOffTemplate', id, ip, { name: t.name });
+  }
+
+  /** The profile's Weekly off field shows the template that applies today (or nothing). */
+  private async syncWeeklyOffProfile(employeeId: number) {
+    const today = mustDate(toIsoDate(new Date()), 'Today');
+    const current = await this.prisma.employeeWeeklyOff.findFirst({
+      where: { employeeId, effectiveFrom: { lte: today }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }] },
+      orderBy: { effectiveFrom: 'desc' },
+      include: { template: { select: { name: true } } },
+    });
+    const row = await this.prisma.employeeProfileSection.findUnique({ where: { employeeId_sectionKey: { employeeId, sectionKey: 'attendance' } } });
+    const data = { ...((row?.data as Record<string, unknown> | null) ?? {}) };
+    if (current) data.weeklyOff = current.template.name;
+    else delete data.weeklyOff;
+    await this.prisma.employeeProfileSection.upsert({
+      where: { employeeId_sectionKey: { employeeId, sectionKey: 'attendance' } },
+      create: { employeeId, sectionKey: 'attendance', data: data as Prisma.InputJsonValue },
+      update: { data: data as Prisma.InputJsonValue },
+    });
+  }
+
+  /** Gives one employee a weekly off template from a date (default today), or removes it with templateId null. */
+  async assignWeeklyOff(employeeId: number, dto: AssignWeeklyOffDto, user: CurrentUserPayload, ip?: string) {
+    await this.assertEmployee(employeeId);
+    const from = mustDate(dto.effectiveFrom ?? toIsoDate(new Date()), 'Effective from');
+    const templateId = dto.templateId ?? null;
+    if (templateId !== null) {
+      const t = await this.prisma.weeklyOffTemplate.findUnique({ where: { id: templateId }, select: { isActive: true } });
+      if (!t || !t.isActive) throw new BadRequestException('Choose an active weekly off template');
+    }
+    const changed = await this.prisma.$transaction((tx) => assignWeeklyOff(tx, employeeId, templateId, from));
+    await this.syncWeeklyOffProfile(employeeId);
+    await this.log(user, 'WEEKLY_OFF_ASSIGNED', 'Employee', employeeId, ip, { templateId, from: toIsoDate(from) });
+    return { changed };
+  }
+
+  /** Removes an assignment of the given kind (work-schedule | roster-pattern | holiday-calendar | weekly-off). */
   async removeAssignment(employeeId: number, kind: string, assignmentId: number, user: CurrentUserPayload, ip?: string) {
     const where = { id: assignmentId, employeeId };
     let count = 0;
     if (kind === 'work-schedule') count = (await this.prisma.employeeWorkSchedule.deleteMany({ where })).count;
     else if (kind === 'roster-pattern') count = (await this.prisma.employeeRosterPattern.deleteMany({ where })).count;
     else if (kind === 'holiday-calendar') count = (await this.prisma.employeeHolidayCalendar.deleteMany({ where })).count;
+    else if (kind === 'weekly-off') count = (await this.prisma.employeeWeeklyOff.deleteMany({ where })).count;
     else throw new BadRequestException('Unknown assignment type');
     if (!count) throw new NotFoundException('Assignment not found');
+    if (kind === 'weekly-off') await this.syncWeeklyOffProfile(employeeId);
     await this.log(user, 'ASSIGNMENT_REMOVED', 'Employee', employeeId, ip, { kind, assignmentId });
   }
 }

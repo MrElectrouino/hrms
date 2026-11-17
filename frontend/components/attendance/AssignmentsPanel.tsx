@@ -1,32 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { Employee, ShiftItem, getEmployees, getShifts } from '../../lib/api';
+import { ShiftItem, getShifts } from '../../lib/api';
+import { BulkEmployee, getBulkEmployees } from '../../lib/bulk-api';
 import {
   AssignmentRow,
   Assignments,
   HolidayCalendar,
   ResolvedDay,
   RosterPattern,
+  WeeklyOffTemplate,
   WorkSchedule,
   assignHolidayCalendar,
   assignRosterPattern,
+  assignWeeklyOffTemplate,
   assignWorkSchedule,
   clearRosterEntry,
   getAssignments,
   getEmployeeCalendar,
   getHolidayCalendars,
   getRosterPatterns,
+  getWeeklyOffTemplates,
   getWorkSchedules,
   removeAssignment,
   setRosterEntry,
 } from '../../lib/attendance-api';
+import Select from '../Select';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const monthStart = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}-01`;
 const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
 const LEVEL = { EMPLOYEE: 'Employee', BRANCH: 'Branch', COUNTRY: 'Country', COMPANY: 'Company' } as const;
 
-type Kind = 'work-schedule' | 'roster-pattern' | 'holiday-calendar';
+type Kind = 'work-schedule' | 'roster-pattern' | 'holiday-calendar' | 'weekly-off';
 
 function AssignmentCard({
   title,
@@ -34,6 +39,7 @@ function AssignmentCard({
   rows,
   options,
   withAnchor,
+  bulk,
   onAssign,
   onRemove,
 }: {
@@ -42,6 +48,8 @@ function AssignmentCard({
   rows: AssignmentRow[];
   options: { id: number; name: string }[];
   withAnchor?: boolean;
+  /** Several employees chosen: only assigning makes sense (no current value or history to show). */
+  bulk?: boolean;
   onAssign: (id: number, from: string, anchor?: string) => Promise<void>;
   onRemove: (id: number) => Promise<void>;
 }) {
@@ -66,16 +74,18 @@ function AssignmentCard({
     <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <p className="mt-0.5 text-xs text-gray-500">{hint}</p>
-      <p className="mt-3 text-sm">
-        Current: <span className="font-medium text-gray-900">{current ? `${current.ref.name} (from ${current.effectiveFrom})` : 'none'}</span>
-      </p>
+      {!bulk && (
+        <p className="mt-3 text-sm">
+          Current: <span className="font-medium text-gray-900">{current ? `${current.ref.name} (from ${current.effectiveFrom})` : 'none'}</span>
+        </p>
+      )}
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <label className="text-xs font-medium text-gray-600">Assign
-          <select value={pick} onChange={(e) => setPick(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
+          <Select value={pick} onChange={(e) => setPick(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
             <option value="">Select…</option>
             {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          </Select>
         </label>
         <label className="text-xs font-medium text-gray-600">From
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" />
@@ -89,7 +99,7 @@ function AssignmentCard({
       </div>
       <p className="mt-2 text-xs text-gray-500">A new assignment ends the previous one the day before it starts.</p>
 
-      {rows.length > 0 && (
+      {!bulk && rows.length > 0 && (
         <table className="mt-3 min-w-full text-sm">
           <thead className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500"><tr><th className="py-1">Name</th><th className="py-1">From</th><th className="py-1">To</th><th /></tr></thead>
           <tbody className="divide-y divide-gray-100">
@@ -108,16 +118,18 @@ function AssignmentCard({
   );
 }
 
-/** Per employee: work schedule, roster pattern and holiday calendar (all effective-dated), plus a month preview. */
+/** Per employee: work schedule, weekly off, roster pattern and holiday calendar (all effective-dated), plus a month preview. */
 export default function AssignmentsPanel() {
   const { isAuthenticated } = useAuth();
-  const [search, setSearch] = useState('');
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeId, setEmployeeId] = useState<number | null>(null);
+  const [employees, setEmployees] = useState<BulkEmployee[]>([]);
+  const [picked, setPicked] = useState<number[]>([]);
+  // One employee: their own schedule history and month preview. Several: assign the same thing to all of them.
+  const employeeId = picked.length === 1 ? picked[0] : null;
   const [assignments, setAssignments] = useState<Assignments | null>(null);
   const [schedules, setSchedules] = useState<WorkSchedule[]>([]);
   const [patterns, setPatterns] = useState<RosterPattern[]>([]);
   const [calendars, setCalendars] = useState<HolidayCalendar[]>([]);
+  const [weeklyOffs, setWeeklyOffs] = useState<WeeklyOffTemplate[]>([]);
   const [shifts, setShifts] = useState<ShiftItem[]>([]);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [days, setDays] = useState<ResolvedDay[]>([]);
@@ -130,16 +142,14 @@ export default function AssignmentsPanel() {
     getWorkSchedules().then((r) => setSchedules(r.data.filter((s) => s.isActive))).catch(() => {});
     getRosterPatterns().then((r) => setPatterns(r.data.filter((p) => p.isActive))).catch(() => {});
     getHolidayCalendars().then((r) => setCalendars(r.data.filter((c) => c.isActive))).catch(() => {});
+    getWeeklyOffTemplates().then((r) => setWeeklyOffs(r.data.filter((t) => t.isActive))).catch(() => {});
     getShifts().then((r) => setShifts(r.data.filter((s) => s.isActive))).catch(() => {});
   }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const t = setTimeout(() => {
-      getEmployees({ pageSize: 25, isActive: true, ...(search.trim() ? { search: search.trim() } : {}) }).then((r) => setEmployees(r.data)).catch(() => setEmployees([]));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [isAuthenticated, search]);
+    getBulkEmployees([], '').then((r) => setEmployees(r.data)).catch(() => setEmployees([]));
+  }, [isAuthenticated]);
 
   const reload = useCallback(async () => {
     if (employeeId === null) return;
@@ -172,6 +182,24 @@ export default function AssignmentsPanel() {
     }
   };
 
+  /** The same change for every chosen employee, one after the other; says who it could not be done for. */
+  const runMany = async (fn: (id: number) => Promise<unknown>, ok: string) => {
+    setError('');
+    setNotice('');
+    const failed: string[] = [];
+    let done = 0;
+    for (const id of picked) {
+      try {
+        await fn(id);
+        done++;
+      } catch (e: any) {
+        failed.push(`${employees.find((x) => x.id === id)?.code ?? id}: ${e.message || 'failed'}`);
+      }
+    }
+    if (done) setNotice(`${ok} for ${done} employee${done === 1 ? '' : 's'}`);
+    if (failed.length) setError(`Not done for ${failed.length}: ${failed.slice(0, 5).join('; ')}${failed.length > 5 ? '…' : ''}`);
+  };
+
   const selected = employees.find((e) => e.id === employeeId);
   const monthLabel = useMemo(() => new Date(Date.UTC(month.y, month.m, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' }), [month]);
   const shiftMonth = (d: number) => setMonth((p) => { const n = new Date(Date.UTC(p.y, p.m + d, 1)); return { y: n.getUTCFullYear(), m: n.getUTCMonth() }; });
@@ -179,7 +207,7 @@ export default function AssignmentsPanel() {
   const statusOf = (d: ResolvedDay) => {
     if (d.holiday) return { text: `Holiday: ${d.holiday.name}`, tone: 'bg-purple-50 text-purple-700 border-purple-200', note: `${LEVEL[d.holiday.calendarLevel]} calendar` };
     if (d.roster.source === 'NONE') return { text: 'No roster', tone: 'bg-gray-50 text-gray-500 border-gray-200', note: '' };
-    if (d.roster.isWeeklyOff) return { text: 'Weekly off', tone: 'bg-gray-100 text-gray-600 border-gray-200', note: d.roster.source === 'ENTRY' ? 'single day' : '' };
+    if (d.roster.isWeeklyOff) return { text: 'Weekly off', tone: 'bg-gray-100 text-gray-600 border-gray-200', note: d.roster.source === 'ENTRY' ? 'single day' : d.roster.source === 'TEMPLATE' ? 'weekly off template' : '' };
     return { text: d.roster.shift?.name ?? 'Working', tone: 'bg-green-50 text-green-700 border-green-200', note: d.roster.source === 'ENTRY' ? 'single day' : '' };
   };
 
@@ -193,31 +221,42 @@ export default function AssignmentsPanel() {
     <div className="space-y-5">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Assignments</h2>
-        <p className="mt-1 text-gray-500">Give an employee a work schedule, a roster pattern and, if needed, their own holiday calendar. Each has an effective date, so history is kept.</p>
+        <p className="mt-1 text-gray-500">Give an employee a work schedule, a weekly off, a roster pattern and, if needed, their own holiday calendar. Each has an effective date, so history is kept.</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm font-medium text-gray-700">Find employee
-          <input type="search" placeholder="Name or code…" value={search} onChange={(e) => setSearch(e.target.value)} className="mt-1 block w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-        </label>
-        <label className="text-sm font-medium text-gray-700">Employee
-          <select value={employeeId ?? ''} onChange={(e) => { setEmployeeId(e.target.value ? Number(e.target.value) : null); setNotice(''); }} className="mt-1 block w-72 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
-            <option value="">Select employee…</option>
-            {employees.map((e) => <option key={e.id} value={e.id}>{[e.profile?.name, e.profile?.lastName].filter(Boolean).join(' ')} ({e.employeeCode})</option>)}
-          </select>
-        </label>
+      <div className="max-w-xl">
+        <Select multiple
+          label="Employees"
+          options={employees.map((e) => ({ value: String(e.id), label: `${e.name} (${e.code})`, hint: e.branchName ?? undefined }))}
+          values={picked.map(String)}
+          onValuesChange={(v) => { setPicked(v.map(Number)); setNotice(''); setError(''); }}
+          placeholder="Select one or more employees…"
+          allText=""
+          noun="employees"
+        />
+        <p className="mt-1.5 text-xs text-gray-500">Choose one employee to see their history and month. Choose several to give them all the same schedule, weekly off, roster pattern or calendar.</p>
       </div>
 
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
       {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
 
-      {employeeId === null ? (
+      {employeeId === null && picked.length === 0 ? (
         <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">Choose an employee to see and change their schedule.</p>
+      ) : employeeId === null ? (
+        <>
+          <p className="rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-sm text-blue-800"><b>{picked.length}</b> employees chosen. What you assign below applies to all of them, from the date you give.</p>
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <AssignmentCard bulk title="Work schedule" hint="Required hours and start model." rows={[]} options={schedules.map((x) => ({ id: x.id, name: `${x.name} (${x.code})` }))} onAssign={(id, from) => runMany((e) => assignWorkSchedule(e, { workScheduleId: id, effectiveFrom: from }), 'Work schedule assigned')} onRemove={async () => {}} />
+            <AssignmentCard bulk title="Weekly off" hint="Which weekdays are off." rows={[]} options={weeklyOffs.map((t) => ({ id: t.id, name: t.name }))} onAssign={(id, from) => runMany((e) => assignWeeklyOffTemplate(e, { templateId: id, effectiveFrom: from }), 'Weekly off assigned')} onRemove={async () => {}} />
+            <AssignmentCard bulk withAnchor title="Roster pattern" hint="The repeating cycle of shifts and weekly offs." rows={[]} options={patterns.map((x) => ({ id: x.id, name: `${x.name} (${x.cycleDays} days)` }))} onAssign={(id, from, anchor) => runMany((e) => assignRosterPattern(e, { patternId: id, effectiveFrom: from, anchorDate: anchor }), 'Roster pattern assigned')} onRemove={async () => {}} />
+            <AssignmentCard bulk title="Employee holiday calendar" hint="Only if these people need a calendar of their own." rows={[]} options={calendars.map((c) => ({ id: c.id, name: c.name }))} onAssign={(id, from) => runMany((e) => assignHolidayCalendar(e, { calendarId: id, effectiveFrom: from }), 'Holiday calendar assigned')} onRemove={async () => {}} />
+          </div>
+        </>
       ) : !assignments ? (
         <p className="text-sm text-gray-400">Loading…</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <AssignmentCard
               title="Work schedule"
               hint="Required hours and start model."
@@ -225,6 +264,14 @@ export default function AssignmentsPanel() {
               options={schedules.map((s) => ({ id: s.id, name: `${s.name} (${s.code})` }))}
               onAssign={(id, from) => run(() => assignWorkSchedule(employeeId, { workScheduleId: id, effectiveFrom: from }), 'Work schedule assigned')}
               onRemove={(id) => run(() => removeAssignment(employeeId, 'work-schedule' as Kind, id), 'Assignment removed')}
+            />
+            <AssignmentCard
+              title="Weekly off"
+              hint="Which weekdays are off (templates are made under Weekly off). A roster entry or pattern still wins for the days it covers."
+              rows={assignments.weeklyOffs ?? []}
+              options={weeklyOffs.map((t) => ({ id: t.id, name: t.name }))}
+              onAssign={(id, from) => run(() => assignWeeklyOffTemplate(employeeId, { templateId: id, effectiveFrom: from }), 'Weekly off assigned')}
+              onRemove={(id) => run(() => removeAssignment(employeeId, 'weekly-off' as Kind, id), 'Assignment removed')}
             />
             <AssignmentCard
               title="Roster pattern"
@@ -248,7 +295,7 @@ export default function AssignmentsPanel() {
           <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">{selected ? `${selected.profile?.name ?? ''} ${selected.profile?.lastName ?? ''}`.trim() : 'Employee'}: {monthLabel}</h3>
+                <h3 className="text-base font-semibold text-gray-900">{selected ? selected.name : 'Employee'}: {monthLabel}</h3>
                 <p className="text-xs text-gray-500">Country of employment: {country || '—'}. Change a single day below; "Pattern" puts it back.</p>
               </div>
               <div className="flex gap-2">
@@ -273,12 +320,12 @@ export default function AssignmentsPanel() {
                         </td>
                         <td className="py-1.5 text-gray-600">{d.workSchedule?.name ?? '—'}</td>
                         <td className="py-1.5">
-                          <select aria-label={`Change ${d.date}`} value="" onChange={(e) => override(d.date, e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
+                          <Select aria-label={`Change ${d.date}`} value="" onChange={(e) => override(d.date, e.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs">
                             <option value="">…</option>
                             {shifts.map((sh) => <option key={sh.id} value={sh.id}>{sh.name}</option>)}
                             <option value="OFF">Weekly off</option>
-                            {d.roster.source === 'ENTRY' && <option value="PATTERN">Pattern</option>}
-                          </select>
+                            {d.roster.source === 'ENTRY' && <option value="PATTERN">Pattern or weekly off</option>}
+                          </Select>
                         </td>
                       </tr>
                     );

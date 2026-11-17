@@ -27,6 +27,8 @@ Local database: `hrms` on `localhost:5432`. Postgres lives at `E:\Installed\DB` 
 - One Save button per form. The user dislikes a Save per row.
 - Merge related screens rather than adding new menu items (the user asked for System settings with side tabs, Masters merged, and so on).
 - Keep language plain; the user is not deeply technical.
+- **Dropdowns: use `frontend/components/Select.tsx` only** (single or `multiple`, with search; it also accepts `<option>` children like a native select). Do not add native `<select>` elements.
+- **Dialogs: use `frontend/components/Modal.tsx`** for short tasks (centred, Escape, click outside, focus kept inside, dropdowns float above it). `Drawer.tsx` stays for long forms beside a list.
 - Never commit `frontend/package-lock.json` or `frontend/next-env.d.ts` changes unless asked.
 - The user could not push to a remote. Work is committed locally on `master`. A zip, a git bundle and a database dump are the way to carry it between PCs (see section 10).
 
@@ -66,13 +68,19 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
 
 ### Attendance (generic, policy driven, works for any country)
 - Policies (assigned by employee, branch or country, versioned), one shared status list, punches, IP/GPS/address capture, mood log, work schedules (fixed or flexible), rosters with Excel import, holiday calendars by company/country/branch with an editable order, Ramadan periods per country, regularization (correction) requests with approval, reports, a nightly processing job (`@Cron 02:00`), late/half-day/short-hours/overtime rules.
+- **Weekly off templates** (Attendance setup, Weekly off): a table of named day sets (0 = Sunday ... 6 = Saturday) with optional alternate rules per weekday: off only in chosen weeks of the month (1st to 5th, last), or every other week from a date (`rules` JSON, logic in `src/attendance-setup/weekly-off.util.ts`). Given to employees on the profile (Attendance & Leave, Weekly off) or in Bulk update; stored as effective-dated rows (`employee_weekly_offs`) so history is kept. In day resolution a roster entry beats a roster pattern, which beats the template (`roster.source = 'TEMPLATE'`). Weekly off days are not marked absent and count in the leave sandwich rule. The old "Weekly Off" dropdown values were converted into templates and the parameter removed.
 - Pure rule code with tests: `src/attendance/attendance-rules.ts`, `hours-rules.ts`.
 - Timezone order: branch timezone, then branch country, then employee country, then Default Country, then UTC.
 
 ### Leave
 - Leave types (create, edit, delete when unused), sandwich rule, leave year start month, comp-off, credit buckets with expiry (earliest expiry used first), ledger, accrual job (`@Cron 02:30`), applications with stored day-by-day calculation, approval recalculation, HR balance adjustments.
-- **Leave policies** (Administration, Leave policies): scope by country, branch, employee type or one employee; effective dates; statutory and company layers (employee gets the higher); per leave type: days per year, upfront or monthly credit, proration (none, completed months, started months, cut-off day, exact days), rounding (7 modes plus tie rule), min/max, service slabs with immediate or next-year timing. Used policies are locked (end them and start a new one). Accrual uses a covering policy, else the leave type's own setting.
+- **Leave policies** (Administration, Leave setup → Policies tab; Balances is the other tab): scope by country, branch, employee type or one employee; effective dates; statutory and company layers (employee gets the higher); per leave type: days per year, upfront or monthly credit, proration (none, completed months, started months, cut-off day, exact days), rounding (7 modes plus tie rule), min/max, service slabs with immediate or next-year timing. Used policies are locked (end them and start a new one). Accrual uses a covering policy, else the leave type's own setting.
 - Pure rules with tests: `src/leave/leave-rules.ts`, `entitlement-rules.ts`.
+
+### Bulk update (Administration, Bulk update)
+- Pick branches (multi-select) and employees, tick the fields to change, review, apply. Same value for every chosen employee, audited (`EMPLOYEE_BULK_UPDATE`), each employee saved on its own, skips are reported.
+- Only group-friendly fields: branch, department, designation, grade, reporting manager, work location, cost centre, employee category, employment type, shift, attendance applicable/processing, roster group, weekly off, OT configuration. Definitions: `src/bulk-update/bulk-fields.ts` (add a field there to offer it).
+- Also fixed: saving the Organization section now keeps `employees.reportingToId` in step with the Reporting manager field (manager and team screens, leave approval and the dashboard read that column).
 
 ### Dashboard and notifications
 - Home page keeps the original design. Live data by role: employee (own day, balances, next leave), manager (team today, approvals waiting), HR/System Admin (everyone in the selected branches, documents expiring). Employee Overview chart = real headcount for six months; Department Distribution real.
@@ -90,7 +98,7 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
 | System settings | `src/system-admin/` | `pages/system-settings.tsx`, `components/settings/*Panel.tsx` |
 | Branches | `src/branches/` | `pages/branches.tsx` |
 | Attendance | `src/attendance/`, `src/attendance-setup/` | `pages/attendance/*`, `pages/attendance-setup.tsx`, `components/attendance/*`, `components/settings/AttendanceConfigPanel.tsx` |
-| Leave | `src/leave/` | `pages/leave/*`, `pages/leave-policies.tsx`, `components/settings/LeaveConfigPanel.tsx` |
+| Leave | `src/leave/` | `pages/leave/*`, `pages/leave-setup.tsx` (tabs: `components/leave/LeavePoliciesPanel.tsx`, `LeaveBalancesPanel.tsx`), `components/settings/LeaveConfigPanel.tsx` |
 | Profile | `src/employee-profile/` | `pages/employee-profile/*`, `pages/profile-rules.tsx` |
 | Guards | `src/common/guards/` | |
 | Seed | `prisma/seed.ts`, `prisma/seed-demo.mjs` (14 demo people, local only, password `Demo@12345`, `--remove` to delete) | |

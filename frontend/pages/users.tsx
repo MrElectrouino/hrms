@@ -7,12 +7,16 @@ import {
   deactivateUser,
   resetUserPassword,
   User,
+  getLoginCandidates,
+  LoginCandidate,
   getUserTypes,
   getBranches,
   BranchOption,
 } from '../lib/api';
 import BranchAccessPicker from '../components/BranchAccessPicker';
 import { UserType } from '../lib/user-types';
+import Select from '../components/Select';
+import Modal from '../components/Modal';
 
 export default function UsersPage() {
   const { isAuthenticated, user: me } = useAuth();
@@ -25,11 +29,17 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [candidates, setCandidates] = useState<LoginCandidate[]>([]);
+  // A generated temporary password, shown once and then forgotten.
+  const [shown, setShown] = useState<{ username: string; password: string; reset: boolean } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [userTypes, setUserTypes] = useState<{ id: number; name: string }[]>([]);
 
   // Create form state
   const [form, setForm] = useState({
+    profileId: '',
+    email: '',
     username: '',
     password: '',
     userTypeId: '',
@@ -39,6 +49,7 @@ export default function UsersPage() {
 
   // Edit form state
   const [editForm, setEditForm] = useState({
+    email: '',
     userTypeId: '',
     isActive: true,
     allBranches: true,
@@ -49,6 +60,7 @@ export default function UsersPage() {
     if (!isAuthenticated) return;
     loadUsers();
     getUserTypes().then((res) => setUserTypes(res.data));
+    getLoginCandidates().then((res) => setCandidates(res.data)).catch(() => {});
     if (isSystemAdmin) getBranches().then((res) => setBranchOptions(res.data)).catch(() => {});
   }, [isAuthenticated, isSystemAdmin, page, search]);
 
@@ -68,9 +80,13 @@ export default function UsersPage() {
     }
   };
 
+  /** Only Managers and HR Admins can be limited to some branches. */
+  const hasBranchChoice = (userTypeId: string | number) => [UserType.Manager, UserType.HRAdmin].includes(Number(userTypeId));
+
   const openEdit = (u: User) => {
     setEditingUser(u);
     setEditForm({
+      email: u.profile?.email ?? '',
       userTypeId: String(u.userTypeId || ''),
       isActive: u.isActive,
       allBranches: u.allBranches ?? true,
@@ -81,18 +97,33 @@ export default function UsersPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createUser({
+      const created = await createUser({
         username: form.username,
-        password: form.password,
+        ...(form.profileId ? { profileId: Number(form.profileId) } : {}),
+        ...(form.email.trim() ? { email: form.email.trim() } : {}),
+        ...(form.password ? { password: form.password } : {}),
         userTypeId: parseInt(form.userTypeId, 10),
-        ...(isSystemAdmin && parseInt(form.userTypeId, 10) !== UserType.SystemAdmin ? { allBranches: form.allBranches, branchIds: form.branchIds } : {}),
+        ...(isSystemAdmin && hasBranchChoice(form.userTypeId) ? { allBranches: form.allBranches, branchIds: form.branchIds } : {}),
       });
       setShowCreate(false);
-      setForm({ username: '', password: '', userTypeId: '', allBranches: true, branchIds: [] });
+      setForm({ profileId: '', email: '', username: '', password: '', userTypeId: '', allBranches: true, branchIds: [] });
+      if (created.data.temporaryPassword) { setCopied(false); setShown({ username: form.username.trim().toLowerCase(), password: created.data.temporaryPassword, reset: false }); }
       loadUsers();
+      getLoginCandidates().then((res) => setCandidates(res.data)).catch(() => {});
     } catch (err: any) {
       setError(err.message || 'Failed to create user');
     }
+  };
+
+  /** Open the create form for an employee who is waiting for a login, with their details filled in. */
+  // Employees given site access on their profile who have no login yet: listed with the users, first page only.
+  const needle = search.trim().toLowerCase();
+  const pending = page === 1 ? candidates.filter((c) => !needle || `${c.name} ${c.code} ${c.username}`.toLowerCase().includes(needle)) : [];
+
+  const startFor = (c: LoginCandidate) => {
+    const match = userTypes.find((t) => t.name.toLowerCase() === (c.accessRole ?? '').toLowerCase());
+    setForm({ profileId: String(c.profileId), email: '', username: c.username, password: '', userTypeId: match ? String(match.id) : String(userTypes.find((t) => t.id === UserType.Executive)?.id ?? ''), allBranches: true, branchIds: [] });
+    setShowCreate(true);
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -100,9 +131,10 @@ export default function UsersPage() {
     if (!editingUser) return;
     try {
       await updateUser(editingUser.id, {
+        email: editForm.email.trim(),
         userTypeId: editForm.userTypeId ? parseInt(editForm.userTypeId, 10) : undefined,
         isActive: editForm.isActive,
-        ...(isSystemAdmin && editingUser.userTypeId !== UserType.SystemAdmin ? { allBranches: editForm.allBranches, branchIds: editForm.branchIds } : {}),
+        ...(isSystemAdmin ? (hasBranchChoice(editForm.userTypeId) ? { allBranches: editForm.allBranches, branchIds: editForm.branchIds } : { allBranches: true, branchIds: [] }) : {}),
       });
       setEditingUser(null);
       loadUsers();
@@ -122,11 +154,11 @@ export default function UsersPage() {
   };
 
   const handleResetPassword = async (id: number) => {
-    const password = prompt('Enter new password (min 8 chars, upper/lower/digit/special):');
-    if (!password) return;
+    const target = users.find((u) => u.id === id);
+    if (!window.confirm(`Generate a new temporary password for ${target?.username ?? 'this user'}? They will be signed out and must choose their own password at the next sign-in.`)) return;
     try {
-      await resetUserPassword(id, password);
-      alert('Password reset successfully');
+      const r = await resetUserPassword(id);
+      if (r.data.temporaryPassword) { setCopied(false); setShown({ username: target?.username ?? '', password: r.data.temporaryPassword, reset: true }); }
     } catch (err: any) {
       setError(err.message || 'Failed to reset password');
     }
@@ -185,14 +217,23 @@ export default function UsersPage() {
                   Loading...
                 </td>
               </tr>
-            ) : users.length === 0 ? (
+            ) : users.length === 0 && pending.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-gray-400">
                   No users found.
                 </td>
               </tr>
             ) : (
-              users.map((u) => (
+              <>
+              {pending.map((c) => (
+                <tr key={`p${c.profileId}`} className="bg-amber-50/50 hover:bg-amber-50">
+                  <td className="px-6 py-4 font-medium text-gray-900">{c.name} <span className="text-xs font-normal text-gray-400">{c.code}</span></td>
+                  <td className="px-6 py-4 text-gray-500">{c.accessRole ?? '—'}</td>
+                  <td className="px-6 py-4"><span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Site access given, no login yet</span></td>
+                  <td className="px-6 py-4 text-right"><button onClick={() => startFor(c)} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Create login</button></td>
+                </tr>
+              ))}
+              {users.map((u) => (
                 <tr key={u.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-medium text-gray-900">{u.username}</td>
                   <td className="px-6 py-4 text-gray-600">{u.userType?.name}</td>
@@ -228,7 +269,8 @@ export default function UsersPage() {
                     )}
                   </td>
                 </tr>
-              ))
+              ))}
+              </>
             )}
           </tbody>
         </table>
@@ -260,10 +302,24 @@ export default function UsersPage() {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Create User</h3>
+        <Modal title="Create User" size="sm" onClose={() => setShowCreate(false)}>
             <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Employee <span className="font-normal text-gray-400">(optional)</span></label>
+                <Select
+                  value={form.profileId}
+                  onChange={(e) => {
+                    const c = candidates.find((x) => String(x.profileId) === e.target.value);
+                    setForm({ ...form, profileId: e.target.value, ...(c ? { username: c.username } : {}) });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white"
+                >
+                  <option value="">Not linked to an employee</option>
+                  {candidates.map((c) => <option key={c.profileId} value={c.profileId}>{c.name} ({c.code})</option>)}
+                </Select>
+                <p className="mt-1 text-xs text-gray-500">Only employees with Login enabled on their System Access tab are listed.</p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                 <input
@@ -275,10 +331,22 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="font-normal text-gray-400">(optional)</span></label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">Where the password reset link is sent. Leave empty to use the email on the employee's profile.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="font-normal text-gray-400">(optional)</span></label>
                 <input
                   type="password"
-                  required
+                  autoComplete="new-password"
+                  placeholder="Leave empty to generate a temporary password"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
@@ -287,7 +355,7 @@ export default function UsersPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
-                <select
+                <Select
                   required
                   value={form.userTypeId}
                   onChange={(e) => setForm({ ...form, userTypeId: e.target.value })}
@@ -299,10 +367,10 @@ export default function UsersPage() {
                       {ut.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
-              {isSystemAdmin && form.userTypeId !== String(UserType.SystemAdmin) && (
+              {isSystemAdmin && hasBranchChoice(form.userTypeId) && (
                 <BranchAccessPicker branches={branchOptions} allBranches={form.allBranches} branchIds={form.branchIds} onChange={(v) => setForm({ ...form, ...v })} />
               )}
 
@@ -322,23 +390,31 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Edit modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Edit User</h3>
+        <Modal title="Edit User" size="sm" onClose={() => setEditingUser(null)}>
             <form onSubmit={handleUpdate} className="space-y-4">
               <div className="text-sm text-gray-500 mb-2">
                 Username: <span className="font-medium text-gray-900">{editingUser.username}</span>
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-500">Where the password reset link is sent.</p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
-                <select
+                <Select
                   required
                   value={editForm.userTypeId}
                   onChange={(e) => setEditForm({ ...editForm, userTypeId: e.target.value })}
@@ -350,7 +426,7 @@ export default function UsersPage() {
                       {ut.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <label className="flex items-center gap-2 text-sm text-gray-700">
@@ -363,7 +439,7 @@ export default function UsersPage() {
                 Active
               </label>
 
-              {isSystemAdmin && editingUser.userTypeId !== UserType.SystemAdmin && (
+              {isSystemAdmin && hasBranchChoice(editForm.userTypeId) && (
                 <BranchAccessPicker branches={branchOptions} allBranches={editForm.allBranches} branchIds={editForm.branchIds} onChange={(v) => setEditForm({ ...editForm, ...v })} />
               )}
 
@@ -383,8 +459,33 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
-          </div>
+        </Modal>
+      )}
+
+      {shown && (
+        <Modal
+          size="sm"
+          title={shown.reset ? 'New temporary password' : 'Account created'}
+          onClose={() => { setShown(null); setCopied(false); }}
+          footer={
+            <button type="button" onClick={() => { setShown(null); setCopied(false); }} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">I have noted it</button>
+          }
+        >
+        <p className="text-sm text-gray-600">Give this to <b>{shown.username}</b>. It is shown <b>only now</b> and cannot be looked up later. They must choose their own password at the first sign-in.</p>
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5">
+          <code className="flex-1 select-all break-all font-mono text-base tracking-wide text-gray-900">{shown.password}</code>
+          <button
+            type="button"
+            onClick={async () => {
+              try { await navigator.clipboard.writeText(shown.password); setCopied(true); } catch { setCopied(false); }
+            }}
+            className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
         </div>
+        <p className="mt-2 text-xs text-gray-500">If it is lost, use Reset Password to make a new one.</p>
+        </Modal>
       )}
     </div>
   );

@@ -9,6 +9,8 @@ export interface MineToday {
 }
 export interface TeamToday {
   total: number;
+  /** On a weekly off or holiday today and not in: not expected, so left out of the rate. */
+  offToday: number;
   present: number;
   late: number;
   onLeave: number;

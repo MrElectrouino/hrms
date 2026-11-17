@@ -17,6 +17,7 @@ import {
   uploadEmployeePhoto,
   validateNewProfile,
 } from '../../lib/api';
+import Select from '../../components/Select';
 
 type Values = Record<string, any>;
 
@@ -81,7 +82,7 @@ function MultiSelect({
         </span>
       ))}
       {!disabled && (
-        <select
+        <Select
           id={id}
           value=""
           onChange={(e) => e.target.value && onChange([...value, e.target.value])}
@@ -91,7 +92,7 @@ function MultiSelect({
         >
           <option value="">{options.length === 0 ? 'No options yet (add in Masters)' : remaining.length ? (value.length ? 'Add another…' : 'Select…') : 'All selected'}</option>
           {remaining.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        </Select>
       )}
       {disabled && value.length === 0 && <span className="px-1 text-sm text-gray-400">—</span>}
     </div>
@@ -167,21 +168,21 @@ function Control({
   }
   if (def.type === 'select') {
     return (
-      <select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+      <Select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">{(def.items ?? def.options ?? []).length ? 'Select' : 'No options yet'}</option>
         {def.items
           ? def.items.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
           : (def.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
+      </Select>
     );
   }
   if (def.type === 'yn') {
     return (
-      <select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
+      <Select {...common} value={value ?? ''} onChange={(e) => onChange(e.target.value)}>
         <option value="">Select</option>
         <option value="Yes">Yes</option>
         <option value="No">No</option>
-      </select>
+      </Select>
     );
   }
   if (def.type === 'textarea') {
@@ -595,7 +596,7 @@ export default function EmployeeProfilePage() {
   const initials = isNew && !typedName ? '+' : displayName.split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase();
   const managerField = sections.flatMap((s) => s.groups.flatMap((g) => g.fields ?? [])).find((f) => f.key === 'reportingManager');
   const managerLabel =
-    managerField?.optionItems?.find((o) => o.value === String(orgv.reportingManager ?? ''))?.label ?? (orgv.reportingManager || '');
+    managerField?.optionItems?.find((o) => o.value === String(values.employment?.reportingManager ?? ''))?.label ?? (values.employment?.reportingManager || '');
   const branchField = sections.flatMap((s) => s.groups.flatMap((g) => g.fields ?? [])).find((f) => f.key === 'branch');
   const branchLabel = branchField?.optionItems?.find((o) => o.value === String(orgv.branch ?? ''))?.label ?? '';
   const groupsByName = sections.reduce<Record<string, ProfileSectionDef[]>>((acc, s) => {

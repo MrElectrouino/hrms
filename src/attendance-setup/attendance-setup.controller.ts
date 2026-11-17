@@ -39,6 +39,7 @@ import {
   RosterPatternDto,
   WorkScheduleDto,
 } from './dto/attendance.dto';
+import { AssignWeeklyOffDto, WeeklyOffTemplateDto } from './dto/weekly-off.dto';
 
 type Upload = { buffer: Buffer; originalname: string; size: number };
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -99,6 +100,29 @@ export class AttendanceSetupController {
   async calendars() {
     return this.ok(await this.setup.listCalendars(), 'Holiday calendars retrieved');
   }
+  @Get('weekly-off-templates')
+  async weeklyOffTemplates() {
+    return this.ok(await this.setup.listWeeklyOffTemplates(), 'Weekly off templates retrieved');
+  }
+  @Post('weekly-off-templates')
+  async createWeeklyOff(@Body() dto: WeeklyOffTemplateDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.createWeeklyOffTemplate(dto, u, ip), 'Weekly off template created');
+  }
+  @Put('weekly-off-templates/:id')
+  async updateWeeklyOff(@Param('id', ParseIntPipe) id: number, @Body() dto: WeeklyOffTemplateDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.updateWeeklyOffTemplate(id, dto, u, ip), 'Weekly off template saved');
+  }
+  @Delete('weekly-off-templates/:id')
+  async deleteWeeklyOff(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    await this.setup.deleteWeeklyOffTemplate(id, u, ip);
+    return this.ok(null, 'Weekly off template deleted');
+  }
+  @Post('employees/:id/weekly-off')
+  @UseGuards(EmployeeBranchGuard)
+  async assignWeeklyOff(@Param('id', ParseIntPipe) id: number, @Body() dto: AssignWeeklyOffDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.assignWeeklyOff(id, dto, u, ip), 'Weekly off assigned');
+  }
+
   @Post('holiday-calendars')
   async createCalendar(@Body() dto: HolidayCalendarDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     return this.ok(await this.setup.createCalendar(dto, u, ip), 'Holiday calendar created');
@@ -118,6 +142,10 @@ export class AttendanceSetupController {
   @Post('holiday-calendars/:id/holidays')
   async saveHoliday(@Param('id', ParseIntPipe) id: number, @Body() dto: HolidayDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
     return this.ok(await this.setup.saveHoliday(id, dto, u, ip), 'Holiday saved');
+  }
+  @Put('holiday-calendars/:id/holidays/:holidayId')
+  async updateHoliday(@Param('id', ParseIntPipe) id: number, @Param('holidayId', ParseIntPipe) holidayId: number, @Body() dto: HolidayDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.updateHoliday(id, holidayId, dto, u, ip), 'Holiday updated');
   }
   @Delete('holiday-calendars/:id/holidays/:holidayId')
   async removeHoliday(@Param('id', ParseIntPipe) id: number, @Param('holidayId', ParseIntPipe) holidayId: number, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -57,6 +58,7 @@ export interface TokenPair {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly bcryptRounds: number;
   private dummyHash?: Promise<string>;
 
@@ -250,18 +252,34 @@ export class AuthService {
   // Forgot / reset / change password (D-013)
   // ---------------------------------------------------------------------------
 
+  /**
+   * The account whose person has this email anywhere on record: the account's own email, the employee's
+   * work email, or the personal / official email on the employee profile. Only active accounts with site access.
+   */
+  private async findUserByEmail(email: string) {
+    const include = { profile: true } as const;
+    const base = { isActive: true, profile: { isSiteAccess: true } };
+    const direct = await this.prisma.user.findFirst({
+      where: { ...base, OR: [{ profile: { email: { equals: email, mode: 'insensitive' as const }, isSiteAccess: true } }, { profile: { isSiteAccess: true, employee: { workEmail: { equals: email, mode: 'insensitive' as const } } } }] },
+      include,
+    });
+    if (direct) return direct;
+    const rows = await this.prisma.$queryRaw<{ employeeId: number }[]>`
+      SELECT "employeeId" FROM employee_profile_sections
+      WHERE lower(data->>'personalEmail') = ${email} OR lower(data->>'officialEmail') = ${email}`;
+    if (!rows.length) return null;
+    return this.prisma.user.findFirst({ where: { ...base, profile: { isSiteAccess: true, employee: { id: { in: rows.map((r) => r.employeeId) } } } }, include });
+  }
+
   async forgotPassword(email: string, ip?: string): Promise<void> {
     const normalizedEmail = email.trim().toLowerCase();
-    const user = await this.prisma.user.findFirst({
-      where: {
-        profile: { email: normalizedEmail, isSiteAccess: true },
-        isActive: true,
-      },
-      include: { profile: true },
-    });
+    const user = await this.findUserByEmail(normalizedEmail);
 
     // Same response whether or not the address matches an account.
-    if (!user) return;
+    if (!user) {
+      this.logger.warn(`Password reset asked for ${normalizedEmail.replace(/^(.).*(@.*)$/, '$1***$2')}: no active account with site access has this email`);
+      return;
+    }
 
     const now = new Date();
     const rawToken = generateSecureToken(48);
@@ -293,12 +311,12 @@ export class AuthService {
     const name = user.profile.name || '';
 
     await this.email.send({
-      to: user.profile.email ?? normalizedEmail,
+      to: normalizedEmail,
       subject: 'Reset your HRMS password',
       text: `Hi ${name},\n\nYou requested a password reset. Click the link below to set a new password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you did not request this, please ignore this email.`,
       html: `<p>Hi ${escapeHtml(name)},</p>
 <p>You requested a password reset. Click the link below to set a new password:</p>
-<p><Link href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</Link></p>
+<p><a href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</a></p>
 <p>This link expires in 1 hour. If you did not request this, please ignore this email.</p>`,
     });
   }

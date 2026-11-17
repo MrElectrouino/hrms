@@ -42,7 +42,7 @@ export interface FieldDef {
   /** Render a Yes/No field as a checkbox (stored as "Yes" / "No"). */
   display?: 'checkbox';
   /** Options come from a master table at request time (see Lookups). */
-  optionsSource?: 'languages' | 'nationalities' | 'employees' | 'noticeReasons' | 'departments' | 'branches' | 'employeeTypes' | 'relationships' | 'shifts';
+  optionsSource?: 'languages' | 'nationalities' | 'employees' | 'noticeReasons' | 'departments' | 'branches' | 'employeeTypes' | 'relationships' | 'shifts' | 'weeklyOffs';
   /** Options come from the parameter type with this name (Masters > Parameters). */
   optionsParameter?: string;
   /** Show this field only when another field in the same section equals a value; hidden fields are not stored or required. */
@@ -70,6 +70,8 @@ export interface Lookups {
   relationships?: string[];
   /** Options by parameter type name, for fields with `optionsParameter`. */
   parameters?: Record<string, string[]>;
+  /** Names of the active weekly off templates (Attendance setup > Weekly off). */
+  weeklyOffs?: string[];
   /** Active shifts (value = shift id). */
   shifts?: OptionItem[];
   /** Active branches the account may use (value = branch id). */
@@ -281,7 +283,7 @@ function rawSections(country: CountryCode): SectionDef[] {
     },
     {
       key: 'employment', title: 'Employment', group: 'Employment', hrOnly: false,
-      description: 'Status, joining, probation and contract.',
+      description: 'Status, joining, probation, contract and reporting manager.',
       groups: [
         { title: 'Employment details', fields: [
           F('employeeCategory', 'Employee category', 'select', { optionsParameter: 'Employee Category' }),
@@ -296,11 +298,14 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('lastWorkingDate', 'Last working date', 'date', { showWhen: { key: 'employmentStatus', equals: 'On Notice' } }),
           F('noticeReason', 'Reason', 'select', { optionsSource: 'noticeReasons', showWhen: { key: 'employmentStatus', equals: 'On Notice' } }),
         ] },
+        { title: 'Reporting', fields: [
+          F('reportingManager', 'Reporting manager', 'select', { optionsSource: 'employees' }),
+        ] },
       ],
     },
     {
       key: 'organization', title: 'Organization', group: 'Employment', hrOnly: false,
-      description: 'Country of employment, branch, department, designation, grade and reporting manager.',
+      description: 'Country of employment, branch, department, designation and grade.',
       groups: [
         { title: 'Assignment', fields: [
           F('legalEntityCountry', 'Country of employment', 'select', { options: ORG_COUNTRY_OPTIONS, required: true, hint: 'Drives address, bank, statutory and document fields' }),
@@ -311,9 +316,6 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('designation', 'Designation', 'text', { required: true }),
           F('grade', 'Grade', 'select', { optionsParameter: 'Grade' }),
           F('costCentre', 'Cost centre'),
-        ] },
-        { title: 'Reporting structure', fields: [
-          F('reportingManager', 'Reporting manager', 'select', { optionsSource: 'employees' }),
         ] },
       ],
     },
@@ -326,7 +328,7 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('attendanceProcessing', 'Attendance processing', 'select', { optionsParameter: 'Attendance Processing' }),
           F('shift', 'Shift', 'select', { optionsSource: 'shifts' }),
           F('roster', 'Roster', 'select', { optionsParameter: 'Roster' }),
-          F('weeklyOff', 'Weekly off', 'select', { optionsParameter: 'Weekly Off' }),
+          F('weeklyOff', 'Weekly off', 'select', { optionsSource: 'weeklyOffs' }),
           F('otConfiguration', 'OT configuration', 'select', { optionsParameter: 'OT Configuration' }),
         ] },
       ],

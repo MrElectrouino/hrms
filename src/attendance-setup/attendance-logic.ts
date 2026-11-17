@@ -133,13 +133,18 @@ export interface HolidayRowInput {
   date: string | null;
   name: string | null;
   type: string | null;
+  endDate?: string | null;
 }
 export interface HolidayRowOk {
   row: number;
   date: string;
+  endDate: string | null;
   name: string;
   holidayType: string;
 }
+
+/** Longest holiday that can be entered as one range. */
+export const MAX_HOLIDAY_DAYS = 31;
 
 export const HOLIDAY_TYPES = ['PUBLIC', 'COMPANY', 'OPTIONAL'] as const;
 
@@ -154,11 +159,19 @@ export function validateHolidayRows(rows: HolidayRowInput[]): { valid: HolidayRo
     if (!name) problems.push('Holiday name is required');
     else if (name.length > 120) problems.push('Holiday name is too long (120 characters)');
     const type = (r.type ?? '').trim().toUpperCase() || 'PUBLIC';
+    const end = (r.endDate ?? '').trim() || null;
+    if (end) {
+      const s = parseIsoDate(r.date);
+      const e = parseIsoDate(end);
+      if (!e) problems.push('End date must be a real date (YYYY-MM-DD)');
+      else if (s && e < s) problems.push('End date cannot be before the date');
+      else if (s && (e.getTime() - s.getTime()) / 86_400_000 + 1 > MAX_HOLIDAY_DAYS) problems.push(`A holiday can last at most ${MAX_HOLIDAY_DAYS} days`);
+    }
     if (!(HOLIDAY_TYPES as readonly string[]).includes(type)) problems.push(`Type must be ${HOLIDAY_TYPES.join(', ')}`);
     if (r.date && seen.has(r.date)) problems.push(`Duplicate date (also on row ${seen.get(r.date)})`);
     if (r.date && !seen.has(r.date)) seen.set(r.date, r.row);
     if (problems.length) errors.push({ row: r.row, message: problems.join('; ') });
-    else valid.push({ row: r.row, date: r.date as string, name, holidayType: type });
+    else valid.push({ row: r.row, date: r.date as string, endDate: end && end !== r.date ? end : null, name, holidayType: type });
   }
   return { valid, errors };
 }

@@ -86,6 +86,12 @@ export class MastersController {
     return this.okEnvelope(updated, 'Site deactivated');
   }
 
+  @Delete('sites/:id/permanent')
+  async deleteSite(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    await this.mastersService.deleteSite(id, user.profileId, ip);
+    return this.okEnvelope(null, 'Site deleted');
+  }
+
   // ==================== Languages ====================
   @Get('languages')
   async languages(@Query() query: MasterListQueryDto) {
@@ -131,6 +137,12 @@ export class MastersController {
   }
 
   // ==================== Shifts ====================
+  @Delete('languages/:id/permanent')
+  async deleteLanguage(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    await this.mastersService.deleteLanguage(id, user.profileId, ip);
+    return this.okEnvelope(null, 'Language deleted');
+  }
+
   @Get('shifts')
   async shifts(@Query() query: MasterListQueryDto) {
     const result = await this.mastersService.findAllShifts(query);
@@ -175,6 +187,12 @@ export class MastersController {
   }
 
   // ==================== Document Types ====================
+  @Delete('shifts/:id/permanent')
+  async deleteShift(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    await this.mastersService.deleteShift(id, user.profileId, ip);
+    return this.okEnvelope(null, 'Shift deleted');
+  }
+
   @Get('document-types')
   async documentTypes(@Query() query: MasterListQueryDto) {
     const result = await this.mastersService.findAllDocumentTypes(query);
@@ -218,6 +236,12 @@ export class MastersController {
     return this.okEnvelope(updated, 'Document type deactivated');
   }
 
+  @Delete('document-types/:id/permanent')
+  async deleteDocumentType(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    await this.mastersService.deleteDocumentType(id, user.profileId, ip);
+    return this.okEnvelope(null, 'Document type deleted');
+  }
+
   // ==================== Parameters ====================
   @Get('parameter-types')
   async parameterTypes() {
@@ -230,6 +254,14 @@ export class MastersController {
   @Roles(UserType.SystemAdmin, UserType.HRAdmin)
   async createParameter(@Body() dto: CreateParameterDto, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
     return this.okEnvelope(await this.mastersService.createParameter(dto, user.profileId, ip), 'Parameter created');
+  }
+
+  @Delete('parameters/:id/permanent')
+  @UseGuards(RolesGuard)
+  @Roles(UserType.SystemAdmin, UserType.HRAdmin)
+  async deleteParameter(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: CurrentUserPayload, @Ip() ip: string) {
+    await this.mastersService.deleteParameter(id, user.profileId, ip);
+    return this.okEnvelope(null, 'Option deleted');
   }
 
   @Patch('parameters/:id')
