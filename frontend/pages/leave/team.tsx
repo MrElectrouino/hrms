@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
+import Select from '../../components/Select';
+import CompOffList from '../../components/leave/CompOffList';
 import { LeaveApplication, REASON_TEXT, decideLeave, getLeaveCalendar, getTeamLeave } from '../../lib/leave-api';
 
-type Tab = 'waiting' | 'calendar';
+type Tab = 'waiting' | 'calendar' | 'compoff';
 
 const monthStart = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}-01`;
 const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
@@ -14,6 +16,11 @@ export default function TeamLeavePage() {
   const [waiting, setWaiting] = useState<LeaveApplication[]>([]);
   const [month, setMonth] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
   const [cal, setCal] = useState<LeaveApplication[]>([]);
+  // Filters for Who is off.
+  const [offEmp, setOffEmp] = useState<string[]>([]);
+  const [offTypes, setOffTypes] = useState<string[]>([]);
+  const [offStatus, setOffStatus] = useState<string[]>([]);
+  const [offToday, setOffToday] = useState(false);
   const [note, setNote] = useState<Record<number, string>>({});
   const [open, setOpen] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -53,6 +60,29 @@ export default function TeamLeavePage() {
     }
   };
 
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const typeOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const a of cal) seen.set(String(a.leaveType.id), a.leaveType.name);
+    return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [cal]);
+  const empOptions = useMemo(() => {
+    const seen = new Map<number, { value: string; label: string }>();
+    for (const a of cal) if (!seen.has(a.employeeId)) seen.set(a.employeeId, { value: String(a.employeeId), label: `${a.employeeName} (${a.employeeCode})` });
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [cal]);
+  const offShown = useMemo(() => {
+    return cal.filter(
+      (a) =>
+        (offEmp.length === 0 || offEmp.includes(String(a.employeeId))) &&
+        (offTypes.length === 0 || offTypes.includes(String(a.leaveType.id))) &&
+        (offStatus.length === 0 || offStatus.includes(a.status)) &&
+        (!offToday || (a.fromDate <= todayIso && a.toDate >= todayIso)),
+    );
+  }, [cal, offEmp, offTypes, offStatus, offToday, todayIso]);
+  const offFiltersOn = offEmp.length > 0 || offTypes.length > 0 || offStatus.length > 0 || offToday;
+  const clearOff = () => { setOffEmp([]); setOffTypes([]); setOffStatus([]); setOffToday(false); };
+
   const label = new Date(Date.UTC(month.y, month.m, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const shift = (d: number) => setMonth((p) => { const n = new Date(Date.UTC(p.y, p.m + d, 1)); return { y: n.getUTCFullYear(), m: n.getUTCMonth() }; });
 
@@ -63,7 +93,7 @@ export default function TeamLeavePage() {
         <p className="mt-1 text-gray-500">Approving takes the days from the balance and marks the days on attendance. The days are counted again when you approve.</p>
       </div>
       <div role="tablist" className="flex gap-1 border-b border-gray-200">
-        {([['waiting', `Waiting for approval (${waiting.length})`], ['calendar', 'Who is off']] as const).map(([k, l]) => (
+        {([['waiting', `Waiting for approval (${waiting.length})`], ['calendar', 'Who is off'], ['compoff', 'Comp off']] as const).map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} type="button" onClick={() => setTab(k)} className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{l}</button>
         ))}
       </div>
@@ -101,6 +131,8 @@ export default function TeamLeavePage() {
         </div>
       )}
 
+      {tab === 'compoff' && <CompOffList scope="team" />}
+
       {tab === 'calendar' && (
         <section className="space-y-3">
           <div className="flex items-center gap-2">
@@ -108,11 +140,28 @@ export default function TeamLeavePage() {
             <span className="w-36 text-center text-sm font-medium text-gray-800">{label}</span>
             <button type="button" onClick={() => shift(1)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50" aria-label="Next month">→</button>
           </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-60">
+              <Select multiple aria-label="Employees" options={empOptions} values={offEmp} onValuesChange={setOffEmp} placeholder="All employees" allText="All employees" noun="employees" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" />
+            </div>
+            <div className="w-52">
+              <Select multiple aria-label="Leave type" options={typeOptions} values={offTypes} onValuesChange={setOffTypes} placeholder="Any leave type" allText="Any leave type" noun="leave types" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" />
+            </div>
+            <div className="w-44">
+              <Select multiple aria-label="Status" options={[{ value: 'APPROVED', label: 'Approved' }, { value: 'PENDING', label: 'Waiting' }]} values={offStatus} onValuesChange={setOffStatus} placeholder="Any status" allText="Any status" noun="statuses" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" />
+            </div>
+            <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${offToday ? 'border-blue-300 bg-blue-50 font-medium text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}>
+              <input type="checkbox" checked={offToday} onChange={(e) => setOffToday(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Off today
+            </label>
+            {offFiltersOn && <button type="button" onClick={clearOff} className="pb-1.5 text-sm font-medium text-blue-600 hover:text-blue-800">Clear filters</button>}
+            <p className="ml-auto pb-1.5 text-xs text-gray-500">Showing {offShown.length} of {cal.length}</p>
+          </div>
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"><tr><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Leave</th><th className="px-4 py-3">Dates</th><th className="px-4 py-3">Days</th><th className="px-4 py-3">Status</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {cal.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">Nobody is on leave this month.</td></tr> : cal.map((a) => (
+                {offShown.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">{offFiltersOn ? 'Nothing matches these filters.' : 'Nobody is on leave this month.'}</td></tr> : offShown.map((a) => (
                   <tr key={a.id}>
                     <td className="px-4 py-2 text-gray-900">{a.employeeName} <span className="text-xs text-gray-400">{a.employeeCode}</span></td>
                     <td className="px-4 py-2 text-gray-700">{a.leaveType.name}</td>

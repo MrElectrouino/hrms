@@ -36,7 +36,14 @@ export default function TeamAttendancePage() {
   const [rows, setRows] = useState<AttendanceRow[]>([]);
   const [statuses, setStatuses] = useState<AttendanceStatus[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending'>('all');
-  const [search, setSearch] = useState('');
+  const [empFilter, setEmpFilter] = useState<string[]>([]);
+  // More filters: status, a range of days in the month, and quick checks.
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [dayFrom, setDayFrom] = useState('');
+  const [dayTo, setDayTo] = useState('');
+  const [onlyLate, setOnlyLate] = useState(false);
+  const [onlyMissingOut, setOnlyMissingOut] = useState(false);
+  const [onlyCompOff, setOnlyCompOff] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -73,10 +80,27 @@ export default function TeamAttendancePage() {
   }, [isAuthenticated, isHr, edit?.isNew, empSearch]);
 
   const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rows.filter((r) => (filter === 'all' || !r.approved) && (!q || `${r.employeeName} ${r.employeeCode}`.toLowerCase().includes(q)));
-  }, [rows, filter, search]);
+    return rows.filter(
+      (r) =>
+        (filter === 'all' || !r.approved) &&
+        (empFilter.length === 0 || empFilter.includes(String(r.employeeId))) &&
+        (statusFilter.length === 0 || statusFilter.includes(r.statusCode)) &&
+        (!dayFrom || r.date >= dayFrom) &&
+        (!dayTo || r.date <= dayTo) &&
+        (!onlyLate || r.lateMinutes > 0) &&
+        (!onlyMissingOut || (!!r.inLocal && !r.outLocal)) &&
+        (!onlyCompOff || r.hasCompOff),
+    );
+  }, [rows, filter, empFilter, statusFilter, dayFrom, dayTo, onlyLate, onlyMissingOut, onlyCompOff]);
+  const filtersOn = empFilter.length > 0 || filter !== 'all' || statusFilter.length > 0 || !!dayFrom || !!dayTo || onlyLate || onlyMissingOut || onlyCompOff;
+  const clearFilters = () => { setEmpFilter([]); setFilter('all'); setStatusFilter([]); setDayFrom(''); setDayTo(''); setOnlyLate(false); setOnlyMissingOut(false); setOnlyCompOff(false); };
   const pending = rows.filter((r) => !r.approved).length;
+  // The people who have days this month, for the employee filter.
+  const empOptions = useMemo(() => {
+    const seen = new Map<number, { value: string; label: string }>();
+    for (const r of rows) if (!seen.has(r.employeeId)) seen.set(r.employeeId, { value: String(r.employeeId), label: `${r.employeeName} (${r.employeeCode})` });
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows]);
 
   const label = new Date(Date.UTC(month.y, month.m, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const shiftMonth = (d: number) => setMonth((p) => { const n = new Date(Date.UTC(p.y, p.m + d, 1)); return { y: n.getUTCFullYear(), m: n.getUTCMonth() }; });
@@ -137,11 +161,39 @@ export default function TeamAttendancePage() {
           <span className="w-36 text-center text-sm font-medium text-gray-800">{label}</span>
           <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50" aria-label="Next month">→</button>
         </div>
-        <input type="search" placeholder="Search name or code…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-56 rounded-lg border border-gray-300 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+        <div className="w-60">
+          <Select multiple aria-label="Employees" options={empOptions} values={empFilter} onValuesChange={setEmpFilter} placeholder="All employees" allText="All employees" noun="employees" className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm" />
+        </div>
         <div className="inline-flex overflow-hidden rounded-lg border border-gray-300 text-sm">
           <button type="button" onClick={() => setFilter('all')} className={`px-3 py-1.5 ${filter === 'all' ? 'bg-blue-50 font-medium text-blue-700' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>All</button>
           <button type="button" onClick={() => setFilter('pending')} className={`border-l border-gray-300 px-3 py-1.5 ${filter === 'pending' ? 'bg-blue-50 font-medium text-blue-700' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>Pending approval ({pending})</button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-56">
+          <Select
+            multiple
+            aria-label="Status"
+            options={statuses.filter((x) => x.isActive).map((x) => ({ value: x.code, label: x.name }))}
+            values={statusFilter}
+            onValuesChange={setStatusFilter}
+            placeholder="Any status"
+            allText="Any status"
+            noun="statuses"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"
+          />
+        </div>
+        <label className="text-xs font-medium text-gray-600">From day<input type="date" min={monthStart(month.y, month.m)} max={monthEnd(month.y, month.m)} value={dayFrom} onChange={(e) => setDayFrom(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
+        <label className="text-xs font-medium text-gray-600">To day<input type="date" min={dayFrom || monthStart(month.y, month.m)} max={monthEnd(month.y, month.m)} value={dayTo} onChange={(e) => setDayTo(e.target.value)} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
+        {([['Late', onlyLate, setOnlyLate], ['Missing OUT', onlyMissingOut, setOnlyMissingOut], ['Comp off given', onlyCompOff, setOnlyCompOff]] as const).map(([text, on, set]) => (
+          <label key={text} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm ${on ? 'border-blue-300 bg-blue-50 font-medium text-blue-700' : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}>
+            <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            {text}
+          </label>
+        ))}
+        {filtersOn && <button type="button" onClick={clearFilters} className="pb-1.5 text-sm font-medium text-blue-600 hover:text-blue-800">Clear filters</button>}
+        <p className="ml-auto pb-1.5 text-xs text-gray-500">{loading ? '' : `Showing ${shown.length} of ${rows.length} days`}</p>
       </div>
 
       {error && !edit && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
@@ -156,7 +208,7 @@ export default function TeamAttendancePage() {
             {loading ? (
               <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
             ) : shown.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">{filter === 'pending' ? 'Nothing is waiting for approval.' : 'No attendance this month.'}</td></tr>
+              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-500">{filtersOn ? 'Nothing matches these filters.' : 'No attendance this month.'}</td></tr>
             ) : (
               shown.map((r) => (
                 <tr key={r.id}>

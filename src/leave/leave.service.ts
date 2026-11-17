@@ -334,6 +334,61 @@ export class LeaveService {
     return rows.map((r) => this.present(r));
   }
 
+  /**
+   * Every comp off credit with what happened to it: still usable (and when it runs out), used, or lost to expiry.
+   * scope "me" = the caller's own; "team" = the people the caller manages (HR: everyone in their branches).
+   */
+  async compOffList(user: CurrentUserPayload, scope: 'me' | 'team') {
+    const where: Prisma.LeaveCreditWhereInput = { source: 'COMP_OFF' };
+    if (scope === 'me') where.employeeId = await this.myEmployeeId(user);
+    else if (HR_TYPES.includes(user.userTypeId)) {
+      if (user.activeBranchIds) where.employee = { branchId: { in: user.activeBranchIds } };
+    } else where.employee = { reportingToId: await this.myEmployeeId(user) };
+    const rows = await this.prisma.leaveCredit.findMany({
+      where,
+      orderBy: [{ expiresOn: { sort: 'asc', nulls: 'last' } }, { id: 'desc' }],
+      take: 500,
+      include: {
+        allocations: { select: { days: true } },
+        leaveType: { select: { name: true } },
+        employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } },
+      },
+    });
+    const todayStr = today();
+    const soon = isoAdd(todayStr, 7);
+    return rows.map((c) => {
+      const quantity = num(c.quantity);
+      const remaining = num(c.remaining);
+      const used = c.allocations.reduce((sum, a) => sum + num(a.days), 0);
+      const expiresOn = c.expiresOn ? toIsoDate(c.expiresOn) : null;
+      const past = expiresOn !== null && expiresOn < todayStr;
+      // Expired: the date has passed. Whatever was not used is lost (the nightly job zeroes it, so work it out from what was used).
+      const lost = past ? Math.max(0, remaining > 0 ? remaining : quantity - used) : 0;
+      let state: 'ACTIVE' | 'EXPIRING' | 'USED' | 'EXPIRED';
+      if (past && lost > 0) state = 'EXPIRED';
+      else if (remaining <= 0) state = 'USED';
+      else if (expiresOn !== null && expiresOn <= soon) state = 'EXPIRING';
+      else state = 'ACTIVE';
+      const daysLeft = expiresOn && !past ? Math.round((new Date(`${expiresOn}T00:00:00Z`).getTime() - new Date(`${todayStr}T00:00:00Z`).getTime()) / 86_400_000) : null;
+      return {
+        id: c.id,
+        employeeId: c.employeeId,
+        employeeCode: c.employee.employeeCode,
+        employeeName: [c.employee.profile.name, c.employee.profile.lastName].filter(Boolean).join(' '),
+        leaveType: c.leaveType.name,
+        workedOn: c.sourceRef,
+        creditedOn: toIsoDate(c.creditedOn),
+        expiresOn,
+        daysLeft,
+        quantity,
+        used,
+        remaining: past ? 0 : remaining,
+        lost,
+        state,
+      };
+    });
+  }
+
   /* ------------------------------------------------------------------ accrual, expiry, adjustments, comp off */
 
   /** One credit with its ledger row. Returns false when the same credit already exists (so running twice adds nothing). */

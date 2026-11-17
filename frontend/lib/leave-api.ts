@@ -105,6 +105,24 @@ export const getLeaveTypes = () => request<LeaveType[]>('/leave/types');
 /** Apply for leave: only the types that apply to my own country. */
 export const getMyLeaveTypes = () => request<LeaveType[]>('/leave/types?scope=mine');
 export const getMyBalances = () => request<LeaveBalance[]>('/leave/balances');
+export interface CompOffRow {
+  id: number;
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+  leaveType: string;
+  /** The day that was worked. */
+  workedOn: string | null;
+  creditedOn: string;
+  expiresOn: string | null;
+  daysLeft: number | null;
+  quantity: number;
+  used: number;
+  remaining: number;
+  lost: number;
+  state: 'ACTIVE' | 'EXPIRING' | 'USED' | 'EXPIRED';
+}
+export const getCompOff = (scope: 'me' | 'team') => request<CompOffRow[]>(`/leave/comp-off?scope=${scope}`);
 export const getBalancesOf = (employeeId: number) => request<LeaveBalance[]>(`/leave/balances/${employeeId}`);
 export const previewLeave = (p: LeaveRequestPayload) => request<LeavePreview>('/leave/preview', { method: 'POST', body: json(p) });
 export const applyLeave = (p: LeaveRequestPayload) => request<LeaveApplication>('/leave/applications', { method: 'POST', body: json(p) });

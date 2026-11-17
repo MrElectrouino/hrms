@@ -56,6 +56,11 @@ export class LeaveController {
     return ok(await this.service.mine(u, { status: status || undefined, leaveTypeId: leaveTypeId ? Number(leaveTypeId) || undefined : undefined, from: from || undefined, to: to || undefined }), 'Applications retrieved');
   }
 
+  @Get('comp-off')
+  async compOffList(@Query('scope') scope: string | undefined, @CurrentUser() u: CurrentUserPayload) {
+    return ok(await this.service.compOffList(u, scope === 'team' ? 'team' : 'me'), 'Comp off retrieved');
+  }
+
   @Get('applications/team')
   async team(@Query('status') status: string | undefined, @CurrentUser() u: CurrentUserPayload) {
     return ok(await this.service.team(u, status), 'Applications retrieved');
