@@ -2,14 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import ParametersPanel from '../components/ParametersPanel';
+import Select from '../components/Select';
 import {
   MasterItem,
   ShiftItem,
   DocumentTypeItem,
+  CountryItem,
   getSites,
   getDocumentTypes,
   getLanguages,
   getShifts,
+  getCountries,
   createSite,
   updateSite,
   deactivateSite,
@@ -51,6 +54,7 @@ const emptyForm = {
   altStartTime: '',
   altEndTime: '',
   hasExpiry: false,
+  countryCodes: [] as string[],
 };
 
 /** The backend stores shift times as 1970-01-01T<HH:mm> parsed in the server's local timezone. */
@@ -85,6 +89,7 @@ export default function MastersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [countries, setCountries] = useState<CountryItem[]>([]);
 
   const loadAll = () => {
     setLoading(true);
@@ -104,6 +109,8 @@ export default function MastersPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     loadAll();
+    // The countries that System Settings > Countries has added, so Document Types can pick among them.
+    getCountries().then((r) => setCountries(r.data.filter((c) => c.isActive))).catch(() => setCountries([]));
   }, [isAuthenticated]);
 
   const switchTab = (tab: MasterTab) => {
@@ -134,9 +141,10 @@ export default function MastersPage() {
         altStartTime: toTimeInput(s.altStartTime),
         altEndTime: toTimeInput(s.altEndTime),
         hasExpiry: false,
+        countryCodes: [],
       });
     } else {
-      setForm({ ...emptyForm, name: item.name, hasExpiry: !!(item as DocumentTypeItem).hasExpiry });
+      setForm({ ...emptyForm, name: item.name, hasExpiry: !!(item as DocumentTypeItem).hasExpiry, countryCodes: (item as DocumentTypeItem).countryCodes ?? [] });
     }
     setError('');
     setNotice('');
@@ -182,7 +190,7 @@ export default function MastersPage() {
         else await (update as typeof updateShift)(editingId as number, payload);
       } else {
         if (activeTab === 'document-types') {
-          const dp = { name: form.name.trim(), hasExpiry: form.hasExpiry };
+          const dp = { name: form.name.trim(), hasExpiry: form.hasExpiry, countryCodes: form.countryCodes };
           if (editingId === 'new') await (create as typeof createDocumentType)(dp);
           else await (update as typeof updateDocumentType)(editingId as number, dp);
         } else {
@@ -238,6 +246,11 @@ export default function MastersPage() {
 
   const inputClass =
     'mt-1.5 block w-full rounded-lg border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm transition-colors';
+
+  const countryLabel = (codes: string[]) => {
+    if (!codes || codes.length === 0) return 'All countries';
+    return codes.map((c) => countries.find((x) => x.isoCode === c)?.name ?? c).join(', ');
+  };
 
   return (
     <div className="space-y-5">
@@ -322,16 +335,21 @@ export default function MastersPage() {
                       <th className="px-4 py-3">Late / Half-day</th>
                     </>
                   )}
-                  {isDocTypes && <th className="px-4 py-3">Expiry</th>}
+                  {isDocTypes && (
+                    <>
+                      <th className="px-4 py-3">Expiry</th>
+                      <th className="px-4 py-3">Country</th>
+                    </>
+                  )}
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 4 : 3} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 5 : 3} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
                 ) : currentItems.length === 0 ? (
-                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 4 : 3} className="px-4 py-8 text-center text-gray-500">No {currentTab.label.toLowerCase()} yet.</td></tr>
+                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 5 : 3} className="px-4 py-8 text-center text-gray-500">No {currentTab.label.toLowerCase()} yet.</td></tr>
                 ) : (
                   currentItems.map((item) => {
                     const shift = isShifts ? (item as ShiftItem) : null;
@@ -345,7 +363,10 @@ export default function MastersPage() {
                           </>
                         )}
                         {isDocTypes && (
-                          <td className="px-4 py-3 text-gray-700">{(item as DocumentTypeItem).hasExpiry ? 'Issue + expiry required' : 'No expiry'}</td>
+                          <>
+                            <td className="px-4 py-3 text-gray-700">{(item as DocumentTypeItem).hasExpiry ? 'Issue + expiry required' : 'No expiry'}</td>
+                            <td className="px-4 py-3 text-gray-700">{countryLabel((item as DocumentTypeItem).countryCodes)}</td>
+                          </>
                         )}
                         <td className="px-4 py-3">
                           {item.isActive ? (
@@ -407,13 +428,29 @@ export default function MastersPage() {
               </label>
 
               {isDocTypes && (
-                <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
-                  <input type="checkbox" className="mt-0.5" checked={form.hasExpiry} onChange={(e) => setForm({ ...form, hasExpiry: e.target.checked })} />
-                  <span>
-                    <span className="font-medium">This document expires</span>
-                    <span className="block text-gray-500">Issue date and expiry date become required for documents of this type.</span>
-                  </span>
-                </label>
+                <>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Countries
+                    <Select
+                      multiple
+                      className={inputClass}
+                      values={form.countryCodes}
+                      onValuesChange={(v) => setForm({ ...form, countryCodes: v })}
+                      options={countries.map((c) => ({ value: c.isoCode, label: c.name }))}
+                      allText="All countries"
+                      noun="countries"
+                      placeholder={countries.length === 0 ? 'Add countries in System Settings first' : 'Select…'}
+                    />
+                    <span className="mt-1 block text-xs text-gray-500">Leave empty for every employee, or pick the countries this document applies to.</span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-3 text-sm text-gray-700">
+                    <input type="checkbox" className="mt-0.5" checked={form.hasExpiry} onChange={(e) => setForm({ ...form, hasExpiry: e.target.checked })} />
+                    <span>
+                      <span className="font-medium">This document expires</span>
+                      <span className="block text-gray-500">Issue date and expiry date become required for documents of this type.</span>
+                    </span>
+                  </label>
+                </>
               )}
 
               {isShifts && (

@@ -13,15 +13,34 @@ export class LeaveConfigService {
     private readonly audit: AuditService,
   ) {}
 
-  types(onlyActive: boolean) {
-    return this.prisma.leaveType.findMany({ where: onlyActive ? { isActive: true } : {}, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
+  /** onlyActive + a country: only types usable by that country (plus the ones left open to every country). */
+  types(onlyActive: boolean, countryCode?: string) {
+    return this.prisma.leaveType.findMany({
+      where: {
+        ...(onlyActive ? { isActive: true } : {}),
+        ...(countryCode ? { OR: [{ countryCodes: { isEmpty: true } }, { countryCodes: { has: countryCode } }] } : {}),
+      },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
   }
 
   settings() {
     return this.prisma.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
   }
 
-  private data(dto: LeaveTypeDto) {
+  /** Every code must be a real, known country (the same list System Settings > Countries manages). */
+  private async validateCountryCodes(codes: string[] | undefined): Promise<string[] | undefined> {
+    if (codes === undefined) return undefined;
+    const unique = [...new Set(codes.map((c) => c.trim().toUpperCase()).filter(Boolean))];
+    if (unique.length === 0) return [];
+    const found = await this.prisma.country.findMany({ where: { isoCode: { in: unique } }, select: { isoCode: true } });
+    const known = new Set(found.map((c) => c.isoCode));
+    const unknown = unique.filter((c) => !known.has(c));
+    if (unknown.length) throw new BadRequestException(`Unknown country code(s): ${unknown.join(', ')}`);
+    return unique;
+  }
+
+  private async data(dto: LeaveTypeDto, countryCodes: string[]) {
     if (dto.isCompOff && dto.accrual !== 'NONE') throw new BadRequestException('Comp off is earned through attendance, so it has no accrual');
     if (dto.accrual !== 'NONE' && !dto.balanceTracking) throw new BadRequestException('A leave type with accrual must keep a balance');
     return {
@@ -39,6 +58,7 @@ export class LeaveConfigService {
       isSandwichEligible: dto.isSandwichEligible,
       isCompOff: dto.isCompOff,
       isActive: dto.isActive ?? true,
+      countryCodes,
     };
   }
 
@@ -49,8 +69,9 @@ export class LeaveConfigService {
 
   async create(dto: LeaveTypeDto, user: CurrentUserPayload, ip?: string) {
     try {
+      const countryCodes = (await this.validateCountryCodes(dto.countryCodes)) ?? [];
       const last = await this.prisma.leaveType.aggregate({ _max: { sortOrder: true } });
-      const created = await this.prisma.leaveType.create({ data: { ...this.data(dto), sortOrder: (last._max.sortOrder ?? 0) + 1 } });
+      const created = await this.prisma.leaveType.create({ data: { ...(await this.data(dto, countryCodes)), sortOrder: (last._max.sortOrder ?? 0) + 1 } });
       await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_TYPE_CREATED', entityType: 'LeaveType', entityId: String(created.id), ipAddress: ip });
       return created;
     } catch (e) {
@@ -77,7 +98,8 @@ export class LeaveConfigService {
   async update(id: number, dto: LeaveTypeDto, user: CurrentUserPayload, ip?: string) {
     if (!(await this.prisma.leaveType.findUnique({ where: { id } }))) throw new NotFoundException('Leave type not found');
     try {
-      const updated = await this.prisma.leaveType.update({ where: { id }, data: this.data(dto) });
+      const countryCodes = (await this.validateCountryCodes(dto.countryCodes)) ?? [];
+      const updated = await this.prisma.leaveType.update({ where: { id }, data: await this.data(dto, countryCodes) });
       await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_TYPE_UPDATED', entityType: 'LeaveType', entityId: String(id), ipAddress: ip, metadata: { sandwichEligible: dto.isSandwichEligible } });
       return updated;
     } catch (e) {

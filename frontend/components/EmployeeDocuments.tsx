@@ -55,9 +55,11 @@ export default function EmployeeDocuments({ employeeId, canEdit }: { employeeId:
     setLoading(true);
     setError('');
     try {
-      const [emp, t] = await Promise.all([getEmployee(employeeId), getDocumentTypes({ pageSize: 100 })]);
+      const emp = await getEmployee(employeeId);
       const pid = emp.data.profileId;
       setProfileId(pid);
+      // Only document types for this employee's own country (plus "ALL") belong in the picker.
+      const t = await getDocumentTypes({ pageSize: 100, countryCode: emp.data.country ?? 'IN' });
       setTypes(t.data.filter((x) => x.isActive));
       const d = await getDocuments({ profileId: pid, isActive: true, pageSize: 100, sortBy: 'createdAt', sortOrder: 'desc' });
       setDocs(d.data);

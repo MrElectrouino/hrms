@@ -348,35 +348,82 @@ async function seedRoles() {
   }
 }
 
-async function seedMenuItems() {
-  // Phase-1 relevant menu tree subset extracted from legacy menu catalog.
-  const items: Array<{ id: number; name: string; parentId?: number; pageUrl?: string; iconClass?: string; displayOrder: number; isMainMenu: boolean; isActive: boolean }> = [
-    // Root menus first
-    { id: 37, name: 'Profile', iconClass: 'fa fa-book', displayOrder: 1, isMainMenu: true, isActive: true },
-    { id: 155, name: 'Profile', displayOrder: 2, isMainMenu: true, isActive: true },
-    { id: 2, name: 'Master Setup', iconClass: 'fa fa-cogs', displayOrder: 2, isMainMenu: true, isActive: true },
-    // Children of Profile (37)
-    { id: 1, name: 'Employee List', parentId: 37, pageUrl: '/profilelist', iconClass: 'fa fa-users', displayOrder: 1, isMainMenu: true, isActive: true },
-    { id: 12, name: 'Document List', parentId: 37, pageUrl: '/documentlist', iconClass: 'fa fa-folder-open-o', displayOrder: 2, isMainMenu: true, isActive: true },
-    { id: 156, name: 'My Profile', parentId: 37, pageUrl: '/myprofile', iconClass: 'fa fa-user-secret', displayOrder: 3, isMainMenu: true, isActive: true },
-    // Children of Master Setup (2)
-    { id: 3, name: 'Language', parentId: 2, displayOrder: 1, isMainMenu: false, isActive: true },
-    { id: 4, name: 'Role', parentId: 2, displayOrder: 2, isMainMenu: false, isActive: true },
-    { id: 6, name: 'Department', parentId: 2, displayOrder: 3, isMainMenu: false, isActive: true },
-    { id: 7, name: 'Site', parentId: 2, displayOrder: 4, isMainMenu: false, isActive: true },
-    { id: 21, name: 'Document Type', parentId: 2, displayOrder: 5, isMainMenu: false, isActive: true },
-    // Children of Profile (155)
-    { id: 146, name: 'Basic & Work Details', parentId: 155, displayOrder: 1, isMainMenu: false, isActive: true },
-    { id: 147, name: 'Document', parentId: 155, displayOrder: 2, isMainMenu: false, isActive: true },
-    { id: 151, name: 'Dependants', parentId: 155, displayOrder: 3, isMainMenu: false, isActive: true },
-  ];
+/**
+ * The real navigation tree (BR-UM-29/30): the sidebar is built entirely from this table plus
+ * each role's rights below, via GET /rbac/my-menu. Replaces the legacy Phase-1 subset, which only
+ * pointed at pages that were never built (/profilelist, /documentlist, /myprofile, Master Setup's
+ * Language/Role/Department/Site/Document Type stubs, and the old flat Profile(155) sub-tabs since
+ * replaced by the nine-section profile). Those dead rows, and any rights/overrides on them, are
+ * removed below so Menus & Rights only ever shows pages that exist.
+ */
+const LEGACY_MENU_ITEM_IDS = [1, 2, 3, 4, 6, 7, 12, 21, 37, 146, 147, 151, 155, 156];
 
-  for (const item of items) {
-    await prisma.menuItem.upsert({
-      where: { id: item.id },
-      create: item,
-      update: item,
-    });
+interface MenuItemSeed {
+  id: number;
+  name: string;
+  parentId?: number;
+  pageUrl?: string;
+  iconClass?: string;
+  displayOrder: number;
+  isMainMenu: boolean;
+  isActive: boolean;
+  /** Roles granted this item by default. Omitted (or empty) for a group heading, which has no rights of its own. */
+  roles?: number[];
+}
+
+const MENU_ITEMS: MenuItemSeed[] = [
+  { id: 500, name: 'Dashboard', pageUrl: '/', iconClass: 'fa fa-home', displayOrder: 1, isMainMenu: true, isActive: true, roles: [1, 2, 3, 4] },
+  { id: 501, name: 'Employees', iconClass: 'fa fa-users', displayOrder: 2, isMainMenu: true, isActive: true },
+  { id: 510, name: 'Employee list', parentId: 501, pageUrl: '/employees', displayOrder: 1, isMainMenu: true, isActive: true, roles: [2, 3, 4] },
+  { id: 511, name: 'Documents', parentId: 501, pageUrl: '/documents', displayOrder: 2, isMainMenu: true, isActive: true, roles: [1, 2, 3, 4] },
+  { id: 502, name: 'Time & Attendance', iconClass: 'fa fa-clock-o', displayOrder: 3, isMainMenu: true, isActive: true },
+  { id: 520, name: 'Mark attendance', parentId: 502, pageUrl: '/attendance/mark', displayOrder: 1, isMainMenu: true, isActive: true, roles: [1, 2, 3, 4] },
+  { id: 521, name: 'My attendance', parentId: 502, pageUrl: '/attendance/my', displayOrder: 2, isMainMenu: true, isActive: true, roles: [1, 2, 3, 4] },
+  { id: 522, name: 'Team attendance', parentId: 502, pageUrl: '/attendance/team', displayOrder: 3, isMainMenu: true, isActive: true, roles: [2, 3, 4] },
+  { id: 523, name: 'Correction requests', parentId: 502, pageUrl: '/attendance/corrections', displayOrder: 4, isMainMenu: true, isActive: true, roles: [2, 3, 4] },
+  { id: 524, name: 'Reports', parentId: 502, pageUrl: '/attendance/reports', displayOrder: 5, isMainMenu: true, isActive: true, roles: [2, 3, 4] },
+  { id: 503, name: 'Leave Management', iconClass: 'fa fa-calendar', displayOrder: 4, isMainMenu: true, isActive: true },
+  { id: 530, name: 'My leave', parentId: 503, pageUrl: '/leave/my', displayOrder: 1, isMainMenu: true, isActive: true, roles: [1, 2, 3, 4] },
+  { id: 531, name: 'Team leave', parentId: 503, pageUrl: '/leave/team', displayOrder: 2, isMainMenu: true, isActive: true, roles: [2, 3, 4] },
+  { id: 504, name: 'Administration', iconClass: 'fa fa-cogs', displayOrder: 5, isMainMenu: true, isActive: true },
+  { id: 540, name: 'Attendance setup', parentId: 504, pageUrl: '/attendance-setup', displayOrder: 1, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 541, name: 'Bulk update', parentId: 504, pageUrl: '/bulk-update', displayOrder: 2, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 542, name: 'Branches', parentId: 504, pageUrl: '/branches', displayOrder: 3, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 543, name: 'Masters', parentId: 504, pageUrl: '/masters', displayOrder: 4, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 544, name: 'Users', parentId: 504, pageUrl: '/users', displayOrder: 5, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 545, name: 'Menus & rights', parentId: 504, pageUrl: '/access-control', displayOrder: 6, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 546, name: 'Leave setup', parentId: 504, pageUrl: '/leave-setup', displayOrder: 7, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 547, name: 'Salary templates', parentId: 504, pageUrl: '/salary-templates', displayOrder: 8, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 548, name: 'Modules', parentId: 504, pageUrl: '/modules', displayOrder: 9, isMainMenu: true, isActive: true, roles: [3] },
+  { id: 505, name: 'System Settings', iconClass: 'fa fa-sliders', displayOrder: 6, isMainMenu: true, isActive: true },
+  { id: 550, name: 'General settings', parentId: 505, pageUrl: '/system-settings', displayOrder: 1, isMainMenu: true, isActive: true, roles: [3] },
+  { id: 551, name: 'Custom fields', parentId: 505, pageUrl: '/custom-fields', displayOrder: 2, isMainMenu: true, isActive: true, roles: [3] },
+  { id: 552, name: 'Profile rules', parentId: 505, pageUrl: '/profile-rules', displayOrder: 3, isMainMenu: true, isActive: true, roles: [3] },
+];
+
+async function seedMenuItems() {
+  // Retire the dead legacy rows (and any rights/overrides pointing at them) before seeding the real tree.
+  // One extra level covers any custom item a System Admin may since have added under one of the old groups.
+  const extra = await prisma.menuItem.findMany({ where: { parentId: { in: LEGACY_MENU_ITEM_IDS } }, select: { id: true } });
+  const toRemove = [...new Set([...LEGACY_MENU_ITEM_IDS, ...extra.map((e) => e.id)])];
+  await prisma.menuUserTypePermission.deleteMany({ where: { menuItemId: { in: toRemove } } });
+  await prisma.menuUserOverride.deleteMany({ where: { menuItemId: { in: toRemove } } });
+  await prisma.menuItem.deleteMany({ where: { id: { in: toRemove } } });
+
+  for (const { roles: _roles, ...item } of MENU_ITEMS) {
+    await prisma.menuItem.upsert({ where: { id: item.id }, create: item, update: item });
+  }
+
+  // Default rights per role, matching what the app granted in code before this was data-driven.
+  // Only fills in what is missing, so a System Admin's own changes in Menus & Rights are never overwritten.
+  for (const item of MENU_ITEMS) {
+    for (const userTypeId of item.roles ?? []) {
+      await prisma.menuUserTypePermission.upsert({
+        where: { userTypeId_menuItemId: { userTypeId, menuItemId: item.id } },
+        create: { userTypeId, menuItemId: item.id },
+        update: {},
+      });
+    }
   }
 }
 

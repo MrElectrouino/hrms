@@ -53,6 +53,11 @@ export class EditAttendanceDto {
   @IsString()
   @MaxLength(150)
   remarks?: string;
+
+  /** The manager ticks this while approving a day worked on a holiday or weekly off; comp off is credited immediately. */
+  @IsOptional()
+  @IsBoolean()
+  compOffEligible?: boolean;
 }
 
 export class RegularizationDto {

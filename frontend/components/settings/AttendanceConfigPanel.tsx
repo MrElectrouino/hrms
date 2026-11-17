@@ -277,14 +277,12 @@ export default function AttendanceConfigPanel() {
             <input type="checkbox" className={`${check} mt-0.5`} checked={cfg.settings.moodEnabled} onChange={(e) => setCfg({ ...cfg, settings: { ...cfg.settings, moodEnabled: e.target.checked } })} />
             <span><span className="font-medium">Ask for a mood on the first IN of the day</span><span className="block text-gray-500">Options are the "Mood" parameters in Masters.</span></span>
           </label>
-          {(['gpsRequirement', 'addressRequirement'] as const).map((k) => (
-            <label key={k} className="block text-sm font-medium text-gray-700">
-              {k === 'gpsRequirement' ? 'GPS location' : 'Address'}
-              <Select className={fieldClass} value={cfg.settings[k]} onChange={(e) => setCfg({ ...cfg, settings: { ...cfg.settings, [k]: e.target.value as 'OFF' | 'OPTIONAL' | 'REQUIRED' } })}>
-                <option value="OFF">Not collected</option><option value="OPTIONAL">Optional</option><option value="REQUIRED">Required to mark attendance</option>
-              </Select>
-            </label>
-          ))}
+          <label className="block text-sm font-medium text-gray-700">
+            GPS location
+            <Select className={fieldClass} value={cfg.settings.gpsRequirement} onChange={(e) => setCfg({ ...cfg, settings: { ...cfg.settings, gpsRequirement: e.target.value as 'OFF' | 'OPTIONAL' | 'REQUIRED' } })}>
+              <option value="OFF">Not collected</option><option value="OPTIONAL">Optional</option><option value="REQUIRED">Required to mark attendance</option>
+            </Select>
+          </label>
           <p className="text-xs text-gray-500">The server always records the IP address itself.</p>
           <button type="button" onClick={() => run(() => saveAttendanceSettings(cfg.settings), 'Settings saved')} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Save settings</button>
         </section>

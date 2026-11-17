@@ -15,6 +15,8 @@ export interface AttendanceRecord {
   approved: boolean;
   source: string;
   remarks: string | null;
+  /** Only set on the response to an edit/approve call. */
+  compOffGranted?: boolean;
 }
 
 export interface AttendanceRow extends AttendanceRecord {
@@ -55,7 +57,7 @@ export const getStatuses = () => request<AttendanceStatus[]>('/attendance/status
 export const getMyAttendance = (from: string, to: string) => request<AttendanceRow[]>(`/attendance/records/me?from=${from}&to=${to}`);
 export const getTeamAttendance = (from: string, to: string, employeeId?: number) =>
   request<AttendanceRow[]>(`/attendance/records/team?from=${from}&to=${to}${employeeId ? `&employeeId=${employeeId}` : ''}`);
-export const editAttendance = (employeeId: number, date: string, p: { inTime?: string; outTime?: string; statusCode?: string; remarks?: string }) =>
+export const editAttendance = (employeeId: number, date: string, p: { inTime?: string; outTime?: string; statusCode?: string; remarks?: string; compOffEligible?: boolean }) =>
   request<AttendanceRecord>(`/attendance/records/${employeeId}/${date}`, { method: 'PUT', body: JSON.stringify(p) });
 
 /* ------------------------------------------------------------------ configuration (System Admin) */

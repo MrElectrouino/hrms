@@ -11,6 +11,11 @@ export class MasterListQueryDto {
   @Transform(({ value }) => value === 'true' || value === true || value === 1 || value === '1')
   isActive?: boolean;
 
+  /** Document types only: restrict to this country plus "ALL". Ignored by other master lists. */
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
+
   @Type(() => Number)
   @IsOptional()
   @IsInt()

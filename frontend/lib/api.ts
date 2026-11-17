@@ -136,6 +136,8 @@ export interface Employee {
   designation?: string;
   shiftId?: number;
   isActive: boolean;
+  /** Country of employment (Organization section). Only present on GET /employees/:id. */
+  country?: string;
   profile: {
     id: number;
     name: string;
@@ -490,6 +492,8 @@ export interface MasterItem {
 
 export interface DocumentTypeItem extends MasterItem {
   hasExpiry: boolean;
+  /** Country.isoCode values this type applies to. Empty = every country. */
+  countryCodes: string[];
 }
 
 export interface ShiftItem extends MasterItem {
@@ -568,10 +572,10 @@ export async function deactivateShift(id: number) {
 export async function getDocumentTypes(params?: Record<string, string | number | boolean>) {
   return request<DocumentTypeItem[]>(`/masters/document-types${mastersQuery(params)}`);
 }
-export async function createDocumentType(payload: MasterItemPayload & { hasExpiry?: boolean }) {
+export async function createDocumentType(payload: MasterItemPayload & { hasExpiry?: boolean; countryCodes?: string[] }) {
   return request<DocumentTypeItem>('/masters/document-types', { method: 'POST', body: JSON.stringify(payload) });
 }
-export async function updateDocumentType(id: number, payload: Partial<MasterItemPayload> & { hasExpiry?: boolean }) {
+export async function updateDocumentType(id: number, payload: Partial<MasterItemPayload> & { hasExpiry?: boolean; countryCodes?: string[] }) {
   return request<DocumentTypeItem>(`/masters/document-types/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
 }
 export async function deactivateDocumentType(id: number) {

@@ -16,6 +16,8 @@ export interface LeaveType {
   isSandwichEligible: boolean;
   isCompOff: boolean;
   isActive: boolean;
+  /** Country.isoCode values this type applies to. Empty = every country. */
+  countryCodes: string[];
 }
 export type LeaveTypePayload = Omit<LeaveType, 'id'>;
 
@@ -100,6 +102,8 @@ export interface LeaveRequestPayload {
 const json = (b: unknown) => JSON.stringify(b);
 
 export const getLeaveTypes = () => request<LeaveType[]>('/leave/types');
+/** Apply for leave: only the types that apply to my own country. */
+export const getMyLeaveTypes = () => request<LeaveType[]>('/leave/types?scope=mine');
 export const getMyBalances = () => request<LeaveBalance[]>('/leave/balances');
 export const getBalancesOf = (employeeId: number) => request<LeaveBalance[]>(`/leave/balances/${employeeId}`);
 export const previewLeave = (p: LeaveRequestPayload) => request<LeavePreview>('/leave/preview', { method: 'POST', body: json(p) });

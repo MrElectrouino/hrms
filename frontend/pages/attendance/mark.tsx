@@ -2,18 +2,15 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { TodayState, markAttendance, getToday, minutesText } from '../../lib/attendance-marking-api';
 import StatusBadge from '../../components/StatusBadge';
-import { fieldClass } from '../../components/Drawer';
 
 const MOOD_ICON: Record<string, string> = { Happy: '😊', OK: '😐', Sad: '😞', None: '—' };
 
 const timeIn = (iso: string, tz: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz });
 
-/** Employee self-service: press IN or OUT for today, with mood, location and address. */
+/** Employee self-service: press IN or OUT for today. One IN and one OUT, that is it for the day. */
 export default function MarkAttendancePage() {
   const { isAuthenticated } = useAuth();
   const [state, setState] = useState<TodayState | null>(null);
-  const [mood, setMood] = useState('');
-  const [address, setAddress] = useState('');
   const [coords, setCoords] = useState('');
   const [geoNote, setGeoNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -40,7 +37,6 @@ export default function MarkAttendancePage() {
   }, []);
 
   const gps = state?.settings.gpsRequirement ?? 'OFF';
-  const addr = state?.settings.addressRequirement ?? 'OFF';
 
   /** Asks the browser for the current position. Resolves to "lat,lng", or '' when not available. */
   const locate = (): Promise<string> =>
@@ -65,7 +61,8 @@ export default function MarkAttendancePage() {
       );
     });
 
-  const press = async () => {
+  /** Pass a mood to mark IN with it right away (clicking an emoji marks immediately, no extra step). */
+  const press = async (mood?: string) => {
     if (!state) return;
     setBusy(true);
     setError('');
@@ -73,9 +70,8 @@ export default function MarkAttendancePage() {
     try {
       const c = await locate();
       if (gps === 'REQUIRED' && !c) throw new Error('Your location is required to mark attendance. Allow location access and try again.');
-      if (addr === 'REQUIRED' && !address.trim()) throw new Error('Enter where you are working (address) to mark attendance.');
       const wasIn = state.next === 'IN';
-      const res = await markAttendance({ coordinates: c || undefined, address: address.trim() || undefined, mood: wasIn && mood ? mood : undefined });
+      const res = await markAttendance({ coordinates: c || undefined, mood: wasIn && mood ? mood : undefined });
       setState(res.data);
       setNotice(wasIn ? 'You are marked IN.' : 'You are marked OUT.');
     } catch (e: any) {
@@ -124,10 +120,10 @@ export default function MarkAttendancePage() {
 
           {isIn && state.settings.moodEnabled && state.settings.moods.length > 0 && !rec?.firstInAt && (
             <div className="mt-6">
-              <p className="text-center text-sm font-medium text-gray-700">How are you feeling today?</p>
+              <p className="text-center text-sm font-medium text-gray-700">How are you feeling today? Tap one to mark IN.</p>
               <div className="mt-2 flex justify-center gap-2">
                 {state.settings.moods.map((m) => (
-                  <button key={m} type="button" onClick={() => setMood(mood === m ? '' : m)} aria-pressed={mood === m} className={`rounded-xl border px-4 py-2 text-sm ${mood === m ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>
+                  <button key={m} type="button" onClick={() => press(m)} disabled={busy || !state.canMark} className="rounded-xl border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
                     <span className="mr-1.5">{MOOD_ICON[m] ?? ''}</span>{m}
                   </button>
                 ))}
@@ -135,12 +131,6 @@ export default function MarkAttendancePage() {
             </div>
           )}
 
-          {addr !== 'OFF' && (
-            <label className="mt-6 block text-sm font-medium text-gray-700">
-              Where are you working?{addr === 'REQUIRED' && <span className="text-red-500"> *</span>}
-              <input className={fieldClass} value={address} maxLength={1000} onChange={(e) => setAddress(e.target.value)} placeholder="Office, client site, home…" />
-            </label>
-          )}
           {gps !== 'OFF' && (
             <p className="mt-3 text-center text-xs text-gray-400">
               {coords ? `Location captured (${coords})` : `Your browser will ask to share your location${gps === 'REQUIRED' ? ' (required)' : ''}.`}
@@ -149,11 +139,11 @@ export default function MarkAttendancePage() {
 
           <button
             type="button"
-            onClick={press}
+            onClick={() => press()}
             disabled={busy || !state.canMark}
             className={`mt-6 w-full rounded-xl py-4 text-lg font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${isIn ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
           >
-            {busy ? 'Please wait…' : isIn ? (rec ? 'Mark IN again' : 'Mark IN') : 'Mark OUT'}
+            {busy ? 'Please wait…' : isIn ? 'Mark IN' : 'Mark OUT'}
           </button>
           {!state.canMark && state.blockedReason && <p className="mt-3 text-center text-sm text-amber-700">{state.blockedReason}</p>}
 

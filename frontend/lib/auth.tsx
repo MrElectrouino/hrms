@@ -15,6 +15,8 @@ export interface AuthUser {
   userTypeId: number;
   profileId: number;
   mustChangePassword: boolean;
+  /** The employee record this account is linked to, for "My profile". null for accounts with none (e.g. a System Admin with no employee record). */
+  employeeId: number | null;
 }
 
 interface AuthContextValue {
@@ -41,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       userTypeId: me.data.userTypeId,
       profileId: me.data.profileId,
       mustChangePassword: me.data.mustChangePassword,
+      employeeId: me.data.profile?.employee?.id ?? null,
     });
   };
 
@@ -57,10 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (username: string, password: string) => {
     const response = await apiLogin(username, password);
-    const { accessToken, refreshToken, mustChangePassword, user: loggedIn } = response.data;
+    const { accessToken, refreshToken, mustChangePassword } = response.data;
     setAccessToken(accessToken);
     setRefreshToken(refreshToken);
-    setUser({ ...loggedIn, mustChangePassword });
+    // Fetch the full account (not just the login response) so employeeId is there from the first page too.
+    await refreshUser();
     return mustChangePassword;
   };
 

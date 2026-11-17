@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, getLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
+import { LeaveApplication, LeaveBalance, LeavePreview, LeaveType, REASON_TEXT, applyLeave, cancelLeave, getMyLeaveTypes, getMyBalances, getMyLeave, previewLeave } from '../../lib/leave-api';
 import { fieldClass } from '../../components/Drawer';
 import Select from '../../components/Select';
 import Modal from '../../components/Modal';
@@ -41,7 +41,7 @@ export default function MyLeavePage() {
   }, [filters]);
 
   useEffect(() => {
-    if (isAuthenticated) getLeaveTypes().then((r) => setTypes(r.data)).catch(() => {});
+    if (isAuthenticated) getMyLeaveTypes().then((r) => setTypes(r.data)).catch(() => {});
   }, [isAuthenticated]);
 
   // Loads again whenever a filter changes.

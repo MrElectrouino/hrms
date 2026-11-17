@@ -20,7 +20,9 @@ export class CountriesController {
     return { data, message: { code: 'OK', text } };
   }
 
+  // HR Admin also needs the country list to scope document types by country.
   @Get()
+  @Roles(UserType.SystemAdmin, UserType.HRAdmin)
   async list() {
     return this.ok(await this.service.listCountries(), 'Countries retrieved');
   }

@@ -22,9 +22,12 @@ export class LeaveController {
     private readonly config: LeaveConfigService,
   ) {}
 
+  // scope=mine (Apply for leave): only types that apply to the caller's own country. Omitted (HR/System Admin
+  // screens — Balances, Policies — managing any employee's leave): every active type, unfiltered.
   @Get('types')
-  async types() {
-    return ok(await this.config.types(true), 'Leave types retrieved');
+  async types(@Query('scope') scope: string | undefined, @CurrentUser() u: CurrentUserPayload) {
+    const country = scope === 'mine' ? await this.service.myCountry(u) : undefined;
+    return ok(await this.config.types(true, country), 'Leave types retrieved');
   }
 
   @Get('balances')

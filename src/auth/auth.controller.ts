@@ -108,7 +108,7 @@ export class AuthController {
         profileId: true,
         mustChangePassword: true,
         userType: { select: { name: true } },
-        profile: { select: { name: true, lastName: true, email: true } },
+        profile: { select: { name: true, lastName: true, email: true, employee: { select: { id: true } } } },
       },
     });
     return { data: account, message: { code: 'OK', text: 'Current user retrieved' } };

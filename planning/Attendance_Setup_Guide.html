@@ -94,7 +94,7 @@
     <li><b class="where">Assignments</b>Attendance setup → <b>Assignments</b>: give employees (many at once) their work schedule, weekly off, roster and holiday calendar, with an effective date.</li>
     <li><b class="where">Shifts</b>Late and half-day thresholds live on the <b>Shift</b> (start time, "late after" minutes, "half day after" minutes). Make sure each employee who clocks in against a start time has a shift.</li>
     <li><b class="where">Attendance policy</b>System settings → <b>Attendance configuration</b> → edit the default policy, or add one per country or branch (section 6), then assign it (section 7).</li>
-    <li><b class="where">Everyone-settings</b>Same page: mood, GPS and address requirements (section 8). Add Ramadan periods if you use a different start time then.</li>
+    <li><b class="where">Everyone-settings</b>Same page: mood and GPS requirements (section 8). Add Ramadan periods if you use a different start time then.</li>
     <li><b class="where">Test</b>Mark attendance as an employee on <b>Mark attendance</b>. Next morning check the nightly job filled the previous day (section 11).</li>
   </ol>
   <div class="note warn"><b>Without a weekly off template or roster the system cannot tell a working day from a day off</b>, so the nightly job leaves unmarked days empty instead of guessing Absent. Set this up before relying on Absent.</div>
@@ -123,13 +123,15 @@
 <section id="marking">
   <h2>4. When an employee marks attendance</h2>
   <p>The employee presses <b>IN</b> and <b>OUT</b> on Mark attendance. Every press is kept as a punch. The day's first IN and last OUT are copied onto the day. Worked time is the sum of each IN to the OUT after it.</p>
+  <div class="note info"><b>One IN and one OUT, and that is it for the day.</b> Once both are recorded, marking is closed for that date — there is no second IN/OUT cycle. The button greys out and shows "You have already marked IN and OUT for today." If a mood question is on, tapping a mood emoji marks IN immediately (no separate confirm step).</div>
   <table>
     <tr><th>Rule</th><th>Result</th></tr>
     <tr><td>A future date</td><td>Refused, always.</td></tr>
     <tr><td>A past date</td><td>Refused unless the policy allows past-date self marking. Otherwise ask the manager or HR.</td></tr>
     <tr><td>Today, after the cut-off time</td><td>Refused if the policy has a cut-off time and it has passed (in the employee's own timezone). HR can be exempt.</td></tr>
+    <tr><td>Already marked IN and OUT today</td><td>Refused. One IN and one OUT per day; ask the manager or HR for a correction if a time was wrong.</td></tr>
     <tr><td>Employee has no linked record</td><td>"Your account is not linked to an active employee record": make sure the login belongs to an employee profile.</td></tr>
-    <tr><td>GPS or address</td><td>Optional, required, or not collected, as set in section 8.</td></tr>
+    <tr><td>GPS</td><td>Optional, required, or not collected, as set in section 8. (There is no address question — it was removed.)</td></tr>
   </table>
 </section>
 
@@ -178,10 +180,9 @@
     <tr><th>Setting</th><th>Options</th></tr>
     <tr><td>Mood question on IN</td><td>On or off. Options come from the parameter type "Mood".</td></tr>
     <tr><td>GPS location</td><td>Not collected, optional, or required to mark.</td></tr>
-    <tr><td>Address</td><td>Not collected, optional, or required to mark.</td></tr>
     <tr><td>Ramadan periods</td><td>A start and end date per country. Used only by policies with "Use Ramadan shift start" on.</td></tr>
   </table>
-  <p>These are in System settings → Attendance configuration, with one <b>Save settings</b> button.</p>
+  <p>These are in System settings → Attendance configuration, with one <b>Save settings</b> button. There is no address question on Mark attendance; it was removed, so there is nothing to configure for it.</p>
 </section>
 
 <section id="schedule">
@@ -232,7 +233,8 @@
 <section id="fix">
   <h2>12. Corrections and approval</h2>
   <ul>
-    <li><b>Approval.</b> With "Requires approval" on, a manager or HR approves the day (Team attendance). Approved days are locked for managers.</li>
+    <li><b>Approval.</b> With "Requires approval" on, a manager or HR approves the day (Team attendance). Approving opens a popup where IN and OUT can be corrected before confirming. Approved days are locked for managers.</li>
+    <li><b>Comp off at approval.</b> The same popup has an <b>"Eligible for comp off"</b> checkbox. Ticking it when approving a day that worked out to a worked holiday or weekly off credits comp off immediately (see the Leave setup guide, section 10) — it is not a nightly job.</li>
     <li><b>Regularization.</b> An employee asks to correct a day (forgot to punch, wrong time) with requested IN and OUT times and a reason. Approving applies the corrected times.</li>
     <li><b>Manager edits.</b> Only for their own reports, only on unapproved days (if the policy says so), and only to Present, Absent or Not found present.</li>
     <li><b>HR edits.</b> Any day, including adding a day with no record, even after the cut-off.</li>
@@ -254,6 +256,7 @@
     <tr><td>Day not filled for yesterday</td><td>Check the processing runs list; the job may not have run. Run it by hand for that date.</td></tr>
     <tr><td>Short hours when the person worked enough</td><td>The automatic break is taken off first. Check the break and the required minutes on the schedule.</td></tr>
     <tr><td>Manager cannot edit a day</td><td>It is already approved, or not their direct report, or the policy locks approved days.</td></tr>
+    <tr><td>Employee cannot mark a second time today</td><td>By design: one IN and one OUT per day, no more. Ask the manager or HR for a correction if a time was wrong.</td></tr>
   </table>
 </section>
 

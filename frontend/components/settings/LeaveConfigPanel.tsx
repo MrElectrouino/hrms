@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { UserType } from '../../lib/user-types';
+import { CountryItem, getCountries } from '../../lib/api';
 import { LeaveSettings, LeaveType, LeaveTypePayload, createLeaveType, deleteLeaveType, getLeaveConfig, runAccrual, saveLeaveSettings, syncCompOff, updateLeaveType } from '../../lib/leave-api';
 import Drawer, { fieldClass } from '../Drawer';
 import Select from '../Select';
@@ -8,6 +9,7 @@ import Select from '../Select';
 const blankType: LeaveTypePayload = {
   code: '', name: '', isPaid: true, balanceTracking: true, accrual: 'NONE', annualDays: 0, allowHalfDay: true, allowNegative: false,
   requiresDocument: false, documentAfterDays: 0, maxDaysPerRequest: null, isSandwichEligible: false, isCompOff: false, isActive: true,
+  countryCodes: [],
 };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -21,6 +23,7 @@ export default function LeaveConfigPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
+  const [countries, setCountries] = useState<CountryItem[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -32,8 +35,13 @@ export default function LeaveConfigPanel() {
     }
   }, []);
   useEffect(() => {
-    if (isAuthenticated && isAdmin) load();
+    if (isAuthenticated && isAdmin) {
+      load();
+      getCountries().then((r) => setCountries(r.data.filter((c) => c.isActive))).catch(() => setCountries([]));
+    }
   }, [isAuthenticated, isAdmin, load]);
+
+  const countryLabel = (codes: string[]) => (!codes || codes.length === 0 ? 'All countries' : codes.map((c) => countries.find((x) => x.isoCode === c)?.name ?? c).join(', '));
 
   const saveType = async () => {
     if (!editing) return;
@@ -103,7 +111,7 @@ export default function LeaveConfigPanel() {
         </div>
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"><tr><th className="px-4 py-3">Code</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Entitlement</th><th className="px-4 py-3">Sandwich</th><th className="px-4 py-3">Status</th><th className="px-4 py-3" /></tr></thead>
+            <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"><tr><th className="px-4 py-3">Code</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Paid</th><th className="px-4 py-3">Entitlement</th><th className="px-4 py-3">Country</th><th className="px-4 py-3">Sandwich</th><th className="px-4 py-3">Status</th><th className="px-4 py-3" /></tr></thead>
             <tbody className="divide-y divide-gray-100">
               {types.map((t) => (
                 <tr key={t.id} className={!t.isActive ? 'bg-gray-50/60' : undefined}>
@@ -111,6 +119,7 @@ export default function LeaveConfigPanel() {
                   <td className={`px-4 py-3 font-medium ${t.isActive ? 'text-gray-900' : 'text-gray-400 line-through'}`}>{t.name}</td>
                   <td className="px-4 py-3 text-gray-700">{t.isPaid ? 'Paid' : 'Unpaid'}</td>
                   <td className="px-4 py-3 text-gray-700">{t.isCompOff ? 'Earned (comp off)' : !t.balanceTracking ? 'No balance kept' : t.accrual === 'NONE' ? 'Set by HR' : `${t.annualDays} days / year, ${t.accrual === 'MONTHLY' ? 'monthly' : 'yearly'}`}</td>
+                  <td className="px-4 py-3 text-gray-700">{countryLabel(t.countryCodes)}</td>
                   <td className="px-4 py-3">{t.isSandwichEligible ? <span className="rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">Eligible</span> : <span className="text-gray-400">—</span>}</td>
                   <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${t.isActive ? 'border-green-200 bg-green-50 text-green-700' : 'border-gray-200 bg-gray-100 text-gray-500'}`}>{t.isActive ? 'Active' : 'Inactive'}</span></td>
                   <td className="px-4 py-3 text-right"><button type="button" onClick={() => { setError(''); setEditing({ id: t.id, form: { ...t } }); }} className="text-xs font-medium text-blue-600 hover:text-blue-800">Edit</button><button type="button" onClick={() => removeType(t)} className="ml-3 text-xs font-medium text-red-600 hover:text-red-800">Delete</button></td>
@@ -143,7 +152,7 @@ export default function LeaveConfigPanel() {
             </label>
             <label className="flex items-start gap-3 text-sm text-gray-700">
               <input type="checkbox" className={`${check} mt-0.5`} checked={settings.compOffEnabled} onChange={(e) => set({ compOffEnabled: e.target.checked })} />
-              <span><span className="font-medium">Earn comp off for working on a weekly off or holiday</span><span className="block text-xs text-gray-500">Credited when the day is approved and enough time was worked.</span></span>
+              <span><span className="font-medium">Earn comp off for working on a weekly off or holiday</span><span className="block text-xs text-gray-500">Credited the moment a manager ticks "Eligible for comp off" while approving the day, if enough time was worked.</span></span>
             </label>
             <fieldset disabled={!settings.compOffEnabled} className="grid grid-cols-3 gap-3 disabled:opacity-50">
               <label className="text-xs font-medium text-gray-600">Days credited<input type="number" step="0.25" min="0.25" className={fieldClass} value={settings.compOffCreditDays} onChange={(e) => set({ compOffCreditDays: e.target.value })} /></label>
@@ -155,7 +164,7 @@ export default function LeaveConfigPanel() {
             <button type="button" onClick={saveSettings} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Save settings</button>
             <button type="button" onClick={async () => { setError(''); try { const r = (await runAccrual()).data; setNotice(`Accrual for ${r.leaveYear}: ${r.credited} credited, ${r.alreadyCredited} already done.`); } catch (e: any) { setError(e.message); } }} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Credit leave now</button>
             <button type="button" onClick={async () => { setError(''); try { const r = (await syncCompOff()).data; setNotice(`Comp off checked: ${r.granted} new credit(s).`); } catch (e: any) { setError(e.message); } }} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Check comp off now</button>
-            <span className="text-xs text-gray-500">Both also run every night. Running them again never credits twice.</span>
+            <span className="text-xs text-gray-500">Credit leave now also runs every night. Comp off is credited at approval; use this only to catch up older days. Running either again never credits twice.</span>
           </div>
         </section>
       )}
@@ -175,6 +184,20 @@ export default function LeaveConfigPanel() {
             <label className="col-span-1 block text-sm font-medium text-gray-700">Code<input className={`${fieldClass} font-mono uppercase`} maxLength={10} value={editing.form.code} onChange={(e) => setF({ code: e.target.value })} /></label>
             <label className="col-span-2 block text-sm font-medium text-gray-700">Name<input className={fieldClass} maxLength={60} value={editing.form.name} onChange={(e) => setF({ name: e.target.value })} /></label>
           </div>
+          <label className="block text-sm font-medium text-gray-700">
+            Countries
+            <Select
+              multiple
+              className={fieldClass}
+              values={editing.form.countryCodes}
+              onValuesChange={(v) => setF({ countryCodes: v })}
+              options={countries.map((c) => ({ value: c.isoCode, label: c.name }))}
+              allText="All countries"
+              noun="countries"
+              placeholder={countries.length === 0 ? 'Add countries in System Settings first' : 'Select…'}
+            />
+            <span className="mt-1 block text-xs text-gray-500">Leave empty for every country, or pick which ones this leave type applies to.</span>
+          </label>
           <div className="space-y-3">
             {([
               ['isPaid', 'Paid leave', ''],

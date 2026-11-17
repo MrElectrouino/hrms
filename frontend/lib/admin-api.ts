@@ -75,7 +75,7 @@ export interface CurrentUser {
   profileId: number;
   mustChangePassword: boolean;
   userType: { name: string };
-  profile: { name: string; lastName?: string | null; email?: string | null };
+  profile: { name: string; lastName?: string | null; email?: string | null; employee: { id: number } | null };
 }
 
 export function getMe() {

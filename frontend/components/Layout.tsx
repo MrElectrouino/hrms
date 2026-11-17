@@ -17,6 +17,7 @@ const Svg = ({ className, children }: IconProps & { children: React.ReactNode })
   </svg>
 );
 const HomeIcon = (p: IconProps) => <Svg {...p}><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></Svg>;
+const IdIcon = (p: IconProps) => <Svg {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10.5" r="2.25" /><path d="M5.5 17c.6-2 2.2-3 3.5-3s2.9 1 3.5 3M14.5 9h4M14.5 12.5h4" /></Svg>;
 const UsersIcon = (p: IconProps) => <Svg {...p}><circle cx="9" cy="8" r="4" /><path d="M2 21v-1a7 7 0 0 1 14 0v1" /><path d="M16 4.1a4 4 0 0 1 0 7.8M18 14.2A7 7 0 0 1 22 21" /></Svg>;
 const ClockIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>;
 const CalendarIcon = (p: IconProps) => <Svg {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></Svg>;
@@ -76,31 +77,32 @@ const ROLE_LABEL: Record<number, string> = {
   [UserType.HRAdmin]: 'HR Admin',
 };
 
-const ADMIN_LINKS: Array<NavChild & { roles: UserType[] }> = [
-  { href: '/attendance-setup', label: 'Attendance setup', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/bulk-update', label: 'Bulk update', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/branches', label: 'Branches', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/masters', label: 'Masters', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/users', label: 'Users', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/access-control', label: 'Menus & rights', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/leave-setup', label: 'Leave setup', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/salary-templates', label: 'Salary templates', roles: [UserType.SystemAdmin, UserType.HRAdmin] },
-  { href: '/modules', label: 'Modules', roles: [UserType.SystemAdmin] },
-];
-
 /** Pages that work without signing in. Every other page sends a signed-out visitor to /login. */
 const PUBLIC_PATHS = ['/login', '/reset-password'];
 
-/** Own top-level menu, System Admin only. */
-const SYSTEM_SETTINGS_LINKS: Array<NavChild & { roles: UserType[] }> = [
-  { href: '/system-settings', label: 'General settings', roles: [UserType.SystemAdmin] },
-  { href: '/custom-fields', label: 'Custom fields', roles: [UserType.SystemAdmin] },
-  { href: '/profile-rules', label: 'Profile rules', roles: [UserType.SystemAdmin] },
-];
+/** DefaultIcon covers any menu item a System Admin adds without picking one of these classes. */
+const DefaultIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="12" r="2" /><circle cx="5" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></Svg>;
+const ICON_BY_CLASS: Record<string, (p: IconProps) => React.JSX.Element> = {
+  'fa fa-home': HomeIcon,
+  'fa fa-users': UsersIcon,
+  'fa fa-clock-o': ClockIcon,
+  'fa fa-calendar': CalendarIcon,
+  'fa fa-cogs': GearIcon,
+  'fa fa-sliders': SlidersIcon,
+};
 
-/** Menu items granted through RBAC (GET /rbac/my-menu), flattened to links. */
-function flattenMenu(nodes: MenuNode[]): NavChild[] {
-  return nodes.flatMap((n) => [...(n.pageUrl ? [{ href: n.pageUrl, label: n.name }] : []), ...flattenMenu(n.children)]);
+/**
+ * The sidebar's main sections, built from what Menus & Rights (GET /rbac/my-menu) actually grants
+ * this user — a group heading becomes an expandable entry, a leaf with a pageUrl becomes a link.
+ * getMyMenu already drops any branch with nothing visible in it, so every node here has something to show.
+ */
+function buildEntries(nodes: MenuNode[]): NavEntry[] {
+  return nodes.map((n) => {
+    const icon = (n.iconClass && ICON_BY_CLASS[n.iconClass]) || DefaultIcon;
+    if (n.pageUrl) return { key: `m${n.id}`, label: n.name, icon, href: n.pageUrl };
+    const children: NavChild[] = n.children.filter((c) => c.pageUrl).map((c) => ({ href: c.pageUrl as string, label: c.name }));
+    return { key: `m${n.id}`, label: n.name, icon, children };
+  });
 }
 
 function initialsOf(name?: string | null) {
@@ -206,58 +208,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const roleLabel = (userType && ROLE_LABEL[userType]) || 'User';
   const displayName = user?.username ?? 'User';
 
-  // Administration = role-based admin screens + anything RBAC grants that is not listed elsewhere.
-  const adminChildren: NavChild[] = ADMIN_LINKS.filter((l) => userType && l.roles.includes(userType)).map(({ href, label }) => ({ href, label }));
-  const systemChildren: NavChild[] = SYSTEM_SETTINGS_LINKS.filter((l) => userType && l.roles.includes(userType)).map(({ href, label }) => ({ href, label }));
-  const reserved = new Set(['/', '/employees', '/documents', '/account', ...adminChildren.map((c) => c.href), ...SYSTEM_SETTINGS_LINKS.map((l) => l.href)]);
-  for (const link of flattenMenu(menu)) {
-    if (!reserved.has(link.href)) {
-      adminChildren.push(link);
-      reserved.add(link.href);
-    }
-  }
-
-  const attendanceChildren: NavChild[] = [
-    { href: '/attendance/mark', label: 'Mark attendance' },
-    { href: '/attendance/my', label: 'My attendance' },
-    ...(userType === UserType.Manager || userType === UserType.HRAdmin || userType === UserType.SystemAdmin
-      ? [
-          { href: '/attendance/team', label: 'Team attendance' },
-          { href: '/attendance/corrections', label: 'Correction requests' },
-          { href: '/attendance/reports', label: 'Reports' },
-        ]
-      : []),
-  ];
-
-  const leaveChildren: NavChild[] = [
-    { href: '/leave/my', label: 'My leave' },
-    ...(userType === UserType.Manager || userType === UserType.HRAdmin || userType === UserType.SystemAdmin ? [{ href: '/leave/team', label: 'Team leave' }] : []),
-  ];
-
+  // Everything below "My Profile" is exactly what Menus & Rights grants this user; no role is hardcoded here.
+  const rbacEntries = buildEntries(menu);
+  const dashboardIdx = rbacEntries.findIndex((e) => e.href === '/');
+  const myProfileAt = dashboardIdx === -1 ? 0 : dashboardIdx + 1;
   const entries: NavEntry[] = [
-    { key: 'dashboard', label: 'Dashboard', icon: HomeIcon, href: '/' },
-    {
-      key: 'employees',
-      label: 'Employees',
-      icon: UsersIcon,
-      children: [
-        { href: '/employees', label: 'Employee list' },
-        { href: '/documents', label: 'Documents' },
-      ],
-    },
-    { key: 'attendance', label: 'Time & Attendance', icon: ClockIcon, children: attendanceChildren },
-    { key: 'leave', label: 'Leave Management', icon: CalendarIcon, children: leaveChildren },
+    ...rbacEntries.slice(0, myProfileAt),
+    // Not a menu item: it needs the viewer's own employee id, which a static pageUrl can't carry.
+    ...(user?.employeeId ? [{ key: 'my-profile', label: 'My Profile', icon: IdIcon, href: `/employee-profile/${user.employeeId}` } as NavEntry] : []),
+    ...rbacEntries.slice(myProfileAt),
     { key: 'payroll', label: 'Payroll', icon: WalletIcon, soon: true },
-    { key: 'reports', label: 'Reports', icon: BarsIcon, soon: true, chevron: true },
-    ...(adminChildren.length ? [{ key: 'admin', label: 'Administration', icon: GearIcon, children: adminChildren } as NavEntry] : []),
-    ...(systemChildren.length ? [{ key: 'system', label: 'System Settings', icon: SlidersIcon, children: systemChildren } as NavEntry] : []),
+    { key: 'reports-soon', label: 'Reports', icon: BarsIcon, soon: true, chevron: true },
   ];
 
   const pathMatches = (href: string) =>
     href === '/' ? router.pathname === '/' : router.pathname === href || router.pathname.startsWith(`${href}/`) || router.asPath.startsWith(`${href}/`);
   const isEmployeeProfile = router.pathname.startsWith('/employee-profile');
   const entryActive = (e: NavEntry) =>
-    (e.href && pathMatches(e.href)) || (e.children ?? []).some((c) => pathMatches(c.href)) || (e.key === 'employees' && isEmployeeProfile);
+    (e.href && pathMatches(e.href)) || (e.children ?? []).some((c) => pathMatches(c.href)) || (isEmployeeProfile && (e.children ?? []).some((c) => c.href === '/employees'));
   const isOpen = (e: NavEntry) => open[e.key] ?? entryActive(e);
 
   const doLogout = () => logout().then(() => router.push('/login'));

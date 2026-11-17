@@ -84,18 +84,17 @@
     <tr><th>Way</th><th>What adds the days</th><th>You control it in</th></tr>
     <tr><td><b>Automatic credit</b></td><td>A job that runs every night, and the button <i>Credit leave now</i>. It gives each employee the days their <b>leave policy</b> says (or, if no policy covers them, the leave type's own setting).</td><td>Administration → <b>Leave setup</b> → <b>Policies</b>, and System settings → <b>Leave configuration</b></td></tr>
     <tr><td><b>By hand</b></td><td>HR adds (or takes away) days for one employee, with a reason. Used for opening balances and corrections.</td><td>Administration → <b>Leave setup</b> → <b>Balances</b></td></tr>
-    <tr><td><b>Comp off</b></td><td>Working on a weekly off or a holiday, when the day is approved and enough time was worked.</td><td>System settings → Leave configuration → <b>Leave year and comp off</b></td></tr>
+    <tr><td><b>Comp off</b></td><td>Working on a weekly off or a holiday: credited the moment a manager ticks <b>Eligible for comp off</b> while approving the day, if enough time was worked.</td><td>System settings → Leave configuration → <b>Leave year and comp off</b></td></tr>
   </table>
   <div class="note warn"><b>If a leave type has no policy and its own setting is "No accrual", nobody ever gets days for it.</b> This is the most common reason an employee cannot apply: the <b>Send for approval</b> button stays off because the balance is zero.</div>
 </section>
 
 <section id="job">
   <h2>2. The nightly job</h2>
-  <p>Every night at <b>02:30 (server time)</b> the system does three things, in this order:</p>
+  <p>Every night at <b>02:30 (server time)</b> the system does two things, in this order:</p>
   <div class="flow">
     <div><b>1. Expire old balance</b>Any credit past its expiry date is closed, and the ledger records what expired.</div>
-    <div><b>2. Check comp off</b>Gives comp off for approved days worked on a weekly off or holiday (only if comp off is switched on).</div>
-    <div><b>3. Credit leave</b>Credits the leave year (for "upfront" types) or each month so far (for "monthly" types) to every active employee who has joined.</div>
+    <div><b>2. Credit leave</b>Credits the leave year (for "upfront" types) or each month so far (for "monthly" types) to every active employee who has joined.</div>
   </div>
   <ul>
     <li><b>Safe to repeat.</b> Each credit carries a unique reference (employee, leave type, month or year). Running the job twice, or pressing <i>Credit leave now</i> several times, never credits the same days twice.</li>
@@ -103,6 +102,7 @@
     <li><b>Run it yourself</b> at any time: System settings → Leave configuration → <b>Credit leave now</b>. It tells you how many credits were added and how many were already done.</li>
     <li>The server must be running at 02:30 for the automatic run. If it was off, the next night (or the button) catches up.</li>
   </ul>
+  <div class="note info"><b>Comp off is not part of this job.</b> It is credited immediately, the moment a manager approves a day worked on a holiday or weekly off with <b>Eligible for comp off</b> ticked — see section 10.</div>
 </section>
 
 <section id="which">
@@ -132,7 +132,7 @@
     <li><b class="where">Countries and branches</b>System settings → <b>Countries</b>: add your countries. Administration → <b>Branches</b>: add each branch and choose its country.</li>
     <li><b class="where">Employee details</b>On every employee's profile set the <b>Country of employment</b> and <b>Branch</b> (Organization tab), and the <b>Employment type</b> and <b>Date of joining</b> (Employment tab). Bulk update can set branch and employment type for many people at once.</li>
     <li><b class="where">Leave year</b>System settings → <b>Leave configuration</b> → <i>Leave year starts in</i>. Choose January for a calendar year, April for April–March, and so on. All balances and expiry follow this.</li>
-    <li><b class="where">Leave types</b>Same page → <b>Add leave type</b>. Create Annual, Casual, Medical, Unpaid and so on (settings in section 5). <b>Leave "Comp off" unticked</b> unless the type is only earned by working on off days.</li>
+    <li><b class="where">Leave types</b>Same page → <b>Add leave type</b>. Create Annual, Casual, Medical, Unpaid and so on (settings in section 5). <b>Leave "Comp off" unticked</b> unless the type is only earned by working on off days. Leave <b>Countries</b> empty unless the type is only for employees working in one or more specific countries.</li>
     <li><b class="where">Leave policies</b>Administration → <b>Leave setup</b> → <b>Policies</b> → <b>New policy</b>. Choose who it applies to, the start date, and add each leave type with its days per year and how it is credited (settings in section 6). Create one policy per group that has different rules, for example one per country.</li>
     <li><b class="where">Check one employee</b>On the Leave setup → Policies tab, use <b>Check an employee</b>: choose an employee, a leave type and the leave year start. It shows which policy applies and how the days were worked out, month by month, without saving anything. If it says "No policy covers this employee", fix the scope or the employee's details.</li>
     <li><b class="where">Credit leave</b>System settings → Leave configuration → <b>Credit leave now</b> (or wait for 02:30). Then open Administration → <b>Leave setup</b> → <b>Balances</b> for an employee to see the days.</li>
@@ -154,8 +154,10 @@
     <tr><td>Maximum days per request</td><td>The longest single request allowed.</td></tr>
     <tr><td>Sandwich leave</td><td>Whether this type takes part in the sandwich rule (off days between two leave days count as leave). Also needs the organization switch below the types.</td></tr>
     <tr><td><b>Comp off</b></td><td>The type is earned only by comp off. It is <b>left out of leave policies</b> and not credited yearly. Tick it only for a real comp off type.</td></tr>
+    <tr><td><b>Countries</b></td><td>Which countries this type applies to. Empty means every country. An employee only sees types that apply to their own country of employment (Organization tab) when applying for leave; a type they already hold a balance for still shows even if it no longer applies to their country.</td></tr>
   </table>
   <p>The same page has <b>Leave year and comp off</b> and the <b>sandwich leave</b> switch with its options (weekly offs, holidays, both sides or either side).</p>
+  <div class="note info">Countries come from System settings → <b>Countries</b>. Leave setup → <b>Policies</b> and <b>Balances</b> always show every leave type regardless of country, since HR there manages any employee.</div>
 </section>
 
 <section id="policy">
@@ -249,7 +251,8 @@
     <tr><td>Expires after (days)</td><td>How long the comp off stays usable. Empty means it never expires.</td></tr>
     <tr><td>Minimum worked (minutes)</td><td>The day must have at least this much worked time.</td></tr>
   </table>
-  <p>You also need a leave type with <b>Comp off</b> ticked to receive the credit. The credit is made when the attendance day is <b>approved</b>, by the nightly job or <b>Check comp off now</b>. A comp off credit is not taken back automatically if the attendance is later changed.</p>
+  <p>You also need a leave type with <b>Comp off</b> ticked to receive the credit. The credit is made <b>immediately</b>, the moment a manager or HR approves the day in Team attendance <b>with the "Eligible for comp off" checkbox ticked</b> in the approve popup — not by a nightly scan. If the day does not actually qualify (not a worked holiday or weekly off, not enough time worked, or comp off switched off), ticking the box does nothing. A comp off credit is not taken back automatically if the attendance is later changed.</p>
+  <p><b>Check comp off now</b> (System settings → Leave configuration) is a separate, manual-only tool: it scans the last 45 days for approved worked-holiday/weekly-off days that were never ticked, and backfills a credit for them. Use it to catch up days approved before this checkbox existed, or any missed by mistake. It never credits the same day twice, and it no longer runs automatically at night.</p>
 </section>
 
 <section id="use">
@@ -282,6 +285,7 @@
     <tr><td>Is the employee active, with a past joining date?</td><td>Inactive employees, or employees whose joining date is in the future, are skipped.</td></tr>
     <tr><td>Did the policy produce 0 days?</td><td>Joining on the last day of a month with <i>Completed months</i> can give 0. Use a minimum ("At least"), or another proration method.</td></tr>
     <tr><td>Is the policy switched off or ended?</td><td>Its "Switched on" box and its end date.</td></tr>
+    <tr><td>Comp off was not credited</td><td>Check the day was approved with "Eligible for comp off" ticked, the day really worked out to a worked holiday/weekly off, comp off is switched on, and enough time was worked. Already-approved days from before this checkbox existed need <b>Check comp off now</b> instead.</td></tr>
   </table>
   <p>The quickest fix for one person is a <b>manual adjustment</b> (section 9). Fix the cause too, or the next employee will have the same problem.</p>
 </section>

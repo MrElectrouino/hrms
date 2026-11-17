@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { getDocuments, createDocument, attachDocumentFile, getDocumentTypes, getEmployees, Document, DocumentTypeItem, Employee } from '../lib/api';
+import { getDocuments, createDocument, attachDocumentFile, getDocumentTypes, getEmployee, getEmployees, Document, DocumentTypeItem, Employee } from '../lib/api';
 import Select from '../components/Select';
 import Modal from '../components/Modal';
 
@@ -15,6 +15,7 @@ export default function DocumentsPage() {
   const [documentTypes, setDocumentTypes] = useState<DocumentTypeItem[]>([]);
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeeCountry, setEmployeeCountry] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const [form, setForm] = useState<any>({
@@ -31,8 +32,18 @@ export default function DocumentsPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     loadDocuments();
-    getDocumentTypes({ pageSize: 100 }).then((r) => setDocumentTypes(r.data.filter((x) => x.isActive)));
   }, [isAuthenticated, page]);
+
+  // Document type choices: all of them until an employee is chosen, then just that employee's country (plus "ALL").
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    getDocumentTypes({ pageSize: 100, ...(employeeCountry ? { countryCode: employeeCountry } : {}) }).then((r) => {
+      const list = r.data.filter((x) => x.isActive);
+      setDocumentTypes(list);
+      // Changing employee can narrow the list; drop a choice that no longer applies.
+      setForm((f: any) => (f.documentTypeId && !list.some((dt) => String(dt.id) === String(f.documentTypeId)) ? { ...f, documentTypeId: '' } : f));
+    });
+  }, [isAuthenticated, employeeCountry]);
 
   // Employee choices for the Add Document form; typing narrows the list.
   useEffect(() => {
@@ -44,6 +55,14 @@ export default function DocumentsPage() {
     }, 300);
     return () => clearTimeout(timer);
   }, [isAuthenticated, showCreate, employeeSearch]);
+
+  // Once an employee is picked, look up their country so the document type list narrows to it.
+  useEffect(() => {
+    if (!form.profileId) { setEmployeeCountry(''); return; }
+    const emp = employees.find((e) => String(e.profileId) === String(form.profileId));
+    if (!emp) return;
+    getEmployee(emp.id).then((r) => setEmployeeCountry(r.data.country ?? 'IN')).catch(() => setEmployeeCountry(''));
+  }, [form.profileId, employees]);
 
   const selectedType = documentTypes.find((dt) => String(dt.id) === String(form.documentTypeId));
   const needsDates = !!selectedType?.hasExpiry;

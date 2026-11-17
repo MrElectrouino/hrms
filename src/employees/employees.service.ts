@@ -16,6 +16,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
 import { CreateDependantDto } from './dto/create-dependant.dto';
 import { UpdateDependantDto } from './dto/update-dependant.dto';
+import { COUNTRIES } from '../employee-profile/profile-schema';
 
 /**
  * Prisma's default interactive-transaction timeout is 5 s. Against a remote
@@ -140,6 +141,7 @@ export class EmployeesService {
             profile: { select: { name: true, lastName: true } },
           },
         },
+        profileSections: { where: { sectionKey: 'organization' }, select: { data: true } },
       },
     });
 
@@ -147,7 +149,9 @@ export class EmployeesService {
       throw new NotFoundException('Employee not found');
     }
 
-    return this.sanitizeEmployee(employee, false);
+    const { profileSections, ...rest } = employee;
+    const country = (profileSections[0]?.data as Record<string, unknown> | undefined)?.legalEntityCountry;
+    return { ...this.sanitizeEmployee(rest, false), country: typeof country === 'string' && (COUNTRIES as readonly string[]).includes(country) ? country : 'IN' };
   }
 
   /**

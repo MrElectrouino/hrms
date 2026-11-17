@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -227,17 +228,31 @@ export class MastersService {
     return this.findAllGeneric('documentType', query);
   }
 
+  /** Every code must be a real, known country (the same list System Settings > Countries manages). */
+  private async validateCountryCodes(codes: string[] | undefined): Promise<string[] | undefined> {
+    if (codes === undefined) return undefined;
+    const unique = [...new Set(codes.map((c) => c.trim().toUpperCase()).filter(Boolean))];
+    if (unique.length === 0) return [];
+    const found = await this.prisma.country.findMany({ where: { isoCode: { in: unique } }, select: { isoCode: true } });
+    const known = new Set(found.map((c) => c.isoCode));
+    const unknown = unique.filter((c) => !known.has(c));
+    if (unknown.length) throw new BadRequestException(`Unknown country code(s): ${unknown.join(', ')}`);
+    return unique;
+  }
+
   async createDocumentType(
     dto: CreateDocumentTypeDto,
     actorProfileId?: number,
     ip?: string,
   ) {
+    const countryCodes = (await this.validateCountryCodes(dto.countryCodes)) ?? [];
     const created = await this.prisma.documentType.create({
-      data: { name: dto.name.trim(), isActive: dto.isActive ?? true, hasExpiry: dto.hasExpiry ?? false },
+      data: { name: dto.name.trim(), isActive: dto.isActive ?? true, hasExpiry: dto.hasExpiry ?? false, countryCodes },
     });
     await this.auditMaster('DOCUMENT_TYPE_CREATED', created.id, actorProfileId, ip, {
       name: created.name,
       hasExpiry: created.hasExpiry,
+      countryCodes: created.countryCodes,
     });
     return created;
   }
@@ -249,12 +264,14 @@ export class MastersService {
     ip?: string,
   ) {
     await this.ensureExists('documentType', id);
+    const countryCodes = await this.validateCountryCodes(dto.countryCodes);
     const updated = await this.prisma.documentType.update({
       where: { id },
       data: {
         ...(dto.name !== undefined && { name: dto.name.trim() }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.hasExpiry !== undefined && { hasExpiry: dto.hasExpiry }),
+        ...(countryCodes !== undefined && { countryCodes }),
       },
     });
     await this.auditMaster('DOCUMENT_TYPE_UPDATED', id, actorProfileId, ip, { changes: { ...dto } });
@@ -418,6 +435,9 @@ export class MastersService {
     }
     if (query.search) {
       where.name = { contains: query.search.trim(), mode: 'insensitive' };
+    }
+    if (query.countryCode && model === 'documentType') {
+      where.OR = [{ countryCodes: { isEmpty: true } }, { countryCodes: { has: query.countryCode } }];
     }
 
     const [totalItems, items] = await Promise.all([

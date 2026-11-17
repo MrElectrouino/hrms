@@ -652,12 +652,14 @@ model Dependant {
 /// IDs preserved (document expiry values are keyed by (documentType, field)).
 model DocumentType {
   /// legacy DocumentTypeId preserved (1..6, 106..110); sequence continues.
-  id        Int     @id @default(autoincrement())
-  name      String  @unique
-  isActive  Boolean @default(true)
+  id           Int      @id @default(autoincrement())
+  name         String   @unique
+  isActive     Boolean  @default(true)
   /// NEW: when true, documents of this type must carry issue and expiry dates
   /// (and feed the expiry scheduler). When false, dates are not collected.
-  hasExpiry Boolean @default(false)
+  hasExpiry    Boolean  @default(false)
+  /// NEW: the countries (Country.isoCode) this document type applies to. Empty = every country.
+  countryCodes String[] @default([])
 
   documents   Document[]
   formFields  FormField[]
@@ -1400,27 +1402,29 @@ model AttendanceProcessingRun {
 // ============================================================================
 
 model LeaveType {
-  id                 Int     @id @default(autoincrement())
-  code               String  @unique
-  name               String  @unique
-  isPaid             Boolean @default(true)
+  id                 Int      @id @default(autoincrement())
+  code               String   @unique
+  name               String   @unique
+  isPaid             Boolean  @default(true)
   /// false = usage is recorded but no balance is kept (for example loss of pay).
-  balanceTracking    Boolean @default(true)
+  balanceTracking    Boolean  @default(true)
   /// NONE | ANNUAL (credited at the start of the leave year) | MONTHLY (annualDays / 12 each month)
-  accrual            String  @default("NONE")
-  annualDays         Decimal @default(0) @db.Decimal(6, 2)
-  allowHalfDay       Boolean @default(true)
-  allowNegative      Boolean @default(false)
-  requiresDocument   Boolean @default(false)
+  accrual            String   @default("NONE")
+  annualDays         Decimal  @default(0) @db.Decimal(6, 2)
+  allowHalfDay       Boolean  @default(true)
+  allowNegative      Boolean  @default(false)
+  requiresDocument   Boolean  @default(false)
   /// Document is only needed when the leave is longer than this many days (0 = always).
-  documentAfterDays  Int     @default(0)
+  documentAfterDays  Int      @default(0)
   maxDaysPerRequest  Int?
   /// Whether this type takes part in sandwich leave (also needs the organization switch).
-  isSandwichEligible Boolean @default(false)
+  isSandwichEligible Boolean  @default(false)
   /// Earned through comp off credits instead of accrual.
-  isCompOff          Boolean @default(false)
-  isActive           Boolean @default(true)
-  sortOrder          Int     @default(0)
+  isCompOff          Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  /// NEW: the countries (Country.isoCode) this leave type applies to. Empty = every country.
+  countryCodes       String[] @default([])
 
   applications LeaveApplication[]
   credits      LeaveCredit[]

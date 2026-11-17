@@ -43,6 +43,12 @@ export class LeaveService {
     return e.id;
   }
 
+  /** Country of employment, for showing only the leave types that apply there. */
+  async myCountry(user: CurrentUserPayload): Promise<string | undefined> {
+    const [fact] = await this.entitlement.facts([await this.myEmployeeId(user)]);
+    return fact?.countryCode ?? undefined;
+  }
+
   /** HR (within their branches) or the employee's own manager may decide leave. */
   private async assertMayDecide(user: CurrentUserPayload, employeeId: number) {
     if (HR_TYPES.includes(user.userTypeId)) {
@@ -115,7 +121,17 @@ export class LeaveService {
   }
 
   async myBalances(user: CurrentUserPayload) {
-    return this.balances(await this.myEmployeeId(user));
+    const employeeId = await this.myEmployeeId(user);
+    const rows = await this.balances(employeeId);
+    const country = await this.myCountry(user);
+    if (!country) return rows;
+    // Hide a type that does not apply to this country, unless the employee actually holds (or is waiting on) days of it.
+    const types = await this.prisma.leaveType.findMany({ where: { id: { in: rows.map((r) => r.leaveTypeId) } }, select: { id: true, countryCodes: true } });
+    const codesOf = new Map(types.map((t) => [t.id, t.countryCodes]));
+    return rows.filter((r) => {
+      const codes = codesOf.get(r.leaveTypeId) ?? [];
+      return codes.length === 0 || codes.includes(country) || r.balance !== 0 || r.pending !== 0;
+    });
   }
 
   /* ------------------------------------------------------------------ applying */
@@ -370,6 +386,8 @@ export class LeaveService {
           continue;
         }
         if (t.accrual !== 'ANNUAL' && t.accrual !== 'MONTHLY') continue;
+        // No policy covered them, so fall back to the type's own setting — only when the type applies to their country.
+        if (t.countryCodes.length && !(e.countryCode && t.countryCodes.includes(e.countryCode))) continue;
         const monthly = t.accrual === 'MONTHLY';
         const days = monthly ? monthlyCredit(num(t.annualDays)) : num(t.annualDays);
         if (days <= 0) continue;
@@ -428,8 +446,9 @@ export class LeaveService {
   }
 
   /**
-   * Comp off: an approved day worked on a holiday or weekly off earns a credit (when switched on and
-   * enough time was worked). One credit per day, so it is safe to run as often as needed.
+   * Comp off is normally credited the moment a manager approves the day (the "Eligible for comp off"
+   * checkbox in AttendanceService.edit), not by this scan. Kept as a manual backfill for days approved
+   * before that checkbox existed, or missed for any other reason. One credit per day, safe to run again.
    */
   async syncCompOff(sinceDays = 45): Promise<number> {
     const settings = await this.prisma.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
@@ -455,14 +474,13 @@ export class LeaveService {
     return granted;
   }
 
-  /** Nightly housekeeping: expire old balance, earn comp off, and credit a new month or year when it starts. */
+  /** Nightly housekeeping: expire old balance, and credit a new month or year when it starts. Comp off is credited at approval time, not here. */
   @Cron('30 2 * * *')
   async nightly() {
     try {
       const expired = await this.expireCredits();
-      const comp = await this.syncCompOff();
       const acc = await this.runAccrual(null);
-      this.logger.log(`Leave nightly: ${expired} expired, ${comp} comp off, ${acc.credited} credited`);
+      this.logger.log(`Leave nightly: ${expired} expired, ${acc.credited} credited`);
     } catch (e) {
       this.logger.error(`Leave nightly failed: ${(e as Error).message}`);
     }

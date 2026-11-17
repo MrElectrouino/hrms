@@ -93,8 +93,8 @@ export default function RightsPanel() {
       <div>
         <h2 className="text-xl font-semibold text-gray-800">Rights by user type</h2>
         <p className="text-sm text-gray-500 mt-1">
-          Choose the menus each user type can open. Ticking a menu also ticks its group. Create, edit and delete
-          flags apply to that menu.
+          This is what actually controls the sidebar: ticking a page grants it (and shows its section);
+          unticking every page in a section hides that section too. Create, edit and delete apply to that page.
         </p>
         {!canEdit && (
           <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
@@ -103,55 +103,64 @@ export default function RightsPanel() {
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
-        <label className="block text-sm font-medium text-gray-700">
-          User type
-          <Select
-            className="mt-1 block w-full sm:w-72 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            value={userTypeId}
-            onChange={(e) => setUserTypeId(e.target.value === '' ? '' : Number(e.target.value))}
-          >
-            <option value="">Select a user type</option>
-            {userTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-5 pb-4 space-y-4 border-b border-gray-100">
+          <label className="block text-sm font-medium text-gray-700">
+            User type
+            <Select
+              className="mt-1 block w-full sm:w-72 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              value={userTypeId}
+              onChange={(e) => setUserTypeId(e.target.value === '' ? '' : Number(e.target.value))}
+            >
+              <option value="">Select a user type</option>
+              {userTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </label>
 
-        {message && (
-          <p className={`text-sm rounded-md px-3 py-2 ${message.type === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-            {message.text}
-          </p>
-        )}
+          {message && (
+            <p className={`text-sm rounded-md px-3 py-2 ${message.type === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {message.text}
+            </p>
+          )}
+        </div>
 
         {userTypeId === '' ? (
-          <p className="text-sm text-gray-500">Select a user type to see its menus.</p>
+          <p className="p-6 text-sm text-gray-500 text-center">Select a user type to see its menus.</p>
         ) : loading ? (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <p className="p-6 text-sm text-gray-500 text-center">Loading…</p>
         ) : (
-          <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
-            {rows.length === 0 && <p className="p-4 text-sm text-gray-500">No menu items yet.</p>}
+          <div className="divide-y divide-gray-100">
+            {rows.length === 0 && <p className="p-6 text-sm text-gray-500 text-center">No menu items yet.</p>}
             {rows.map(({ item, depth }) => {
               const flags = selection[item.id];
               const ticked = !!flags;
+              const isGroup = depth === 0;
               return (
-                <div key={item.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 pr-3" style={{ paddingLeft: `${depth * 24 + 12}px` }}>
-                  <label className="flex items-center gap-2 min-w-[14rem] cursor-pointer">
+                <div
+                  key={item.id}
+                  className={`grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 pr-4 ${isGroup ? 'bg-gray-50/80 py-2.5' : 'py-2'}`}
+                  style={{ paddingLeft: `${depth * 24 + 16}px` }}
+                >
+                  <label className="flex min-w-0 items-center gap-2.5 cursor-pointer">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                      className="h-4 w-4 shrink-0 rounded border-gray-300 text-blue-600"
                       checked={ticked}
                       disabled={!canEdit}
                       onChange={(e) => tick(item.id, e.target.checked)}
                     />
-                    <span className={`text-sm ${item.isActive ? 'text-gray-800' : 'text-gray-400 line-through'}`}>{item.name}</span>
+                    <span className={`truncate text-sm ${isGroup ? 'font-semibold' : 'font-normal'} ${item.isActive ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
+                      {item.name}
+                    </span>
+                    {item.pageUrl && <span className="hidden shrink-0 text-xs text-gray-400 font-mono sm:inline">{item.pageUrl}</span>}
+                    {!item.isActive && <span className="shrink-0 text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">inactive</span>}
                   </label>
-                  {item.pageUrl && <span className="text-xs text-gray-400 font-mono">{item.pageUrl}</span>}
-                  {!item.isActive && <span className="text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">inactive</span>}
-                  {flags && (
-                    <div className="flex items-center gap-3 ml-auto text-xs text-gray-600">
+                  {flags ? (
+                    <div className="flex items-center gap-3 text-xs text-gray-600">
                       {FLAGS.map((f) => (
                         <label key={f.key} className="flex items-center gap-1">
                           <input
@@ -165,7 +174,7 @@ export default function RightsPanel() {
                         </label>
                       ))}
                     </div>
-                  )}
+                  ) : <span />}
                 </div>
               );
             })}
@@ -173,7 +182,7 @@ export default function RightsPanel() {
         )}
 
         {canEdit && userTypeId !== '' && !loading && (
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-100 bg-gray-50/50">
             {dirty && <span className="text-xs text-amber-600">Unsaved changes</span>}
             <button
               onClick={save}

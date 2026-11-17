@@ -20,6 +20,7 @@ interface Target {
   statusCode: string;
   remarks: string;
   isNew: boolean;
+  compOffEligible: boolean;
 }
 
 /** Managers approve and correct their team's unapproved days. HR can correct any day or add a missing one. */
@@ -76,20 +77,11 @@ export default function TeamAttendancePage() {
   const label = new Date(Date.UTC(month.y, month.m, 1)).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   const shiftMonth = (d: number) => setMonth((p) => { const n = new Date(Date.UTC(p.y, p.m + d, 1)); return { y: n.getUTCFullYear(), m: n.getUTCMonth() }; });
 
-  const open = (r: AttendanceRow) => { setError(''); setEdit({ employeeId: r.employeeId, employeeName: `${r.employeeName} (${r.employeeCode})`, date: r.date, inTime: r.inLocal ?? '', outTime: r.outLocal ?? '', statusCode: '', remarks: '', isNew: false }); };
-  const openNew = () => { setError(''); setEmpSearch(''); setEdit({ employeeId: 0, employeeName: '', date: new Date().toISOString().slice(0, 10), inTime: '', outTime: '', statusCode: '', remarks: '', isNew: true }); };
+  const open = (r: AttendanceRow) => { setError(''); setEdit({ employeeId: r.employeeId, employeeName: `${r.employeeName} (${r.employeeCode})`, date: r.date, inTime: r.inLocal ?? '', outTime: r.outLocal ?? '', statusCode: '', remarks: '', isNew: false, compOffEligible: false }); };
+  const openNew = () => { setError(''); setEmpSearch(''); setEdit({ employeeId: 0, employeeName: '', date: new Date().toISOString().slice(0, 10), inTime: '', outTime: '', statusCode: '', remarks: '', isNew: true, compOffEligible: false }); };
 
-  const approve = async (r: AttendanceRow) => {
-    setError('');
-    setNotice('');
-    try {
-      await editAttendance(r.employeeId, r.date, {});
-      setNotice(`${r.employeeName}, ${r.date} approved`);
-      await load();
-    } catch (e: any) {
-      setError(e.message || 'Could not approve');
-    }
-  };
+  // Approving opens the same popup as Edit, so the manager can check the times and comp off before confirming.
+  const approve = (r: AttendanceRow) => open(r);
 
   const save = async () => {
     if (!edit) return;
@@ -98,7 +90,7 @@ export default function TeamAttendancePage() {
     setError('');
     try {
       const original = rows.find((r) => r.employeeId === edit.employeeId && r.date === edit.date);
-      await editAttendance(edit.employeeId, edit.date, {
+      const result = await editAttendance(edit.employeeId, edit.date, {
         // Only send times that were changed, so a plain status change keeps the punches.
         ...(edit.inTime && edit.inTime !== (original?.inLocal ?? '') ? { inTime: edit.inTime } : {}),
         ...(edit.outTime && edit.outTime !== (original?.outLocal ?? '') ? { outTime: edit.outTime } : {}),
@@ -106,8 +98,9 @@ export default function TeamAttendancePage() {
         ...(edit.isNew && edit.outTime ? { outTime: edit.outTime } : {}),
         ...(edit.statusCode ? { statusCode: edit.statusCode } : {}),
         ...(edit.remarks.trim() ? { remarks: edit.remarks.trim() } : {}),
+        compOffEligible: edit.compOffEligible,
       });
-      setNotice('Attendance saved and approved');
+      setNotice(result.data.compOffGranted ? 'Attendance saved and approved. Comp off credited.' : 'Attendance saved and approved');
       setEdit(null);
       await load();
     } catch (e: any) {
@@ -213,6 +206,10 @@ export default function TeamAttendancePage() {
             <label className="block text-sm font-medium text-gray-700">OUT time<input type="time" className={fieldClass} value={edit.outTime} onChange={(e) => setEdit({ ...edit, outTime: e.target.value })} /></label>
           </div>
           <p className="-mt-2 text-xs text-gray-500">Times are in the employee's own timezone. Late and half day are worked out again from the IN time.</p>
+          <label className="flex items-start gap-3 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={edit.compOffEligible} onChange={(e) => setEdit({ ...edit, compOffEligible: e.target.checked })} />
+            <span><span className="font-medium">Eligible for comp off</span><span className="block text-xs text-gray-500">Only applies when the day worked out to "Worked on holiday" or "Worked on weekly off". Credited the moment you approve.</span></span>
+          </label>
           <label className="block text-sm font-medium text-gray-700">Status
             <Select className={fieldClass} value={edit.statusCode} onChange={(e) => setEdit({ ...edit, statusCode: e.target.value })}>
               <option value="">Work it out from the times</option>

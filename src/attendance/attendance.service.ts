@@ -22,6 +22,7 @@ import {
 import { EditAttendanceDto, MarkAttendanceDto } from './dto/attendance.dto';
 import { evaluateHours, flexibleLate, statusAfterHours, statusWhenHoursOk } from './hours-rules';
 import { minutesBetween } from '../attendance-setup/attendance-logic';
+import { compOffExpiry } from '../leave/leave-rules';
 
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
 const MAX_RANGE_DAYS = 62;
@@ -168,8 +169,11 @@ export class AttendanceService {
       where: { employeeId_date: { employeeId, date: parseIsoDate(local.date)! } },
       include: { punches: { orderBy: { at: 'asc' } }, status: true },
     });
-    const next = nextPunchType((record?.punches ?? []).map((p) => ({ punchType: p.punchType as 'IN' | 'OUT', at: p.at })));
-    const allowed = next === 'OUT' ? { ok: true as const } : checkSelfMark(ctx.policy, local.date, local.date, local.minutes);
+    const punchList = record?.punches ?? [];
+    const next = nextPunchType(punchList.map((p) => ({ punchType: p.punchType as 'IN' | 'OUT', at: p.at })));
+    // One IN and one OUT per day, no more: once both are in, marking is closed for the day.
+    const done = punchList.length >= 2;
+    const allowed = done ? { ok: false as const, message: 'You have already marked IN and OUT for today.' } : next === 'OUT' ? { ok: true as const } : checkSelfMark(ctx.policy, local.date, local.date, local.minutes);
     const moods = ctx.settings.moodEnabled ? await this.prisma.parameter.findMany({ where: { isVisible: true, parameterType: { name: 'Mood' } }, orderBy: [{ displayOrder: 'asc' }], select: { text: true } }) : [];
     return {
       date: local.date,
@@ -202,6 +206,9 @@ export class AttendanceService {
     const punches = (existing?.punches ?? []).map((p) => ({ punchType: p.punchType as 'IN' | 'OUT', at: p.at }));
     const type = nextPunchType(punches);
 
+    // One IN and one OUT per day, no more.
+    if (punches.length >= 2) throw new ForbiddenException('You have already marked IN and OUT for today.');
+
     // The time limit stops a late first IN; ending the day (OUT) is always allowed.
     if (type === 'IN') {
       const ok = checkSelfMark(ctx.policy, forDate, local.date, local.minutes);
@@ -209,7 +216,6 @@ export class AttendanceService {
     }
     if (existing && (await this.statusFlags(existing.statusCode))?.clearsPunches) throw new BadRequestException('This day is already recorded as leave or comp off');
     if (ctx.settings.gpsRequirement === 'REQUIRED' && !dto.coordinates) throw new BadRequestException('Your location is required to mark attendance');
-    if (ctx.settings.addressRequirement === 'REQUIRED' && !dto.address) throw new BadRequestException('Your address is required to mark attendance');
 
     const { day, shift, schedule } = await this.dayInfo(employeeId, forDate, ctx.employee.shiftId);
     const isFirstIn = type === 'IN' && punches.length === 0;
@@ -358,7 +364,8 @@ export class AttendanceService {
         if (!clears && finalIn) await tx.attendancePunch.create({ data: { attendanceId: record.id, punchType: 'IN', at: finalIn, source } });
         if (!clears && finalOut) await tx.attendancePunch.create({ data: { attendanceId: record.id, punchType: 'OUT', at: finalOut, source } });
       }
-      return tx.attendance.update({
+      const workedMinutes = clears || !hours ? null : hours.netMinutes;
+      const updated = await tx.attendance.update({
         where: { id: record.id },
         data: {
           ...base,
@@ -366,7 +373,7 @@ export class AttendanceService {
           isPresent: clears ? false : !!finalIn || (flags ? flags.category === 'WORK' : existing?.isPresent ?? false),
           firstInAt: clears ? null : finalIn,
           lastOutAt: clears ? null : finalOut,
-          workedMinutes: clears || !hours ? null : hours.netMinutes,
+          workedMinutes,
           requiredMinutes: clears ? null : required,
           shortMinutes: clears || !hours ? 0 : hours.shortMinutes,
           overtimeMinutes: clears || !hours ? 0 : hours.overtimeMinutes,
@@ -379,10 +386,50 @@ export class AttendanceService {
           remarks,
         },
       });
+      // The manager decides this at the moment of approval; no nightly scan picks it up later.
+      const compOffGranted = dto.compOffEligible ? await this.grantCompOffIfEligible(tx, employeeId, dateStr, finalStatus, workedMinutes, user.profileId) : false;
+      return { record: updated, compOffGranted };
     });
 
-    await this.audit.log({ actorProfileId: user.profileId, action: 'ATTENDANCE_EDITED', entityType: 'Attendance', entityId: String(saved.id), ipAddress: ip, metadata: { employeeId, date: dateStr, status: finalStatus, by: actor } });
-    return this.present(await this.prisma.attendance.findUniqueOrThrow({ where: { id: saved.id }, include: { status: true } }));
+    await this.audit.log({ actorProfileId: user.profileId, action: 'ATTENDANCE_EDITED', entityType: 'Attendance', entityId: String(saved.record.id), ipAddress: ip, metadata: { employeeId, date: dateStr, status: finalStatus, by: actor, compOffGranted: saved.compOffGranted } });
+    return { ...this.present(await this.prisma.attendance.findUniqueOrThrow({ where: { id: saved.record.id }, include: { status: true } })), compOffGranted: saved.compOffGranted };
+  }
+
+  /**
+   * Comp off for one day, decided by the manager at approval time (the "Eligible for comp off" checkbox),
+   * not by a nightly scan. Safe to call more than once: the unique credit per employee/day/source stops a duplicate.
+   */
+  private async grantCompOffIfEligible(tx: Prisma.TransactionClient, employeeId: number, dateStr: string, statusCode: string, workedMinutes: number | null, approverId: number): Promise<boolean> {
+    if (statusCode !== 'WORKED_ON_HOLIDAY' && statusCode !== 'WORKED_ON_WEEKLY_OFF') return false;
+    const settings = await tx.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+    if (!settings.compOffEnabled) return false;
+    if (!workedMinutes || workedMinutes < settings.compOffMinWorkedMinutes) return false;
+    const type = await tx.leaveType.findFirst({ where: { isCompOff: true, isActive: true } });
+    if (!type) return false;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const quantity = Number(settings.compOffCreditDays);
+    const expiresOnStr = compOffExpiry(todayStr, settings.compOffExpiryDays);
+    try {
+      await tx.leaveCredit.create({
+        data: {
+          employeeId,
+          leaveTypeId: type.id,
+          quantity,
+          remaining: quantity,
+          creditedOn: parseIsoDate(todayStr)!,
+          expiresOn: expiresOnStr ? parseIsoDate(expiresOnStr)! : null,
+          source: 'COMP_OFF',
+          sourceRef: dateStr,
+          note: `Worked on ${dateStr}`,
+          createdById: approverId,
+        },
+      });
+      await tx.leaveTransaction.create({ data: { employeeId, leaveTypeId: type.id, kind: 'CREDIT', days: quantity, note: `Comp off for ${dateStr}`, createdById: approverId } });
+      return true;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return false; // already credited for this day
+      throw err;
+    }
   }
 
   /* ------------------------------------------------------------------ reading */

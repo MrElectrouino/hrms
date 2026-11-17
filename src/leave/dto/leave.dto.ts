@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -18,6 +18,8 @@ export class LeaveTypeDto {
   @IsBoolean() isSandwichEligible: boolean;
   @IsBoolean() isCompOff: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
+  /** Country.isoCode values this type applies to (checked against the Countries list). Empty/omitted = every country. */
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) countryCodes?: string[];
 }
 
 export class LeaveSettingsDto {
