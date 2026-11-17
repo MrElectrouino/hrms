@@ -8,7 +8,7 @@ import { UserType } from '../common/constants/user-types';
 import { RosterService } from '../attendance-setup/roster.service';
 import { parseIsoDate, toIsoDate } from '../attendance-setup/attendance-logic';
 import { AttendanceProcessingService } from '../attendance/attendance-processing.service';
-import { AdjustBalanceDto, LeaveRequestDto } from './dto/leave.dto';
+import { AdjustBalanceDto, AdjustGroupDto, LeaveRequestDto } from './dto/leave.dto';
 import { EntitlementService } from './entitlement.service';
 import { addMonthsIso } from './entitlement-rules';
 import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLeaveDays, isoAdd, leaveYear, monthlyCredit } from './leave-rules';
@@ -486,6 +486,41 @@ export class LeaveService {
     });
     await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_BALANCE_ADJUSTED', entityType: 'Employee', entityId: String(dto.employeeId), ipAddress: ip, metadata: { type: type.code, days: dto.days } });
     return this.balances(dto.employeeId);
+  }
+
+  /** Active employees in a branch, a country (from the Organization tab) or the whole company, within what the caller may see. */
+  async groupEmployees(user: CurrentUserPayload, scope: string, branchId?: number, countryCode?: string): Promise<number[]> {
+    if (!HR_TYPES.includes(user.userTypeId)) throw new ForbiddenException('Only HR can change balances');
+    if (scope === 'BRANCH' && !branchId) throw new BadRequestException('Choose a branch');
+    const country = (countryCode ?? '').trim().toUpperCase();
+    if (scope === 'COUNTRY' && !country) throw new BadRequestException('Choose a country');
+    const facts = await this.entitlement.facts();
+    return facts
+      .filter((f) => (!user.branchAccess || (f.branchId !== null && user.branchAccess.includes(f.branchId))) && (scope === 'COMPANY' || (scope === 'BRANCH' ? f.branchId === branchId : f.countryCode === country)))
+      .map((f) => f.id);
+  }
+
+  async groupCount(user: CurrentUserPayload, scope: string, branchId?: number, countryCode?: string) {
+    return { count: (await this.groupEmployees(user, scope, branchId, countryCode)).length };
+  }
+
+  /** The same adjustment for each person in the group, one at a time; says who it could not be done for. */
+  async adjustGroup(user: CurrentUserPayload, dto: AdjustGroupDto, ip?: string) {
+    const ids = await this.groupEmployees(user, dto.scope, dto.branchId, dto.countryCode);
+    if (!ids.length) throw new BadRequestException('There are no active employees in that group');
+    const codes = new Map((await this.prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, employeeCode: true } })).map((e) => [e.id, e.employeeCode]));
+    const failed: { employeeId: number; code: string; reason: string }[] = [];
+    let done = 0;
+    for (const employeeId of ids) {
+      try {
+        await this.adjust(user, { employeeId, leaveTypeId: dto.leaveTypeId, days: dto.days, note: dto.note, expiresOn: dto.expiresOn }, ip);
+        done += 1;
+      } catch (e) {
+        failed.push({ employeeId, code: codes.get(employeeId) ?? String(employeeId), reason: (e as Error).message });
+      }
+    }
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_BALANCE_ADJUSTED_GROUP', entityType: 'LeaveType', entityId: String(dto.leaveTypeId), ipAddress: ip, metadata: { scope: dto.scope, branchId: dto.branchId ?? null, countryCode: dto.countryCode ?? null, days: dto.days, done, failed: failed.length } });
+    return { total: ids.length, done, failed };
   }
 
   /** Employee's ledger: every credit, usage, expiry and adjustment. */

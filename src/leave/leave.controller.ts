@@ -7,7 +7,7 @@ import { CurrentUser, CurrentUserPayload } from '../common/decorators/current-us
 import { UserType } from '../common/constants/user-types';
 import { LeaveService } from './leave.service';
 import { LeaveConfigService } from './leave-config.service';
-import { AccrualDto, AdjustBalanceDto, LeaveDecisionDto, LeaveRequestDto, LeaveSettingsDto, LeaveTypeDto } from './dto/leave.dto';
+import { AccrualDto, AdjustBalanceDto, AdjustGroupDto, LeaveDecisionDto, LeaveRequestDto, LeaveSettingsDto, LeaveTypeDto } from './dto/leave.dto';
 
 const ok = (data: unknown, text: string) => ({ data, message: { code: 'OK', text } });
 
@@ -92,6 +92,16 @@ export class LeaveController {
   async balancesOf(@Param('employeeId', ParseIntPipe) employeeId: number, @CurrentUser() u: CurrentUserPayload) {
     await this.service.ledgerFor(u, employeeId); // same access check as the ledger
     return ok(await this.service.balances(employeeId), 'Balances retrieved');
+  }
+
+  @Get('adjust-group/count')
+  async adjustGroupCount(@Query('scope') scope: string, @Query('branchId') branchId: string | undefined, @Query('countryCode') countryCode: string | undefined, @CurrentUser() u: CurrentUserPayload) {
+    return ok(await this.service.groupCount(u, scope, branchId ? Number(branchId) || undefined : undefined, countryCode), 'Counted');
+  }
+
+  @Post('adjust-group')
+  async adjustGroup(@Body() dto: AdjustGroupDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return ok(await this.service.adjustGroup(u, dto, ip), 'Balances adjusted');
   }
 
   @Post('adjust')

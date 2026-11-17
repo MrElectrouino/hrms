@@ -60,3 +60,15 @@ export class AdjustBalanceDto {
   @IsString() @IsNotEmpty() @MaxLength(200) note: string;
   @IsOptional() @IsString() @Matches(DATE) expiresOn?: string;
 }
+
+/** The same days for everyone in a branch, a country or the whole company. */
+export class AdjustGroupDto {
+  @IsIn(['BRANCH', 'COUNTRY', 'COMPANY']) scope: string;
+  @IsOptional() @Type(() => Number) @IsInt() branchId?: number;
+  @IsOptional() @IsString() @MaxLength(10) countryCode?: string;
+  @Type(() => Number) @IsInt() leaveTypeId: number;
+  /** Positive adds days, negative takes days away. */
+  @Type(() => Number) @IsNumber() days: number;
+  @IsString() @IsNotEmpty() @MaxLength(200) note: string;
+  @IsOptional() @IsString() @Matches(DATE) expiresOn?: string;
+}

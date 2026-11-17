@@ -143,6 +143,15 @@ export const decideLeave = (id: number, approve: boolean, note?: string) => requ
 export const cancelLeave = (id: number) => request<null>(`/leave/applications/${id}/cancel`, { method: 'PUT' });
 export const getLeaveCalendar = (from: string, to: string, scope: 'me' | 'team') => request<LeaveApplication[]>(`/leave/calendar?from=${from}&to=${to}&scope=${scope}`);
 export const getLedger = (employeeId?: number) => request<LedgerRow[]>(`/leave/ledger${employeeId ? `?employeeId=${employeeId}` : ''}`);
+export interface GroupTarget {
+  scope: 'BRANCH' | 'COUNTRY' | 'COMPANY';
+  branchId?: number;
+  countryCode?: string;
+}
+export const getGroupCount = (t: GroupTarget) =>
+  request<{ count: number }>(`/leave/adjust-group/count?scope=${t.scope}${t.branchId ? `&branchId=${t.branchId}` : ''}${t.countryCode ? `&countryCode=${encodeURIComponent(t.countryCode)}` : ''}`);
+export const adjustGroup = (p: GroupTarget & { leaveTypeId: number; days: number; note: string; expiresOn?: string }) =>
+  request<{ total: number; done: number; failed: { employeeId: number; code: string; reason: string }[] }>('/leave/adjust-group', { method: 'POST', body: json(p) });
 export const adjustBalance = (p: { employeeId: number; leaveTypeId: number; days: number; note: string; expiresOn?: string }) => request<LeaveBalance[]>('/leave/adjust', { method: 'POST', body: json(p) });
 export const runAccrual = (asOf?: string) => request<{ asOf: string; leaveYear: string; credited: number; alreadyCredited: number }>('/leave/accrual', { method: 'POST', body: json({ asOf }) });
 export const syncCompOff = () => request<{ granted: number }>('/leave/comp-off/sync', { method: 'POST' });

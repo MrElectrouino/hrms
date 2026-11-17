@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
+import { BranchOption, CountryItem, getBranches, getCountries } from '../../lib/api';
 import { searchEmployeeOptions } from '../../lib/bulk-api';
-import { LeaveBalance, LeaveType, LedgerRow, adjustBalance, getBalancesOf, getLeaveTypes, getLedger } from '../../lib/leave-api';
+import { GroupTarget, LeaveBalance, LeaveType, LedgerRow, adjustBalance, adjustGroup, getBalancesOf, getGroupCount, getLeaveTypes, getLedger } from '../../lib/leave-api';
 import { fieldClass } from '../Drawer';
 import Select from '../Select';
 
@@ -11,6 +12,12 @@ const KIND: Record<string, string> = { CREDIT: 'Credit', DEBIT: 'Used', REVERSAL
 export default function LeaveBalancesPanel() {
   const { isAuthenticated } = useAuth();
   const [names, setNames] = useState<Record<number, string>>({});
+  // Who the change is for: people, or a whole branch, country or the company.
+  const [level, setLevel] = useState<'EMPLOYEE' | 'BRANCH' | 'COUNTRY' | 'COMPANY'>('EMPLOYEE');
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [countries, setCountries] = useState<CountryItem[]>([]);
+  const [branchId, setBranchId] = useState('');
+  const [countryCode, setCountryCode] = useState('');
   const [picked, setPicked] = useState<number[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
@@ -25,6 +32,8 @@ export default function LeaveBalancesPanel() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    getBranches().then((r) => setBranches(r.data)).catch(() => {});
+    getCountries().then((r) => setCountries(r.data.filter((c) => c.isActive))).catch(() => {});
     getLeaveTypes().then((r) => setTypes(r.data.filter((t) => t.balanceTracking))).catch(() => {});
   }, [isAuthenticated]);
 
@@ -44,6 +53,35 @@ export default function LeaveBalancesPanel() {
     setLedger([]);
     load();
   }, [load]);
+
+  const target: GroupTarget | null =
+    level === 'COMPANY' ? { scope: 'COMPANY' } : level === 'BRANCH' && branchId ? { scope: 'BRANCH', branchId: Number(branchId) } : level === 'COUNTRY' && countryCode ? { scope: 'COUNTRY', countryCode } : null;
+  const targetName = level === 'COMPANY' ? 'the whole company' : level === 'BRANCH' ? branches.find((b) => String(b.id) === branchId)?.name ?? '' : countries.find((c) => c.isoCode === countryCode)?.name ?? '';
+
+  /** The same change for everyone in the group. Asks first, saying how many people it reaches. */
+  const saveGroup = async () => {
+    if (!target) return;
+    const days = Number(adj.days);
+    if (!adj.leaveTypeId || !days) return setError('Choose a leave type and the number of days (negative to take away)');
+    if (!adj.note.trim()) return setError('A reason is required');
+    setError('');
+    setNotice('');
+    setSaving(true);
+    try {
+      const { count } = (await getGroupCount(target)).data;
+      if (count === 0) return setError('There are no active employees in that group.');
+      const typeName = types.find((t) => String(t.id) === adj.leaveTypeId)?.name ?? 'leave';
+      if (!window.confirm(`${days > 0 ? 'Add' : 'Take away'} ${Math.abs(days)} day(s) of ${typeName} ${days > 0 ? 'to' : 'from'} ${count} employee(s) in ${targetName}?`)) return;
+      const r = (await adjustGroup({ ...target, leaveTypeId: Number(adj.leaveTypeId), days, note: adj.note.trim(), expiresOn: adj.expiresOn || undefined })).data;
+      if (r.done) setNotice(`Balance adjusted for ${r.done} of ${r.total} employees in ${targetName}`);
+      if (r.failed.length) setError(`Not changed for ${r.failed.length}: ${r.failed.slice(0, 5).map((f) => `${f.code} (${f.reason})`).join('; ')}${r.failed.length > 5 ? '…' : ''}`);
+      if (r.done) setAdj({ leaveTypeId: adj.leaveTypeId, days: '', note: '', expiresOn: '' });
+    } catch (e: any) {
+      setError(e.message || 'Could not adjust');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const save = async () => {
     if (!picked.length) return;
@@ -75,6 +113,55 @@ export default function LeaveBalancesPanel() {
   return (
     <div className="space-y-5">
       <p className="text-gray-500">Every change to a balance is recorded. Days taken away use the earliest-expiring balance first.</p>
+
+      <div role="tablist" aria-label="Who is this for" className="inline-flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
+        {([['EMPLOYEE', 'Employees'], ['BRANCH', 'A branch'], ['COUNTRY', 'A country'], ['COMPANY', 'Whole company']] as const).map(([key, text]) => (
+          <button key={key} type="button" role="tab" aria-selected={level === key} onClick={() => { setLevel(key); setError(''); setNotice(''); }} className={`rounded-md px-3.5 py-1.5 text-sm font-medium ${level === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>{text}</button>
+        ))}
+      </div>
+
+      {level !== 'EMPLOYEE' && (
+        <>
+          {level === 'BRANCH' && (
+            <div className="max-w-sm">
+              <Select label="Branch" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                <option value="">Select a branch…</option>
+                {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </Select>
+            </div>
+          )}
+          {level === 'COUNTRY' && (
+            <div className="max-w-sm">
+              <Select label="Country" value={countryCode} onChange={(e) => setCountryCode(e.target.value)}>
+                <option value="">Select a country…</option>
+                {countries.map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
+              </Select>
+            </div>
+          )}
+          {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
+          {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
+          {!target ? (
+            <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">{level === 'BRANCH' ? 'Choose a branch.' : 'Choose a country.'}</p>
+          ) : (
+            <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h3 className="text-base font-semibold text-gray-900">Add or take away days for everyone in {targetName}</h3>
+              <p className="mt-1 text-sm text-gray-500">The same change is made for every active employee there, and each one gets a line in their own history. You are asked to confirm, with the number of people, before anything is saved. Only people who join later are not included.</p>
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="text-xs font-medium text-gray-600">Leave type
+                  <Select value={adj.leaveTypeId} onChange={(e) => setAdj({ ...adj, leaveTypeId: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"><option value="">Select…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+                </label>
+                <label className="text-xs font-medium text-gray-600">Days (use − to take away)<input type="number" step="0.5" value={adj.days} onChange={(e) => setAdj({ ...adj, days: e.target.value })} className="mt-1 block w-32 rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
+                <label className="text-xs font-medium text-gray-600">Expires (optional)<input type="date" value={adj.expiresOn} onChange={(e) => setAdj({ ...adj, expiresOn: e.target.value })} className="mt-1 block rounded-lg border border-gray-300 px-3 py-1.5 text-sm" /></label>
+                <label className="min-w-[14rem] flex-1 text-xs font-medium text-gray-600">Reason<input value={adj.note} maxLength={200} onChange={(e) => setAdj({ ...adj, note: e.target.value })} className={`${fieldClass} !mt-1`} /></label>
+                <button type="button" disabled={saving} onClick={saveGroup} className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {level === 'EMPLOYEE' && (
+      <>
 
       <div className="max-w-xl">
         <Select multiple
@@ -141,6 +228,8 @@ export default function LeaveBalancesPanel() {
             </section>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   );
