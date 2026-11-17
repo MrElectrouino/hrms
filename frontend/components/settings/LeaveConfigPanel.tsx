@@ -5,6 +5,7 @@ import { CountryItem, getCountries } from '../../lib/api';
 import { LeaveSettings, LeaveType, LeaveTypePayload, createLeaveType, deleteLeaveType, getLeaveConfig, runAccrual, saveLeaveSettings, syncCompOff, updateLeaveType } from '../../lib/leave-api';
 import Drawer, { fieldClass } from '../Drawer';
 import Select from '../Select';
+import LeavePoliciesPanel from '../leave/LeavePoliciesPanel';
 
 const blankType: LeaveTypePayload = {
   code: '', name: '', isPaid: true, balanceTracking: true, accrual: 'NONE', annualDays: 0, allowHalfDay: true, allowNegative: false,
@@ -17,6 +18,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 export default function LeaveConfigPanel() {
   const { isAuthenticated, user } = useAuth();
   const isAdmin = user?.userTypeId === UserType.SystemAdmin;
+  // Two parts: the leave types and settings, and the leave policies (who gets how many days).
+  const [part, setPart] = useState<'config' | 'policies'>('config');
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [settings, setSettings] = useState<LeaveSettings | null>(null);
   const [editing, setEditing] = useState<{ id: number | null; form: LeaveTypePayload } | null>(null);
@@ -95,11 +98,33 @@ export default function LeaveConfigPanel() {
   };
   const setF = (patch: Partial<LeaveTypePayload>) => editing && setEditing({ ...editing, form: { ...editing.form, ...patch } });
 
+  if (part === 'policies') {
+    return (
+      <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Leave configuration</h2>
+            <p className="mt-1 text-gray-500">Leave types, the sandwich leave policy, comp off and the leave year.</p>
+          </div>
+          <div role="tablist" className="flex flex-wrap gap-1 border-b border-gray-200">
+            {([['config', 'Leave types and settings'], ['policies', 'Leave policies']] as const).map(([k, l]) => (
+              <button key={k} role="tab" aria-selected={part === k} type="button" onClick={() => { setPart(k); setError(''); setNotice(''); }} className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium ${part === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{l}</button>
+            ))}
+          </div>
+        <LeavePoliciesPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Leave configuration</h2>
         <p className="mt-1 text-gray-500">Leave types, the sandwich leave policy, comp off and the leave year.</p>
+      </div>
+      <div role="tablist" className="flex flex-wrap gap-1 border-b border-gray-200">
+        {([['config', 'Leave types and settings'], ['policies', 'Leave policies']] as const).map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={part === k} type="button" onClick={() => { setPart(k); setError(''); setNotice(''); }} className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-medium ${part === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>{l}</button>
+        ))}
       </div>
       {error && !editing && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
       {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}

@@ -82,8 +82,8 @@
   <p>Leave is <b>never added just because someone joined</b>. Days appear in an employee's balance in only three ways:</p>
   <table>
     <tr><th>Way</th><th>What adds the days</th><th>You control it in</th></tr>
-    <tr><td><b>Automatic credit</b></td><td>A job that runs every night, and the button <i>Credit leave now</i>. It gives each employee the days their <b>leave policy</b> says (or, if no policy covers them, the leave type's own setting).</td><td>Administration → <b>Leave setup</b> → <b>Policies</b>, and System settings → <b>Leave configuration</b></td></tr>
-    <tr><td><b>By hand</b></td><td>HR adds (or takes away) days for one employee, with a reason. Used for opening balances and corrections.</td><td>Administration → <b>Leave setup</b> → <b>Balances</b></td></tr>
+    <tr><td><b>Automatic credit</b></td><td>A job that runs every night, and the button <i>Credit leave now</i>. It gives each employee the days their <b>leave policy</b> says (or, if no policy covers them, the leave type's own setting).</td><td>System settings → <b>Leave configuration</b> → <b>Leave policies</b>, and System settings → <b>Leave configuration</b></td></tr>
+    <tr><td><b>By hand</b></td><td>HR adds (or takes away) days for one employee, with a reason. Used for opening balances and corrections.</td><td>Administration → <b>Leave balances</b></td></tr>
     <tr><td><b>Comp off</b></td><td>Working on a weekly off or a holiday: credited the moment a manager ticks <b>Eligible for comp off</b> while approving the day, if enough time was worked.</td><td>System settings → Leave configuration → <b>Leave year and comp off</b></td></tr>
   </table>
   <div class="note warn"><b>If a leave type has no policy and its own setting is "No accrual", nobody ever gets days for it.</b> This is the most common reason an employee cannot apply: the <b>Send for approval</b> button stays off because the balance is zero.</div>
@@ -133,9 +133,9 @@
     <li><b class="where">Employee details</b>On every employee's profile set the <b>Country of employment</b> and <b>Branch</b> (Organization tab), and the <b>Employment type</b> and <b>Date of joining</b> (Employment tab). Bulk update can set branch and employment type for many people at once.</li>
     <li><b class="where">Leave year</b>System settings → <b>Leave configuration</b> → <i>Leave year starts in</i>. Choose January for a calendar year, April for April–March, and so on. All balances and expiry follow this.</li>
     <li><b class="where">Leave types</b>Same page → <b>Add leave type</b>. Create Annual, Casual, Medical, Unpaid and so on (settings in section 5). <b>Leave "Comp off" unticked</b> unless the type is only earned by working on off days. Leave <b>Countries</b> empty unless the type is only for employees working in one or more specific countries.</li>
-    <li><b class="where">Leave policies</b>Administration → <b>Leave setup</b> → <b>Policies</b> → <b>New policy</b>. Choose who it applies to, the start date, and add each leave type with its days per year and how it is credited (settings in section 6). Create one policy per group that has different rules, for example one per country.</li>
-    <li><b class="where">Check one employee</b>On the Leave setup → Policies tab, use <b>Check an employee</b>: choose an employee, a leave type and the leave year start. It shows which policy applies and how the days were worked out, month by month, without saving anything. If it says "No policy covers this employee", fix the scope or the employee's details.</li>
-    <li><b class="where">Credit leave</b>System settings → Leave configuration → <b>Credit leave now</b> (or wait for 02:30). Then open Administration → <b>Leave setup</b> → <b>Balances</b> for an employee to see the days.</li>
+    <li><b class="where">Leave policies</b>System settings → <b>Leave configuration</b> → <b>Leave policies</b> → <b>New policy</b>. Choose who it applies to, the start date, and add each leave type with its days per year and how it is credited (settings in section 6). Create one policy per group that has different rules, for example one per country.</li>
+    <li><b class="where">Check one employee</b>On the Leave configuration → Leave policies tab, use <b>Check an employee</b>: choose an employee, a leave type and the leave year start. It shows which policy applies and how the days were worked out, month by month, without saving anything. If it says "No policy covers this employee", fix the scope or the employee's details.</li>
+    <li><b class="where">Credit leave</b>System settings → Leave configuration → <b>Credit leave now</b> (or wait for 02:30). Then open Administration → <b>Leave balances</b> for an employee to see the days.</li>
     <li><b class="where">Test as an employee</b>Sign in as an employee, open <b>My leave</b>, and apply. The balance cards show what is available, and the dialog counts the days before you send.</li>
   </ol>
 </section>
@@ -157,12 +157,12 @@
     <tr><td><b>Countries</b></td><td>Which countries this type applies to. Empty means every country. An employee only sees types that apply to their own country of employment (Organization tab) when applying for leave; a type they already hold a balance for still shows even if it no longer applies to their country.</td></tr>
   </table>
   <p>The same page has <b>Leave year and comp off</b> and the <b>sandwich leave</b> switch with its options (weekly offs, holidays, both sides or either side).</p>
-  <div class="note info">Countries come from System settings → <b>Countries</b>. Leave setup → <b>Policies</b> and <b>Balances</b> always show every leave type regardless of country, since HR there manages any employee.</div>
+  <div class="note info">Countries come from System settings → <b>Countries</b>. Leave configuration → <b>Leave policies</b> and <b>Balances</b> always show every leave type regardless of country, since HR there manages any employee.</div>
 </section>
 
 <section id="policy">
   <h2>6. Leave policy settings</h2>
-  <p>Administration → <b>Leave setup</b> → <b>Policies</b>. A policy has who it applies to, its dates, and a rule for each leave type.</p>
+  <p>System settings → <b>Leave configuration</b> → <b>Leave policies</b>. A policy has who it applies to, its dates, and a rule for each leave type.</p>
   <h3>The policy</h3>
   <table>
     <tr><th>Field</th><th>Meaning</th></tr>
@@ -205,7 +205,7 @@
       <p>Leave year starts in April. A joiner on 1 July with 24 days a year and <i>Completed months</i> earns July to March: <span class="num">9 × 2 = <b>18 days</b></span>.</p>
     </div>
   </div>
-  <p>The page <b>Check an employee</b> (Leave setup → Policies) shows this working for a real employee before you rely on it.</p>
+  <p>The page <b>Check an employee</b> (Leave configuration → Leave policies) shows this working for a real employee before you rely on it.</p>
 </section>
 
 <section id="golive">
@@ -219,7 +219,7 @@
     </div>
     <div class="card">
       <h3>B. Type the real balances in</h3>
-      <p>Enter each employee's actual balance by hand (Leave setup → Balances tab), with the reason "Opening balance". <b>Do not</b> create a policy for those leave types until the <b>next leave year</b> starts, otherwise the first run also credits the year-to-date days and the balance is counted twice.</p>
+      <p>Enter each employee's actual balance by hand (Leave balances tab), with the reason "Opening balance". <b>Do not</b> create a policy for those leave types until the <b>next leave year</b> starts, otherwise the first run also credits the year-to-date days and the balance is counted twice.</p>
       <p><span class="pill p-ok">Good</span> when you only have a spreadsheet of final balances.</p>
     </div>
   </div>
@@ -229,8 +229,8 @@
 <section id="manual">
   <h2>9. Adding or removing days by hand</h2>
   <ol class="steps">
-    <li><b class="where">Open the page</b>Administration → <b>Leave setup</b> → <b>Balances</b> (HR Admin or System Admin).</li>
-    <li><b class="where">Choose the employee</b>Use the Employees list (it has a search box). You can tick several employees to give them all the same days at once.</li>
+    <li><b class="where">Open the page</b>Administration → <b>Leave balances</b> (HR Admin or System Admin).</li>
+    <li><b class="where">Choose the employee</b>Use the Employees list (it has a search box). You can tick several employees to give them all the same days at once, or choose <b>A branch</b>, <b>A country</b> or <b>Whole company</b> to change everyone there in one go (you are asked to confirm, with the number of people, first).</li>
     <li><b class="where">Fill "Add or take away days"</b>Pick the leave type, type the days (use a minus sign to take days away, for example <code>-2</code>), write a <b>reason</b> (required), and optionally an <b>Expires</b> date.</li>
     <li><b class="where">Save</b>The balance card and the ledger below update at once. Every change is recorded with who, when and why.</li>
   </ol>

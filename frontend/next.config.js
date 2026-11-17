@@ -9,8 +9,8 @@ const nextConfig = {
   async redirects() {
     return [
       { source: '/branches', destination: '/masters?tab=branches', permanent: false },
-      { source: '/leave-policies', destination: '/leave-setup?tab=policies', permanent: false },
-      { source: '/leave/balances', destination: '/leave-setup?tab=balances', permanent: false },
+      { source: '/leave-policies', destination: '/system-settings?tab=leave', permanent: false },
+      { source: '/leave/balances', destination: '/leave-setup', permanent: false },
     ];
   },
   async rewrites() {

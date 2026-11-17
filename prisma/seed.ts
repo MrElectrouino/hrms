@@ -393,7 +393,7 @@ const MENU_ITEMS: MenuItemSeed[] = [
   { id: 543, name: 'Masters', parentId: 504, pageUrl: '/masters', displayOrder: 4, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 544, name: 'Users', parentId: 504, pageUrl: '/users', displayOrder: 5, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 545, name: 'Menus & rights', parentId: 504, pageUrl: '/access-control', displayOrder: 6, isMainMenu: true, isActive: true, roles: [3, 4] },
-  { id: 546, name: 'Leave setup', parentId: 504, pageUrl: '/leave-setup', displayOrder: 7, isMainMenu: true, isActive: true, roles: [3, 4] },
+  { id: 546, name: 'Leave balances', parentId: 504, pageUrl: '/leave-setup', displayOrder: 7, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 547, name: 'Salary templates', parentId: 504, pageUrl: '/salary-templates', displayOrder: 8, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 548, name: 'Modules', parentId: 504, pageUrl: '/modules', displayOrder: 9, isMainMenu: true, isActive: true, roles: [3] },
   { id: 505, name: 'System Settings', iconClass: 'fa fa-sliders', displayOrder: 6, isMainMenu: true, isActive: true },
