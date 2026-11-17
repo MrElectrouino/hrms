@@ -38,9 +38,9 @@ export class BulkUpdateController {
 
   /** Employees to choose from: all active ones, or those in the given branches (?branchIds=1,2). */
   @Get('employees')
-  async employees(@Query('branchIds') branchIds: string | undefined, @Query('search') search: string | undefined, @CurrentUser() u: CurrentUserPayload) {
+  async employees(@Query('branchIds') branchIds: string | undefined, @Query('search') search: string | undefined, @Query('limit') limit: string | undefined, @CurrentUser() u: CurrentUserPayload) {
     const ids = (branchIds ?? '').split(',').map((s) => Number(s)).filter((n) => Number.isInteger(n) && n > 0);
-    return ok(await this.service.employees(u, ids, search), 'Employees retrieved');
+    return ok(await this.service.employees(u, ids, search, Number(limit) || undefined), 'Employees retrieved');
   }
 
   @Post('apply')

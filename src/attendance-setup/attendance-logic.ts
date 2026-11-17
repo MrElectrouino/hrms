@@ -225,3 +225,29 @@ export function validateRosterRows(
   }
   return { valid, errors };
 }
+
+/* ------------------------------------------------------------------ assignments given to a branch, country or the company */
+
+export type GroupScope = 'BRANCH' | 'COUNTRY' | 'COMPANY';
+
+export interface GroupAssignmentLike {
+  scope: string;
+  countryCode: string | null;
+  branchId: number | null;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+}
+
+/**
+ * The assignment that applies to an employee on a date when they have none of their own:
+ * their branch's first, then their country's, then the company's.
+ */
+export function pickGroupAssignment<T extends GroupAssignmentLike>(list: T[], who: { branchId: number | null; country: string }, date: Date): T | null {
+  const live = list.filter((a) => a.effectiveFrom <= date && (a.effectiveTo === null || a.effectiveTo >= date));
+  return (
+    live.find((a) => a.scope === 'BRANCH' && a.branchId !== null && a.branchId === who.branchId) ??
+    live.find((a) => a.scope === 'COUNTRY' && a.countryCode === who.country) ??
+    live.find((a) => a.scope === 'COMPANY') ??
+    null
+  );
+}

@@ -1076,6 +1076,31 @@ model EmployeeHolidayCalendar {
   @@map("employee_holiday_calendars")
 }
 
+/// A work schedule, weekly off template or roster pattern given to a whole company, country or branch.
+/// Employees inherit it (branch, then country, then company); an assignment made to the employee still wins.
+model AttendanceGroupAssignment {
+  id            Int       @id @default(autoincrement())
+  /// WORK_SCHEDULE | WEEKLY_OFF | ROSTER_PATTERN
+  kind          String
+  /// COMPANY | COUNTRY | BRANCH
+  scope         String
+  countryCode   String?
+  branchId      Int?
+  /// The work schedule, weekly off template or roster pattern, depending on kind.
+  refId         Int
+  /// Roster pattern only: where day 1 of the cycle falls.
+  anchorDate    DateTime? @db.Date
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([kind, scope])
+  @@index([branchId])
+  @@map("attendance_group_assignments")
+}
+
 /// A repeating roster cycle (7, 14, 21 or 28 days). Each day is a shift or a weekly off.
 model RosterPattern {
   id        Int      @id @default(autoincrement())
@@ -1643,10 +1668,11 @@ model Branch {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
-  employees         Employee[]
-  users             UserBranch[]
-  holidayCalendars  HolidayCalendar[]
-  policyAssignments AttendancePolicyAssignment[]
+  employees                  Employee[]
+  users                      UserBranch[]
+  holidayCalendars           HolidayCalendar[]
+  policyAssignments          AttendancePolicyAssignment[]
+  attendanceGroupAssignments AttendanceGroupAssignment[]
 
   @@index([countryCode])
   @@map("branches")

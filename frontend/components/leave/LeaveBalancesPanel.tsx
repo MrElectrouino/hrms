@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { BulkEmployee, getBulkEmployees } from '../../lib/bulk-api';
+import { searchEmployeeOptions } from '../../lib/bulk-api';
 import { LeaveBalance, LeaveType, LedgerRow, adjustBalance, getBalancesOf, getLeaveTypes, getLedger } from '../../lib/leave-api';
 import { fieldClass } from '../Drawer';
 import Select from '../Select';
@@ -10,7 +10,7 @@ const KIND: Record<string, string> = { CREDIT: 'Credit', DEBIT: 'Used', REVERSAL
 /** HR: employees' balances and ledger, and adding or taking away days with a reason. */
 export default function LeaveBalancesPanel() {
   const { isAuthenticated } = useAuth();
-  const [emps, setEmps] = useState<BulkEmployee[]>([]);
+  const [names, setNames] = useState<Record<number, string>>({});
   const [picked, setPicked] = useState<number[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
@@ -26,7 +26,6 @@ export default function LeaveBalancesPanel() {
   useEffect(() => {
     if (!isAuthenticated) return;
     getLeaveTypes().then((r) => setTypes(r.data.filter((t) => t.balanceTracking))).catch(() => {});
-    getBulkEmployees([], '').then((r) => setEmps(r.data)).catch(() => setEmps([]));
   }, [isAuthenticated]);
 
   const load = useCallback(async () => {
@@ -61,7 +60,7 @@ export default function LeaveBalancesPanel() {
         await adjustBalance({ employeeId: id, leaveTypeId: Number(adj.leaveTypeId), days, note: adj.note.trim(), expiresOn: adj.expiresOn || undefined });
         done++;
       } catch (e: any) {
-        failed.push(`${emps.find((x) => x.id === id)?.code ?? id}: ${e.message || 'failed'}`);
+        failed.push(`${names[id] ?? id}: ${e.message || 'failed'}`);
       }
     }
     setSaving(false);
@@ -80,9 +79,9 @@ export default function LeaveBalancesPanel() {
       <div className="max-w-xl">
         <Select multiple
           label="Employees"
-          options={emps.map((e) => ({ value: String(e.id), label: `${e.name} (${e.code})`, hint: e.branchName ?? undefined }))}
+          loadOptions={searchEmployeeOptions}
           values={picked.map(String)}
-          onValuesChange={(v) => { setPicked(v.map(Number)); setNotice(''); setError(''); }}
+          onValuesChange={(v, chosen) => { setPicked(v.map(Number)); setNames(Object.fromEntries(chosen.map((o) => [Number(o.value), o.label]))); setNotice(''); setError(''); }}
           placeholder="Select one or more employees…"
           allText=""
           noun="employees"

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../common/services/audit.service';
@@ -14,6 +14,7 @@ import {
   validateSchedule,
 } from './attendance-logic';
 import {
+  AssignGroupDto,
   AssignHolidayCalendarDto,
   AssignPatternDto,
   AssignWorkScheduleDto,
@@ -339,6 +340,87 @@ export class AttendanceSetupService {
       holidayCalendars: calendars.map((a) => ({ id: a.id, ref: a.calendar, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
       weeklyOffs: weeklyOffs.map((a) => ({ id: a.id, ref: a.template, effectiveFrom: f(a.effectiveFrom), effectiveTo: f(a.effectiveTo) })),
     };
+  }
+
+  /* ------------------------------------------------------------------ assignments to a branch, country or the whole company */
+
+  /** Everything given to a group, newest first, with the name of what was given. */
+  async listGroupAssignments(user: CurrentUserPayload) {
+    const rows = await this.prisma.attendanceGroupAssignment.findMany({
+      where: user.activeBranchIds ? { scope: 'BRANCH', branchId: { in: user.activeBranchIds } } : {},
+      orderBy: [{ effectiveFrom: 'desc' }, { id: 'desc' }],
+    });
+    const ids = (kind: string) => [...new Set(rows.filter((r) => r.kind === kind).map((r) => r.refId))];
+    const [schedules, templates, patterns] = await Promise.all([
+      this.prisma.workSchedule.findMany({ where: { id: { in: ids('WORK_SCHEDULE') } }, select: { id: true, name: true, code: true } }),
+      this.prisma.weeklyOffTemplate.findMany({ where: { id: { in: ids('WEEKLY_OFF') } }, select: { id: true, name: true } }),
+      this.prisma.rosterPattern.findMany({ where: { id: { in: ids('ROSTER_PATTERN') } }, select: { id: true, name: true, cycleDays: true } }),
+    ]);
+    const nameOf = (kind: string, id: number) => {
+      if (kind === 'WORK_SCHEDULE') {
+        const x = schedules.find((r) => r.id === id);
+        return x ? `${x.name} (${x.code})` : 'Removed schedule';
+      }
+      if (kind === 'WEEKLY_OFF') return templates.find((r) => r.id === id)?.name ?? 'Removed template';
+      const x = patterns.find((r) => r.id === id);
+      return x ? `${x.name} (${x.cycleDays} days)` : 'Removed pattern';
+    };
+    return rows.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      scope: r.scope,
+      countryCode: r.countryCode,
+      branchId: r.branchId,
+      ref: { id: r.refId, name: nameOf(r.kind, r.refId) },
+      effectiveFrom: toIsoDate(r.effectiveFrom),
+      effectiveTo: r.effectiveTo ? toIsoDate(r.effectiveTo) : null,
+      anchorDate: r.anchorDate ? toIsoDate(r.anchorDate) : null,
+    }));
+  }
+
+  /** A restricted HR user (limited to some branches) may only work on those branches. */
+  private assertGroupAllowed(user: CurrentUserPayload, scope: string, branchId: number | null) {
+    if (!user.activeBranchIds) return;
+    if (scope !== 'BRANCH' || branchId === null || !user.activeBranchIds.includes(branchId)) throw new ForbiddenException('You can only set this for the branches you manage');
+  }
+
+  async assignToGroup(dto: AssignGroupDto, user: CurrentUserPayload, ip?: string) {
+    const from = mustDate(dto.effectiveFrom, 'Effective from');
+    const countryCode = dto.scope === 'COUNTRY' ? (dto.countryCode ?? '').trim().toUpperCase() : null;
+    const branchId = dto.scope === 'BRANCH' ? dto.branchId ?? null : null;
+    if (dto.scope === 'COUNTRY' && !countryCode) throw new BadRequestException('Choose a country');
+    if (dto.scope === 'BRANCH') {
+      if (branchId === null || !(await this.prisma.branch.findUnique({ where: { id: branchId }, select: { id: true } }))) throw new BadRequestException('Choose a branch');
+    }
+    this.assertGroupAllowed(user, dto.scope, branchId);
+    if (dto.kind === 'WORK_SCHEDULE') {
+      const x = await this.prisma.workSchedule.findUnique({ where: { id: dto.refId }, select: { isActive: true } });
+      if (!x || !x.isActive) throw new BadRequestException('Choose an active work schedule');
+    } else if (dto.kind === 'WEEKLY_OFF') {
+      const x = await this.prisma.weeklyOffTemplate.findUnique({ where: { id: dto.refId }, select: { isActive: true } });
+      if (!x || !x.isActive) throw new BadRequestException('Choose an active weekly off template');
+    } else {
+      const x = await this.prisma.rosterPattern.findUnique({ where: { id: dto.refId }, select: { isActive: true } });
+      if (!x || !x.isActive) throw new BadRequestException('Choose an active roster pattern');
+    }
+    const anchor = dto.kind === 'ROSTER_PATTERN' ? (dto.anchorDate ? mustDate(dto.anchorDate, 'Cycle start date') : from) : null;
+    const where = { kind: dto.kind, scope: dto.scope, countryCode, branchId };
+    const created = await this.newAssignment(
+      from,
+      () => this.prisma.attendanceGroupAssignment.findMany({ where }),
+      (id, to) => this.prisma.attendanceGroupAssignment.update({ where: { id }, data: { effectiveTo: to } }),
+      () => this.prisma.attendanceGroupAssignment.create({ data: { ...where, refId: dto.refId, anchorDate: anchor, effectiveFrom: from } }),
+    );
+    await this.log(user, 'ATTENDANCE_GROUP_ASSIGNED', 'AttendanceGroupAssignment', (created as { id: number }).id, ip, { kind: dto.kind, scope: dto.scope, countryCode, branchId, refId: dto.refId, from: dto.effectiveFrom });
+    return created;
+  }
+
+  async removeGroupAssignment(id: number, user: CurrentUserPayload, ip?: string) {
+    const row = await this.prisma.attendanceGroupAssignment.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Assignment not found');
+    this.assertGroupAllowed(user, row.scope, row.branchId);
+    await this.prisma.attendanceGroupAssignment.delete({ where: { id } });
+    await this.log(user, 'ATTENDANCE_GROUP_ASSIGNMENT_REMOVED', 'AttendanceGroupAssignment', id, ip, { kind: row.kind, scope: row.scope });
   }
 
   private async assertEmployee(id: number) {

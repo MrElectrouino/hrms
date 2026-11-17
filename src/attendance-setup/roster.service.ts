@@ -9,6 +9,7 @@ import {
   cycleIndex,
   daysBetween,
   parseIsoDate,
+  pickGroupAssignment,
   pickHolidayCalendar,
   toIsoDate,
   validateRosterRows,
@@ -52,7 +53,7 @@ export class RosterService {
 
     const overlap = { employeeId, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: from } }] };
     const country = await this.countryOf(employeeId);
-    const [order, schedules, patterns, entries, empCalendars, candidateCalendars, weeklyOffs] = await Promise.all([
+    const [order, schedules, patterns, entries, empCalendars, candidateCalendars, weeklyOffs, groupRows] = await Promise.all([
       this.setup.getHolidayOrder(),
       this.prisma.employeeWorkSchedule.findMany({ where: overlap, include: { workSchedule: true } }),
       this.prisma.employeeRosterPattern.findMany({ where: overlap, include: { pattern: { include: { days: { include: { shift: { select: { id: true, name: true } } } } } } } }),
@@ -66,6 +67,24 @@ export class RosterService {
         orderBy: { id: 'asc' },
       }),
       this.prisma.employeeWeeklyOff.findMany({ where: overlap, include: { template: { select: { days: true, rules: true } } } }),
+      // What the branch, country or company gave everyone; an assignment made to the employee wins over these.
+      this.prisma.attendanceGroupAssignment.findMany({
+        where: {
+          effectiveFrom: { lte: to },
+          AND: [{ OR: [{ effectiveTo: null }, { effectiveTo: { gte: from } }] }],
+          OR: [{ scope: 'COMPANY' }, { scope: 'COUNTRY', countryCode: country }, ...(employee.branchId ? [{ scope: 'BRANCH', branchId: employee.branchId }] : [])],
+        },
+      }),
+    ]);
+    const who = { branchId: employee.branchId, country };
+    const groupOf = (kind: string) => groupRows.filter((g) => g.kind === kind);
+    const groupSchedules = groupOf('WORK_SCHEDULE');
+    const groupTemplates = groupOf('WEEKLY_OFF');
+    const groupPatterns = groupOf('ROSTER_PATTERN');
+    const [gSchedules, gTemplates, gPatterns] = await Promise.all([
+      this.prisma.workSchedule.findMany({ where: { id: { in: groupSchedules.map((g) => g.refId) } } }),
+      this.prisma.weeklyOffTemplate.findMany({ where: { id: { in: groupTemplates.map((g) => g.refId) } }, select: { id: true, days: true, rules: true } }),
+      this.prisma.rosterPattern.findMany({ where: { id: { in: groupPatterns.map((g) => g.refId) } }, include: { days: { include: { shift: { select: { id: true, name: true } } } } } }),
     ]);
 
     const levelCalendar = (scope: string) => candidateCalendars.find((c) => c.scope === scope)?.id ?? null;
@@ -103,7 +122,10 @@ export class RosterService {
       const entry = entryAt.get(iso);
       if (entry) roster = { source: 'ENTRY', isWeeklyOff: entry.isWeeklyOff, shift: entry.shift };
       else {
-        const pa = patterns.find((a) => covers(a, date));
+        const own = patterns.find((a) => covers(a, date));
+        const group = own ? null : pickGroupAssignment(groupPatterns, who, date);
+        const groupPattern = group ? gPatterns.find((p) => p.id === group.refId) : undefined;
+        const pa = own ? { pattern: own.pattern, anchorDate: own.anchorDate } : groupPattern && group ? { pattern: groupPattern, anchorDate: group.anchorDate ?? group.effectiveFrom } : null;
         if (pa) {
           const day = pa.pattern.days.find((d) => d.dayIndex === cycleIndex(pa.anchorDate, date, pa.pattern.cycleDays));
           if (day) roster = { source: 'PATTERN', isWeeklyOff: day.isWeeklyOff, shift: day.shift };
@@ -111,11 +133,15 @@ export class RosterService {
       }
       // No entry or pattern for the day: the weekly off template says which weekdays are off.
       if (roster.source === 'NONE') {
-        const wo = weeklyOffs.find((a) => covers(a, date));
-        if (wo) roster = { source: 'TEMPLATE', isWeeklyOff: isWeeklyOffDay({ days: wo.template.days, rules: wo.template.rules as unknown as WeeklyOffRule[] }, date), shift: null };
+        const own = weeklyOffs.find((a) => covers(a, date));
+        const group = own ? null : pickGroupAssignment(groupTemplates, who, date);
+        const template = own ? own.template : group ? gTemplates.find((t) => t.id === group.refId) : undefined;
+        if (template) roster = { source: 'TEMPLATE', isWeeklyOff: isWeeklyOffDay({ days: template.days, rules: template.rules as unknown as WeeklyOffRule[] }, date), shift: null };
       }
 
-      const sch = schedules.find((a) => covers(a, date));
+      const ownSchedule = schedules.find((a) => covers(a, date));
+      const groupSchedule = ownSchedule ? null : pickGroupAssignment(groupSchedules, who, date);
+      const sch = ownSchedule ?? (groupSchedule ? (() => { const w = gSchedules.find((x) => x.id === groupSchedule.refId); return w ? { workSchedule: w } : undefined; })() : undefined);
       days.push({
         date: iso,
         holiday: holiday ? { name: holiday.name, type: holiday.holidayType, calendarLevel: picked!.level } : null,

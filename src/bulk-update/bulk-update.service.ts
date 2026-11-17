@@ -50,7 +50,7 @@ export class BulkUpdateService {
   }
 
   /** Active employees the caller may change, optionally limited to some branches or a search text. */
-  async employees(user: CurrentUserPayload, branchIds: number[], search?: string) {
+  async employees(user: CurrentUserPayload, branchIds: number[], search?: string, limit?: number) {
     const scope = user.branchAccess ?? user.activeBranchIds;
     const where: Prisma.EmployeeWhereInput = { isActive: true };
     const want = branchIds.length ? (scope ? branchIds.filter((b) => scope.includes(b)) : branchIds) : scope;
@@ -62,7 +62,7 @@ export class BulkUpdateService {
     const rows = await this.prisma.employee.findMany({
       where,
       orderBy: [{ employeeCode: 'asc' }],
-      take: 1000,
+      take: Math.min(Math.max(limit ?? 1000, 1), 1000),
       select: { id: true, employeeCode: true, designation: true, branchId: true, branch: { select: { name: true } }, profile: { select: { name: true, lastName: true } } },
     });
     const sections = await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'organization', employeeId: { in: rows.map((r) => r.id) } }, select: { employeeId: true, data: true } });

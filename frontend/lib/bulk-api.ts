@@ -23,7 +23,11 @@ export interface BulkResult {
 }
 
 export const getBulkFields = () => request<BulkField[]>('/bulk-update/fields');
-export const getBulkEmployees = (branchIds: number[], search: string) =>
-  request<BulkEmployee[]>(`/bulk-update/employees?branchIds=${branchIds.join(',')}&search=${encodeURIComponent(search)}`);
+export const getBulkEmployees = (branchIds: number[], search: string, limit?: number) =>
+  request<BulkEmployee[]>(`/bulk-update/employees?branchIds=${branchIds.join(',')}&search=${encodeURIComponent(search)}${limit ? `&limit=${limit}` : ''}`);
+
+/** For a dropdown that loads as you type: the first few matches only, never the whole list. */
+export const searchEmployeeOptions = async (query: string) =>
+  (await getBulkEmployees([], query, 25)).data.map((e) => ({ value: String(e.id), label: `${e.name} (${e.code})`, hint: e.branchName ?? undefined }));
 export const applyBulkUpdate = (employeeIds: number[], changes: { field: string; value: string | null }[]) =>
   request<BulkResult>('/bulk-update/apply', { method: 'POST', body: JSON.stringify({ employeeIds, changes }) });

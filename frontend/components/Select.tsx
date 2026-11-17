@@ -24,6 +24,11 @@ interface BaseProps {
   searchable?: boolean;
   /** Text above the control. */
   label?: string;
+  /**
+   * For long lists (employees, for example): the options are not all loaded up front. They are fetched when the
+   * list opens and again, after a short pause, as the person types. Chosen items keep their names.
+   */
+  loadOptions?: (query: string) => Promise<SelectOption[]>;
 }
 
 /** Choose one. Works like a native <select>: pass <option> children, or an `options` list. */
@@ -41,8 +46,10 @@ interface SingleProps extends BaseProps {
 interface MultiProps extends BaseProps {
   multiple: true;
   values: string[];
-  onValuesChange: (values: string[]) => void;
-  options: SelectOption[];
+  /** Second argument: the chosen options, with their names (also when the list is loaded as you type). */
+  onValuesChange: (values: string[], chosen: SelectOption[]) => void;
+  /** Not needed when loadOptions is used (give the options already chosen, if their names should show before the list is opened). */
+  options?: SelectOption[];
   /** Shown when nothing is ticked and that means "everything" (for example all branches). */
   allText?: string;
   /** Word after the count when more than two are ticked ("3 branches"). */
@@ -87,13 +94,23 @@ const DEFAULT_TRIGGER =
 export default function Select(props: SelectProps) {
   const { id, className, disabled, required, title, placeholder = 'Select…', label } = props;
   const multiple = props.multiple === true;
-  const options = useMemo(
+  const baseOptions = useMemo(
     () => (props.options ?? (multiple ? [] : optionsFromChildren((props as SingleProps).children))),
     // children change on every render; compare by content so the list is not rebuilt for nothing
     // eslint-disable-next-line react-hooks/exhaustive-deps
     multiple ? [props.options] : [props.options, JSON.stringify(optionsFromChildren((props as SingleProps).children))],
   );
   const selectedValues: string[] = multiple ? (props as MultiProps).values : [String((props as SingleProps).value ?? '')];
+
+  // Search-based loading: the list shown is whatever the last search returned.
+  const remoteMode = !!props.loadOptions;
+  const loader = useRef(props.loadOptions);
+  loader.current = props.loadOptions;
+  const known = useRef(new Map<string, SelectOption>());
+  baseOptions.forEach((o) => known.current.set(o.value, o));
+  const [remote, setRemote] = useState<SelectOption[]>([]);
+  const [loading, setLoading] = useState(false);
+  const options = remoteMode ? remote : baseOptions;
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -103,11 +120,35 @@ export default function Select(props: SelectProps) {
   const panel = useRef<HTMLDivElement>(null);
   const searchBox = useRef<HTMLInputElement>(null);
 
-  const searchable = props.searchable ?? options.length > 7;
+  const searchable = remoteMode || (props.searchable ?? options.length > 7);
   const shown = useMemo(() => {
+    if (remoteMode) {
+      // With nothing typed, the ticked ones stay at the top so they can be un-ticked even if the search no longer returns them.
+      if (query.trim()) return options;
+      const chosen = selectedValues.filter((v) => !options.some((o) => o.value === v)).map((v) => known.current.get(v)).filter((o): o is SelectOption => !!o);
+      return [...chosen, ...options];
+    }
     const q = query.trim().toLowerCase();
     return q ? options.filter((o) => `${o.label} ${o.hint ?? ''}`.toLowerCase().includes(q)) : options;
-  }, [options, query]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, query, remoteMode, selectedValues.join('|')]);
+
+  // Fetch when the list opens and, after a short pause, as the person types.
+  useEffect(() => {
+    if (!remoteMode || !open) return;
+    let cancelled = false;
+    setLoading(true);
+    const t = setTimeout(
+      () => {
+        loader.current?.(query.trim())
+          .then((r) => { if (!cancelled) { r.forEach((o) => known.current.set(o.value, o)); setRemote(r); } })
+          .catch(() => { if (!cancelled) setRemote([]); })
+          .finally(() => { if (!cancelled) setLoading(false); });
+      },
+      query.trim() ? 250 : 0,
+    );
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [remoteMode, open, query]);
 
   const place = useCallback(() => {
     const el = trigger.current;
@@ -163,14 +204,11 @@ export default function Select(props: SelectProps) {
     p.onChange?.({ target: { value: v } });
     close();
   };
-  const toggleMany = (v: string) => {
-    const p = props as MultiProps;
-    p.onValuesChange(selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]);
-  };
-  const allShownChosen = multiple && shown.length > 0 && shown.every((o) => selectedValues.includes(o.value));
+  const emit = (values: string[]) => (props as MultiProps).onValuesChange(values, values.map((v) => known.current.get(v)).filter((o): o is SelectOption => !!o));
+  const toggleMany = (v: string) => emit(selectedValues.includes(v) ? selectedValues.filter((x) => x !== v) : [...selectedValues, v]);
+  const allShownChosen = multiple && !remoteMode && shown.length > 0 && shown.every((o) => selectedValues.includes(o.value));
   const toggleShown = () => {
-    const p = props as MultiProps;
-    p.onValuesChange(allShownChosen ? selectedValues.filter((v) => !shown.some((o) => o.value === v)) : [...new Set([...selectedValues, ...shown.map((o) => o.value)])]);
+    emit(allShownChosen ? selectedValues.filter((v) => !shown.some((o) => o.value === v)) : [...new Set([...selectedValues, ...shown.map((o) => o.value)])]);
   };
 
   const onListKey = (e: React.KeyboardEvent) => {
@@ -193,13 +231,13 @@ export default function Select(props: SelectProps) {
     if (multiple) {
       const p = props as MultiProps;
       if (p.values.length === 0) return p.allText || placeholder;
-      if (p.values.length <= 2) return p.values.map((v) => options.find((o) => o.value === v)?.label ?? v).join(', ');
+      if (p.values.length <= 2) return p.values.map((v) => options.find((o) => o.value === v)?.label ?? known.current.get(v)?.label ?? v).join(', ');
       return `${p.values.length} ${p.noun ?? 'selected'}`;
     }
     const v = selectedValues[0];
-    return options.find((o) => o.value === v)?.label ?? (v || placeholder);
+    return options.find((o) => o.value === v)?.label ?? known.current.get(v)?.label ?? (v || placeholder);
   })();
-  const isPlaceholder = multiple ? (props as MultiProps).values.length === 0 : !selectedValues[0] || !options.some((o) => o.value === selectedValues[0] && o.label.trim() && !/^(…|\.\.\.|select…?)$/i.test(o.label.trim()));
+  const isPlaceholder = multiple ? (props as MultiProps).values.length === 0 : !selectedValues[0] || !(remoteMode ? [...options, ...known.current.values()] : options).some((o) => o.value === selectedValues[0] && o.label.trim() && !/^(…|\.\.\.|select…?)$/i.test(o.label.trim()));
 
   const cls = className ?? DEFAULT_TRIGGER;
   const display = /\b(block|w-|flex)/.test(cls) ? 'flex' : 'inline-flex';
@@ -236,19 +274,23 @@ export default function Select(props: SelectProps) {
         >
           {searchable && (
             <div className="border-b border-gray-100 p-2">
-              <input ref={searchBox} type="search" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onListKey} placeholder="Search…" className="block w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input ref={searchBox} type="search" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onListKey} placeholder={remoteMode ? 'Type a name or code…' : 'Search…'} className="block w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           )}
           {multiple && (
             <div className="flex items-center justify-between border-b border-gray-100 px-3 py-1.5 text-xs">
-              <button type="button" onClick={toggleShown} disabled={shown.length === 0} className="font-medium text-blue-600 hover:text-blue-800 disabled:opacity-40">
-                {allShownChosen ? 'Untick all shown' : `Tick all shown (${shown.length})`}
-              </button>
-              <button type="button" onClick={() => (props as MultiProps).onValuesChange([])} disabled={selectedValues.length === 0} className="font-medium text-gray-500 hover:text-gray-800 disabled:opacity-40">Clear</button>
+              {remoteMode ? (
+                <span className="text-gray-500">{selectedValues.length ? `${selectedValues.length} chosen` : 'None chosen'}</span>
+              ) : (
+                <button type="button" onClick={toggleShown} disabled={shown.length === 0} className="font-medium text-blue-600 hover:text-blue-800 disabled:opacity-40">
+                  {allShownChosen ? 'Untick all shown' : `Tick all shown (${shown.length})`}
+                </button>
+              )}
+              <button type="button" onClick={() => emit([])} disabled={selectedValues.length === 0} className="font-medium text-gray-500 hover:text-gray-800 disabled:opacity-40">Clear</button>
             </div>
           )}
           <ul role="listbox" aria-multiselectable={multiple || undefined} className="min-h-0 flex-1 overflow-y-auto py-1">
-            {shown.length === 0 && <li className="px-3 py-3 text-gray-500">Nothing matches.</li>}
+            {shown.length === 0 && <li className="px-3 py-3 text-gray-500">{loading ? 'Searching…' : 'Nothing matches.'}</li>}
             {shown.map((o, i) => {
               const on = selectedValues.includes(o.value);
               return (
@@ -276,6 +318,8 @@ export default function Select(props: SelectProps) {
               );
             })}
           </ul>
+          {remoteMode && !loading && options.length >= 25 && <p className="border-t border-gray-100 px-3 py-1.5 text-xs text-gray-500">Showing the first matches. Type to narrow the list.</p>}
+          {remoteMode && loading && shown.length > 0 && <p className="border-t border-gray-100 px-3 py-1.5 text-xs text-gray-500">Searching…</p>}
         </div>,
         document.body,
       )}

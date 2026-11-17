@@ -29,6 +29,7 @@ import { UserType } from '../common/constants/user-types';
 import { AttendanceSetupService } from './attendance-setup.service';
 import { RosterService } from './roster.service';
 import {
+  AssignGroupDto,
   AssignHolidayCalendarDto,
   AssignPatternDto,
   AssignWorkScheduleDto,
@@ -199,6 +200,19 @@ export class AttendanceSetupController {
   @UseGuards(EmployeeBranchGuard)
   async employeeCalendar(@Param('id', ParseIntPipe) id: number, @Query('from') from: string, @Query('to') to: string) {
     return this.ok(await this.roster.resolveRange(id, from, to), 'Calendar retrieved');
+  }
+  @Get('group-assignments')
+  async groupAssignments(@CurrentUser() u: CurrentUserPayload) {
+    return this.ok(await this.setup.listGroupAssignments(u), 'Assignments retrieved');
+  }
+  @Post('group-assignments')
+  async assignGroup(@Body() dto: AssignGroupDto, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.assignToGroup(dto, u, ip), 'Assigned');
+  }
+  @Delete('group-assignments/:id')
+  async removeGroup(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    await this.setup.removeGroupAssignment(id, u, ip);
+    return this.ok(null, 'Assignment removed');
   }
   @Get('employees/:id/assignments')
   @UseGuards(EmployeeBranchGuard)

@@ -130,3 +130,14 @@ export class RosterEntryDto {
   @IsOptional() @Type(() => Number) @IsInt() shiftId?: number | null;
   @IsOptional() @IsBoolean() isWeeklyOff?: boolean;
 }
+
+export class AssignGroupDto {
+  @IsIn(['WORK_SCHEDULE', 'WEEKLY_OFF', 'ROSTER_PATTERN']) kind: string;
+  @IsIn(['COMPANY', 'COUNTRY', 'BRANCH']) scope: string;
+  @IsOptional() @IsString() @MaxLength(10) countryCode?: string;
+  @IsOptional() @Type(() => Number) @IsInt() branchId?: number;
+  @Type(() => Number) @IsInt() refId: number;
+  @IsString() effectiveFrom: string;
+  /** Roster pattern only: date where cycle day 1 falls; defaults to effectiveFrom. */
+  @IsOptional() @IsString() anchorDate?: string;
+}

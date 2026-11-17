@@ -127,6 +127,22 @@ export const assignWeeklyOffTemplate = (employeeId: number, p: { templateId: num
 export const assignHolidayCalendar = (employeeId: number, p: { calendarId: number; effectiveFrom: string }) => request<unknown>(`/attendance/employees/${employeeId}/holiday-calendar`, { method: 'POST', body: json(p) });
 export const removeAssignment = (employeeId: number, kind: 'work-schedule' | 'roster-pattern' | 'holiday-calendar' | 'weekly-off', id: number) =>
   request<null>(`/attendance/employees/${employeeId}/assignments/${kind}/${id}`, { method: 'DELETE' });
+/** A schedule, weekly off or roster pattern given to a branch, a country or the whole company. */
+export interface GroupAssignment {
+  id: number;
+  kind: 'WORK_SCHEDULE' | 'WEEKLY_OFF' | 'ROSTER_PATTERN';
+  scope: 'COMPANY' | 'COUNTRY' | 'BRANCH';
+  countryCode: string | null;
+  branchId: number | null;
+  ref: { id: number; name: string };
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  anchorDate: string | null;
+}
+export const getGroupAssignments = () => request<GroupAssignment[]>('/attendance/group-assignments');
+export const assignToGroup = (p: { kind: GroupAssignment['kind']; scope: GroupAssignment['scope']; countryCode?: string; branchId?: number; refId: number; effectiveFrom: string; anchorDate?: string }) =>
+  request<unknown>('/attendance/group-assignments', { method: 'POST', body: json(p) });
+export const removeGroupAssignment = (id: number) => request<null>(`/attendance/group-assignments/${id}`, { method: 'DELETE' });
 export const getEmployeeCalendar = (employeeId: number, from: string, to: string) =>
   request<{ employeeId: number; country: string; holidayOrder: HolidayLevel[]; days: ResolvedDay[] }>(`/attendance/employees/${employeeId}/calendar?from=${from}&to=${to}`);
 export const setRosterEntry = (p: { employeeId: number; date: string; shiftId?: number | null; isWeeklyOff: boolean }) => request<unknown>('/attendance/roster/entries', { method: 'PUT', body: json(p) });

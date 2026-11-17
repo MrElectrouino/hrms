@@ -153,7 +153,7 @@ Start with **Attendance setup**:
 2. **Holiday calendars.** Create a calendar per company, per country or per branch (for example one for the India branch, one for the Dubai branch). Add holidays one by one or with the Excel import. Use **Save order** to decide which calendar wins when several apply.
 3. **Weekly off.** Create templates of weekly off days (for example "Saturday, Sunday", "Friday only"): name it and choose, for each weekday, working day, off every week, off in some weeks of the month (for example the 2nd and 4th Saturday) or off every other week (from a start date). Give a template to employees on their profile (Attendance & Leave, Weekly off) or in bulk under Administration, Bulk update. The change takes effect from today and earlier days keep their old weekly off. A roster entry or pattern still wins for the days it covers.
 4. **Roster.** Repeating shift patterns (weekly offs and shifts per weekday) and Excel import of dated rosters.
-5. **Assignments.** Give each employee a schedule, roster and calendar (or assign in bulk).
+5. **Assignments.** Choose who it is for: employees (one or several), a branch, a country, or the whole company. A work schedule, weekly off and roster pattern given to a branch, country or the company applies to everyone there, including people who join later; an assignment made to the employee personally always wins, then branch, then country, then company. Holiday calendars are tied to a company, country or branch on the calendar itself.
 
 Then **System settings → Attendance configuration**:
 

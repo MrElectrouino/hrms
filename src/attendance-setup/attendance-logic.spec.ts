@@ -3,6 +3,7 @@ import {
   netWorkedMinutes,
   parseHolidayOrder,
   parseIsoDate,
+  pickGroupAssignment,
   pickHolidayCalendar,
   validateHolidayRows,
   validateRosterRows,
@@ -120,5 +121,38 @@ describe('holidays that last several days', () => {
       expect.stringMatching(/real date/),
       expect.stringMatching(/at most 31 days/),
     ]);
+  });
+});
+
+describe('pickGroupAssignment', () => {
+  const d = (s: string) => new Date(s + 'T00:00:00Z');
+  const mk = (scope: string, extra: Record<string, unknown> = {}) => ({ scope, countryCode: null as string | null, branchId: null as number | null, effectiveFrom: d('2026-01-01'), effectiveTo: null as Date | null, ...extra });
+  const who = { branchId: 5, country: 'AE' };
+
+  it('prefers the branch, then the country, then the company', () => {
+    const branch = mk('BRANCH', { branchId: 5 });
+    const country = mk('COUNTRY', { countryCode: 'AE' });
+    const company = mk('COMPANY');
+    expect(pickGroupAssignment([company, country, branch], who, d('2026-06-01'))).toBe(branch);
+    expect(pickGroupAssignment([company, country], who, d('2026-06-01'))).toBe(country);
+    expect(pickGroupAssignment([company], who, d('2026-06-01'))).toBe(company);
+  });
+
+  it('ignores other branches and countries', () => {
+    expect(pickGroupAssignment([mk('BRANCH', { branchId: 9 }), mk('COUNTRY', { countryCode: 'IN' })], who, d('2026-06-01'))).toBeNull();
+  });
+
+  it('respects the dates', () => {
+    const ended = mk('COMPANY', { effectiveTo: d('2026-03-31') });
+    const later = mk('COMPANY', { effectiveFrom: d('2026-07-01') });
+    expect(pickGroupAssignment([ended, later], who, d('2026-06-01'))).toBeNull();
+    expect(pickGroupAssignment([ended, later], who, d('2026-03-31'))).toBe(ended);
+    expect(pickGroupAssignment([ended, later], who, d('2026-07-01'))).toBe(later);
+  });
+
+  it('a branch assignment that has ended falls back to the next level', () => {
+    const branch = mk('BRANCH', { branchId: 5, effectiveTo: d('2026-02-28') });
+    const company = mk('COMPANY');
+    expect(pickGroupAssignment([branch, company], who, d('2026-06-01'))).toBe(company);
   });
 });
