@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
 import { BranchPayload, BranchRow, createBranch, deleteBranch, getBranchesToManage, updateBranch } from '../lib/api';
-import Drawer, { fieldClass } from '../components/Drawer';
-import Select from '../components/Select';
+import Drawer, { fieldClass } from './Drawer';
+import Select from './Select';
 
 type Country = { isoCode: string; name: string; defaultTimezone: string };
 
@@ -19,7 +19,7 @@ const timeZones: string[] = (() => {
 const Label = ({ text, children }: { text: string; children: React.ReactNode }) => <label className="block text-xs font-medium text-gray-600">{text}{children}</label>;
 
 /** HR and System Admin: the places the company works from, each with its country and timezone. */
-export default function BranchesPage() {
+export default function BranchesPanel() {
   const { isAuthenticated } = useAuth();
   const [rows, setRows] = useState<BranchRow[]>([]);
   const [countries, setCountries] = useState<Country[]>([]);
@@ -83,7 +83,7 @@ export default function BranchesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Branches</h2>
+          <h3 className="text-lg font-semibold text-gray-900">Branches</h3>
           <p className="mt-1 max-w-2xl text-gray-500">The places the company works from. A branch has a country (from System settings → Countries) and optionally its own timezone. Branches appear in the header switcher, on each employee, and in holiday calendars and policies.</p>
         </div>
         <button type="button" onClick={() => { setEditing({ id: null, form: blank() }); setError(''); }} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700">Add branch</button>

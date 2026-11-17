@@ -2,7 +2,7 @@
 
 A step by step guide to install the HRMS on a computer and configure it for one company. Written from what the application does today (2026-11-15). Where something is not built yet, it says so.
 
-Who does what: **System Admin** can open every screen below. **HR Admin** can open Administration, Attendance setup, Branches, Masters, Users, Menus & rights and Leave setup, but not System settings.
+Who does what: **System Admin** can open every screen below. **HR Admin** can open Administration, Attendance setup, Masters (which includes Branches), Users, Menus & rights and Leave setup, but not System settings.
 
 ---
 

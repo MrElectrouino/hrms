@@ -62,7 +62,7 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
   - Countries: the country list (a real table). One country is the **Default**. Everything country-related picks from it.
   - Branding: name, logo, favicon, colours, login text, footer, plus time format and number format.
   - Security: failed-login limit, lockout minutes, session timeout.
-- Branches: a real table (`branches`) with country, optional timezone, address, city, phone, email. Screen: Administration, Branches.
+- Branches: a real table (`branches`) with country, optional timezone, address, city, phone, email. Screen: Administration, Masters → Branches.
 - Masters: Sites, Languages, Shifts, Document Types, and Parameters.
 - Users, Menus and Rights (merged screen), Modules switches, Salary templates.
 
@@ -96,7 +96,7 @@ Important: the backend and `prisma.config.ts` read `DATABASE_URL_UNPOOLED`, not 
 |---|---|---|
 | Dashboard | `src/dashboard/` | `pages/index.tsx`, bell in `components/Layout.tsx`, `lib/dashboard-api.ts` |
 | System settings | `src/system-admin/` | `pages/system-settings.tsx`, `components/settings/*Panel.tsx` |
-| Branches | `src/branches/` | `pages/branches.tsx` |
+| Branches | `src/branches/` | `components/BranchesPanel.tsx` (inside `pages/masters.tsx`) |
 | Attendance | `src/attendance/`, `src/attendance-setup/` | `pages/attendance/*`, `pages/attendance-setup.tsx`, `components/attendance/*`, `components/settings/AttendanceConfigPanel.tsx` |
 | Leave | `src/leave/` | `pages/leave/*`, `pages/leave-setup.tsx` (tabs: `components/leave/LeavePoliciesPanel.tsx`, `LeaveBalancesPanel.tsx`), `components/settings/LeaveConfigPanel.tsx` |
 | Profile | `src/employee-profile/` | `pages/employee-profile/*`, `pages/profile-rules.tsx` |

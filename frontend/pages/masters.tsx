@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../lib/auth';
 import ParametersPanel from '../components/ParametersPanel';
+import BranchesPanel from '../components/BranchesPanel';
 import Select from '../components/Select';
 import {
   MasterItem,
@@ -69,12 +70,12 @@ export default function MastersPage() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
   // Parameters carries its own screen inside this page.
-  const [special, setSpecial] = useState<'parameters' | null>(null);
+  const [special, setSpecial] = useState<'parameters' | 'branches' | null>(null);
 
   // Old /branches and /parameters URLs arrive as ?tab=…
   useEffect(() => {
     const q = router.query.tab;
-    if (q === 'parameters') setSpecial(q);
+    if (q === 'parameters' || q === 'branches') setSpecial(q);
   }, [router.query.tab]);
   const [activeTab, setActiveTab] = useState<MasterTab>('sites');
   const [items, setItems] = useState<Record<MasterTab, (MasterItem | ShiftItem | DocumentTypeItem)[]>>({
@@ -284,6 +285,14 @@ export default function MastersPage() {
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => { setSpecial('branches'); setEditingId(null); setError(''); setNotice(''); }}
+            aria-current={special === 'branches' ? 'true' : undefined}
+            className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium ${special === 'branches' ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100'}`}
+          >
+            Branches
+          </button>
           <p className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Dropdown options</p>
           <button
             type="button"
@@ -298,7 +307,7 @@ export default function MastersPage() {
         {/* Section panel */}
         {special ? (
           <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-9">
-            <ParametersPanel />
+            {special === 'branches' ? <BranchesPanel /> : <ParametersPanel />}
           </section>
         ) : (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-9">

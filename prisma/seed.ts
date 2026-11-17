@@ -356,7 +356,8 @@ async function seedRoles() {
  * replaced by the nine-section profile). Those dead rows, and any rights/overrides on them, are
  * removed below so Menus & Rights only ever shows pages that exist.
  */
-const LEGACY_MENU_ITEM_IDS = [1, 2, 3, 4, 6, 7, 12, 21, 37, 146, 147, 151, 155, 156];
+// 542 (Branches) now lives inside Masters.
+const LEGACY_MENU_ITEM_IDS = [1, 2, 3, 4, 6, 7, 12, 21, 37, 146, 147, 151, 155, 156, 542];
 
 interface MenuItemSeed {
   id: number;
@@ -388,7 +389,6 @@ const MENU_ITEMS: MenuItemSeed[] = [
   { id: 504, name: 'Administration', iconClass: 'fa fa-cogs', displayOrder: 5, isMainMenu: true, isActive: true },
   { id: 540, name: 'Attendance setup', parentId: 504, pageUrl: '/attendance-setup', displayOrder: 1, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 541, name: 'Bulk update', parentId: 504, pageUrl: '/bulk-update', displayOrder: 2, isMainMenu: true, isActive: true, roles: [3, 4] },
-  { id: 542, name: 'Branches', parentId: 504, pageUrl: '/branches', displayOrder: 3, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 543, name: 'Masters', parentId: 504, pageUrl: '/masters', displayOrder: 4, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 544, name: 'Users', parentId: 504, pageUrl: '/users', displayOrder: 5, isMainMenu: true, isActive: true, roles: [3, 4] },
   { id: 545, name: 'Menus & rights', parentId: 504, pageUrl: '/access-control', displayOrder: 6, isMainMenu: true, isActive: true, roles: [3, 4] },
