@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { BranchOption, getBranches } from '../../lib/api';
+import { BranchOption, CountryItem, MasterItem, getBranches, getCountries, getSites } from '../../lib/api';
 import {
   Holiday,
   HolidayCalendar,
@@ -20,22 +20,24 @@ import Drawer, { fieldClass } from '../Drawer';
 import ExcelImport from '../ExcelImport';
 import Select from '../Select';
 
-const COUNTRIES: [string, string][] = [['IN', 'India'], ['AE', 'UAE'], ['GB', 'United Kingdom'], ['US', 'United States']];
 const LEVEL_LABEL: Record<HolidayLevel, { name: string; hint: string }> = {
   EMPLOYEE: { name: 'Employee calendar', hint: 'A calendar assigned to the employee personally' },
+  SITE: { name: 'Site calendar', hint: "The calendar of the employee's site" },
   BRANCH: { name: 'Branch calendar', hint: "The calendar of the employee's branch" },
   COUNTRY: { name: 'Country calendar', hint: "The calendar of the employee's country of employment" },
   COMPANY: { name: 'Company calendar', hint: 'The company-wide calendar' },
 };
-const scopeText = (c: HolidayCalendar) => (c.scope === 'COMPANY' ? 'Company' : c.scope === 'COUNTRY' ? `Country · ${COUNTRIES.find(([x]) => x === c.countryCode)?.[1] ?? c.countryCode}` : `Branch · ${c.branchName ?? ''}`);
+const scopeText = (c: HolidayCalendar, countries: CountryItem[]) => (c.scope === 'COMPANY' ? 'Company' : c.scope === 'COUNTRY' ? `Country · ${countries.find((x) => x.isoCode === c.countryCode)?.name ?? c.countryCode}` : c.scope === 'SITE' ? `Site · ${c.siteName ?? ''}` : `Branch · ${c.branchName ?? ''}`);
 
-const blank = { name: '', scope: 'COMPANY', countryCode: 'IN', branchId: '', isActive: true };
+const blank = { name: '', scope: 'COMPANY', countryCode: '', branchId: '', siteId: '', isActive: true };
 
 /** Holiday calendars by company, country or branch, plus the order in which they apply to an employee. */
 export default function HolidayCalendarsPanel() {
   const { isAuthenticated } = useAuth();
   const [calendars, setCalendars] = useState<HolidayCalendar[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [countries, setCountries] = useState<CountryItem[]>([]);
+  const [sites, setSites] = useState<MasterItem[]>([]);
   const [order, setOrder] = useState<HolidayLevel[]>([]);
   const [savedOrder, setSavedOrder] = useState('');
   const [selected, setSelected] = useState<(HolidayCalendar & { holidays: Holiday[] }) | null>(null);
@@ -69,6 +71,8 @@ export default function HolidayCalendarsPanel() {
     if (!isAuthenticated) return;
     loadCalendars();
     getBranches().then((r) => setBranches(r.data)).catch(() => {});
+    getCountries().then((r) => setCountries(r.data)).catch(() => setCountries([]));
+    getSites().then((r) => setSites(r.data)).catch(() => setSites([]));
     getHolidayOrder().then((r) => { setOrder(r.data); setSavedOrder(JSON.stringify(r.data)); }).catch(() => {});
   }, [isAuthenticated]);
 
@@ -97,16 +101,18 @@ export default function HolidayCalendarsPanel() {
     setError('');
   };
   const startEdit = (c: HolidayCalendar) => {
-    setForm({ name: c.name, scope: c.scope, countryCode: c.countryCode ?? 'IN', branchId: c.branchId ? String(c.branchId) : '', isActive: c.isActive });
+    setForm({ name: c.name, scope: c.scope, countryCode: c.countryCode ?? '', branchId: c.branchId ? String(c.branchId) : '', siteId: c.siteId ? String(c.siteId) : '', isActive: c.isActive });
     setEditing(c.id);
     setError('');
   };
   const saveCalendar = async () => {
     if (!form.name.trim()) return setError('Name is required');
+    if (form.scope === 'COUNTRY' && !form.countryCode) return setError('Choose a country');
+    if (form.scope === 'SITE' && !form.siteId) return setError('Choose a site');
     setSaving(true);
     setError('');
     try {
-      const payload = { name: form.name.trim(), scope: form.scope, countryCode: form.scope === 'COUNTRY' ? form.countryCode : undefined, branchId: form.scope === 'BRANCH' && form.branchId ? Number(form.branchId) : undefined, isActive: form.isActive };
+      const payload = { name: form.name.trim(), scope: form.scope, countryCode: form.scope === 'COUNTRY' ? form.countryCode : undefined, branchId: form.scope === 'BRANCH' && form.branchId ? Number(form.branchId) : undefined, siteId: form.scope === 'SITE' && form.siteId ? Number(form.siteId) : undefined, isActive: form.isActive };
       if (editing === 'new') {
         const created = await createHolidayCalendar(payload);
         await open(created.data.id);
@@ -210,7 +216,7 @@ export default function HolidayCalendarsPanel() {
                 <span className={`text-sm font-medium ${c.isActive ? 'text-gray-900' : 'text-gray-400 line-through'}`}>{c.name}</span>
                 <span className="text-xs text-gray-500">{c.holidayCount} days</span>
               </div>
-              <p className="mt-0.5 text-xs text-gray-500">{scopeText(c)}</p>
+              <p className="mt-0.5 text-xs text-gray-500">{scopeText(c, countries)}</p>
             </button>
           ))}
         </div>
@@ -224,7 +230,7 @@ export default function HolidayCalendarsPanel() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">{selected.name}</h3>
-                    <p className="text-xs text-gray-500">{scopeText(selected)}</p>
+                    <p className="text-xs text-gray-500">{scopeText(selected, countries)}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <Select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))} className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm">
@@ -265,19 +271,19 @@ export default function HolidayCalendarsPanel() {
                   </tbody>
                 </table>
               </section>
-
-              <ExcelImport
-                title="Import holidays from Excel"
-                help="Columns: Date (YYYY-MM-DD), Name, Type (Public, Company or Optional; optional), End date (YYYY-MM-DD; optional, for a holiday that lasts several days). A date that already exists is updated."
-                templatePath="/attendance/holiday-calendars/template"
-                templateName="holidays-template.xlsx"
-                run={(file, commit) => importHolidays(selected.id, file, commit)}
-                onImported={() => { open(selected.id); loadCalendars(); }}
-              />
             </>
           )}
         </div>
       </div>
+
+      <ExcelImport
+        title="Import holidays from Excel"
+        help="Columns: Date (YYYY-MM-DD), Name, End date (optional, for a holiday that lasts several days), Applies to (Company, Country, Branch or Site) and Value (the country, branch or site name; leave empty for Company). Each row goes to the calendar for that company, country, branch or site, and a new calendar is created if there is none. If Applies to is empty, the row goes to the calendar chosen above. A date that already exists is updated; new holidays are added as public holidays."
+        templatePath="/attendance/holiday-calendars/template"
+        templateName="holidays-template.xlsx"
+        run={(file, commit) => importHolidays(selected ? selected.id : null, file, commit)}
+        onImported={() => { if (selected) open(selected.id); loadCalendars(); }}
+        />
 
       {editing !== null && (
         <Drawer
@@ -298,13 +304,23 @@ export default function HolidayCalendarsPanel() {
             <Select className={fieldClass} value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}>
               <option value="COMPANY">The whole company</option>
               <option value="COUNTRY">A country</option>
+              <option value="SITE">A site</option>
               <option value="BRANCH">A branch</option>
             </Select>
           </label>
           {form.scope === 'COUNTRY' && (
             <label className="block text-sm font-medium text-gray-700">Country
               <Select className={fieldClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
-                {COUNTRIES.map(([c, n]) => <option key={c} value={c}>{n}</option>)}
+                <option value="">Select a country…</option>
+                {countries.filter((c) => c.isActive || c.isoCode === form.countryCode).map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
+              </Select>
+            </label>
+          )}
+          {form.scope === 'SITE' && (
+            <label className="block text-sm font-medium text-gray-700">Site
+              <Select className={fieldClass} value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value })}>
+                <option value="">Select…</option>
+                {sites.filter((x) => x.isActive || String(x.id) === form.siteId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               </Select>
             </label>
           )}

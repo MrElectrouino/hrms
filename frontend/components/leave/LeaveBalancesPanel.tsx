@@ -1,22 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { BranchOption, CountryItem, getBranches, getCountries } from '../../lib/api';
+import { BranchOption, CountryItem, MasterItem, getBranches, getCountries, getSites } from '../../lib/api';
 import { searchEmployeeOptions } from '../../lib/bulk-api';
 import { GroupTarget, LeaveBalance, LeaveType, LedgerRow, adjustBalance, adjustGroup, getBalancesOf, getGroupCount, getLeaveTypes, getLedger } from '../../lib/leave-api';
 import { fieldClass } from '../Drawer';
 import Select from '../Select';
 
-const KIND: Record<string, string> = { CREDIT: 'Credit', DEBIT: 'Used', REVERSAL: 'Returned', EXPIRY: 'Expired', ADJUSTMENT: 'Adjustment' };
+const KIND: Record<string, string> = { CREDIT: 'Credit', DEBIT: 'Used', REVERSAL: 'Returned', EXPIRY: 'Expired', CARRY_FORWARD: 'Carried forward', ADJUSTMENT: 'Adjustment' };
 
 /** HR: employees' balances and ledger, and adding or taking away days with a reason. */
 export default function LeaveBalancesPanel() {
   const { isAuthenticated } = useAuth();
   const [names, setNames] = useState<Record<number, string>>({});
   // Who the change is for: people, or a whole branch, country or the company.
-  const [level, setLevel] = useState<'EMPLOYEE' | 'BRANCH' | 'COUNTRY' | 'COMPANY'>('EMPLOYEE');
+  const [level, setLevel] = useState<'EMPLOYEE' | 'SITE' | 'BRANCH' | 'COUNTRY' | 'COMPANY'>('EMPLOYEE');
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [countries, setCountries] = useState<CountryItem[]>([]);
   const [branchId, setBranchId] = useState('');
+  const [sites, setSites] = useState<MasterItem[]>([]);
+  const [siteId, setSiteId] = useState('');
   const [countryCode, setCountryCode] = useState('');
   const [picked, setPicked] = useState<number[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
@@ -33,6 +35,7 @@ export default function LeaveBalancesPanel() {
   useEffect(() => {
     if (!isAuthenticated) return;
     getBranches().then((r) => setBranches(r.data)).catch(() => {});
+    getSites().then((r) => setSites(r.data)).catch(() => setSites([]));
     getCountries().then((r) => setCountries(r.data.filter((c) => c.isActive))).catch(() => {});
     getLeaveTypes().then((r) => setTypes(r.data.filter((t) => t.balanceTracking))).catch(() => {});
   }, [isAuthenticated]);
@@ -55,8 +58,8 @@ export default function LeaveBalancesPanel() {
   }, [load]);
 
   const target: GroupTarget | null =
-    level === 'COMPANY' ? { scope: 'COMPANY' } : level === 'BRANCH' && branchId ? { scope: 'BRANCH', branchId: Number(branchId) } : level === 'COUNTRY' && countryCode ? { scope: 'COUNTRY', countryCode } : null;
-  const targetName = level === 'COMPANY' ? 'the whole company' : level === 'BRANCH' ? branches.find((b) => String(b.id) === branchId)?.name ?? '' : countries.find((c) => c.isoCode === countryCode)?.name ?? '';
+    level === 'COMPANY' ? { scope: 'COMPANY' } : level === 'BRANCH' && branchId ? { scope: 'BRANCH', branchId: Number(branchId) } : level === 'SITE' && siteId ? { scope: 'SITE', siteId: Number(siteId) } : level === 'COUNTRY' && countryCode ? { scope: 'COUNTRY', countryCode } : null;
+  const targetName = level === 'COMPANY' ? 'the whole company' : level === 'BRANCH' ? branches.find((b) => String(b.id) === branchId)?.name ?? '' : level === 'SITE' ? sites.find((x) => String(x.id) === siteId)?.name ?? '' : countries.find((c) => c.isoCode === countryCode)?.name ?? '';
 
   /** The same change for everyone in the group. Asks first, saying how many people it reaches. */
   const saveGroup = async () => {
@@ -115,13 +118,21 @@ export default function LeaveBalancesPanel() {
       <p className="text-gray-500">Every change to a balance is recorded. Days taken away use the earliest-expiring balance first.</p>
 
       <div role="tablist" aria-label="Who is this for" className="inline-flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
-        {([['EMPLOYEE', 'Employees'], ['BRANCH', 'A branch'], ['COUNTRY', 'A country'], ['COMPANY', 'Whole company']] as const).map(([key, text]) => (
+        {([['EMPLOYEE', 'Employees'], ['SITE', 'A site'], ['BRANCH', 'A branch'], ['COUNTRY', 'A country'], ['COMPANY', 'Whole company']] as const).map(([key, text]) => (
           <button key={key} type="button" role="tab" aria-selected={level === key} onClick={() => { setLevel(key); setError(''); setNotice(''); }} className={`rounded-md px-3.5 py-1.5 text-sm font-medium ${level === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>{text}</button>
         ))}
       </div>
 
       {level !== 'EMPLOYEE' && (
         <>
+          {level === 'SITE' && (
+            <div className="max-w-sm">
+              <Select label="Site" value={siteId} onChange={(e) => setSiteId(e.target.value)}>
+                <option value="">Select a site…</option>
+                {sites.filter((x) => x.isActive).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </Select>
+            </div>
+          )}
           {level === 'BRANCH' && (
             <div className="max-w-sm">
               <Select label="Branch" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -141,7 +152,7 @@ export default function LeaveBalancesPanel() {
           {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
           {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
           {!target ? (
-            <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">{level === 'BRANCH' ? 'Choose a branch.' : 'Choose a country.'}</p>
+            <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">{level === 'BRANCH' ? 'Choose a branch.' : level === 'SITE' ? 'Choose a site.' : 'Choose a country.'}</p>
           ) : (
             <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
               <h3 className="text-base font-semibold text-gray-900">Add or take away days for everyone in {targetName}</h3>

@@ -1,5 +1,5 @@
 import { IsArray, IsBoolean, IsIn, IsOptional, IsString, Length, MaxLength, ValidateIf } from 'class-validator';
-import { CUSTOM_FIELD_TYPES, CUSTOM_FIELD_OPTIONS_REQUIRED, COUNTRIES, SECTION_KEYS } from '../profile-schema';
+import { CUSTOM_FIELD_TYPES, CUSTOM_FIELD_OPTIONS_REQUIRED, SECTION_KEYS } from '../profile-schema';
 
 /** POST /custom-fields — System Admin only (D-023). The code is generated from the label. */
 export class CreateCustomFieldDto {
@@ -23,7 +23,8 @@ export class CreateCustomFieldDto {
   options?: string[];
 
   @IsOptional()
-  @IsIn(['ALL', ...COUNTRIES])
+  @IsString()
+  @Length(2, 10)
   countryCode?: string;
 
   @IsOptional()

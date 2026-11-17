@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { BranchOption, Employee, Parameter, getBranches, getEmployees, getParameters } from '../../lib/api';
+import { BranchOption, CountryItem, Employee, Parameter, getBranches, getCountries, getEmployees, getParameters } from '../../lib/api';
 import { LeaveType, getLeaveTypes } from '../../lib/leave-api';
 import {
   CREDIT_LABEL, EntitlementPreview, LeavePolicy, LeavePolicyPayload, PRORATION_LABEL, PolicyRule, ROUNDING_LABEL,
@@ -22,6 +22,7 @@ export default function LeavePoliciesPanel() {
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [empTypes, setEmpTypes] = useState<Parameter[]>([]);
+  const [countries, setCountries] = useState<CountryItem[]>([]);
   const [editing, setEditing] = useState<{ id: number | null; used: boolean; form: LeavePolicyPayload } | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -39,6 +40,7 @@ export default function LeavePoliciesPanel() {
     load();
     getLeaveTypes().then((r) => setTypes(r.data.filter((t) => t.balanceTracking && !t.isCompOff))).catch(() => {});
     getBranches().then((r) => setBranches(r.data)).catch(() => {});
+    getCountries().then((r) => setCountries(r.data)).catch(() => {});
     getParameters('Employee Type').then((r) => setEmpTypes(r.data)).catch(() => {});
   }, [isAuthenticated, load]);
 
@@ -79,7 +81,7 @@ export default function LeavePoliciesPanel() {
 
   const scopeText = (p: LeavePolicy) => {
     const parts = [
-      p.countryCode ?? 'All countries',
+      p.countryCode ? countries.find((c) => c.isoCode === p.countryCode)?.name ?? p.countryCode : 'All countries',
       p.branchId ? `branch: ${branches.find((b) => b.id === p.branchId)?.name ?? p.branchId}` : '',
       p.employeeTypeId ? `type: ${empTypes.find((t) => t.id === p.employeeTypeId)?.text ?? p.employeeTypeId}` : '',
       p.employeeId ? `employee #${p.employeeId}` : '',
@@ -141,7 +143,7 @@ export default function LeavePoliciesPanel() {
             <div className="rounded-lg border border-gray-200 p-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Applies to (leave empty for everyone)</p>
               <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                <Label text="Country code"><input className={fieldClass} disabled={editing.used} placeholder="e.g. AE" value={editing.form.countryCode ?? ''} onChange={(e) => setForm({ countryCode: e.target.value || null })} maxLength={10} /></Label>
+                <Label text="Country"><Select className={fieldClass} disabled={editing.used} value={editing.form.countryCode ?? ''} onChange={(e) => setForm({ countryCode: e.target.value || null })}><option value="">Any country</option>{countries.filter((c) => c.isActive || c.isoCode === editing.form.countryCode).map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}</Select></Label>
                 <Label text="Branch"><Select className={fieldClass} disabled={editing.used} value={editing.form.branchId ?? ''} onChange={(e) => setForm({ branchId: numOrNull(e.target.value) })}><option value="">Any branch</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Label>
                 <Label text="Employee type"><Select className={fieldClass} disabled={editing.used} value={editing.form.employeeTypeId ?? ''} onChange={(e) => setForm({ employeeTypeId: numOrNull(e.target.value) })}><option value="">Any type</option>{empTypes.map((t) => <option key={t.id} value={t.id}>{t.text}</option>)}</Select></Label>
               </div>
@@ -240,6 +242,13 @@ function Tester({ types }: { types: LeaveType[] }) {
             <p className="text-gray-800"><b className="text-lg">{result.quantity}</b> days for {result.yearStart} to {result.yearEnd}, from <b>{result.winner.policy}</b> ({result.winner.layer === 'STATUTORY' ? 'statutory' : 'company'}, {CREDIT_LABEL[result.winner.creditMethod as keyof typeof CREDIT_LABEL].toLowerCase()}). Before rounding: {result.raw}.</p>
           ) : (
             <p className="text-amber-700">No policy covers this employee and leave type on that date. The leave type's own setting is used instead.</p>
+          )}
+          {result.winner?.creditMethod === 'MONTHLY_LUMP' && (
+            <p className="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              {result.confirmedOn
+                ? `Date of confirmation: ${result.confirmedOn}. ${result.confirmedOn >= result.yearStart && result.confirmedOn <= result.yearEnd ? 'It falls in this leave year, so once that date is reached every remaining month of the year is credited at once.' : result.confirmedOn > result.yearEnd ? 'It is after this leave year, so the days are credited month by month.' : 'It was in an earlier leave year, so this year is credited month by month.'}`
+                : 'No date of confirmation is set yet, so the days are credited month by month. The rest of the year is credited at once when a date of confirmation (on or before today) is set on the Employment tab.'}
+            </p>
           )}
           {result.applied.length > 1 && <p className="text-xs text-gray-500">Both a statutory and a company policy apply. The higher figure is used.</p>}
           {result.lines.length > 0 && (

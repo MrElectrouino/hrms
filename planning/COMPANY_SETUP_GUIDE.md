@@ -153,7 +153,7 @@ Start with **Attendance setup**:
 2. **Holiday calendars.** Create a calendar per company, per country or per branch (for example one for the India branch, one for the Dubai branch). Add holidays one by one or with the Excel import. Use **Save order** to decide which calendar wins when several apply.
 3. **Weekly off.** Create templates of weekly off days (for example "Saturday, Sunday", "Friday only"): name it and choose, for each weekday, working day, off every week, off in some weeks of the month (for example the 2nd and 4th Saturday) or off every other week (from a start date). Give a template to employees on their profile (Attendance & Leave, Weekly off) or in bulk under Administration, Bulk update. The change takes effect from today and earlier days keep their old weekly off. A roster entry or pattern still wins for the days it covers.
 4. **Roster.** Repeating shift patterns (weekly offs and shifts per weekday) and Excel import of dated rosters.
-5. **Assignments.** Choose who it is for: employees (one or several), a branch, a country, or the whole company. A work schedule, weekly off and roster pattern given to a branch, country or the company applies to everyone there, including people who join later; an assignment made to the employee personally always wins, then branch, then country, then company. Holiday calendars are tied to a company, country or branch on the calendar itself.
+5. **Assignments.** Choose who it is for: employees (one or several), a site, a branch, a country, or the whole company. A work schedule, weekly off and roster pattern given to a branch, country or the company applies to everyone there, including people who join later; an assignment made to the employee personally always wins, then site, branch, country, company. Holiday calendars are tied to a company, country or branch on the calendar itself.
 
 Then **System settings → Attendance configuration**:
 
@@ -167,14 +167,14 @@ Timezone rule: the branch's own timezone, then the branch's country, then the em
 ### B7. Leave (System settings, Leave configuration, and Administration, Leave balances)
 
 1. **Leave configuration → leave types.** The starters were deleted. Add your types (Annual, Sick, Casual, Unpaid and so on): paid or not, tracks a balance or not, half-day allowed, negative balance allowed, document needed (and after how many days), maximum days per request, takes part in the sandwich rule, is comp-off. A type that has been used cannot be deleted, only switched off.
-2. **Leave configuration → settings.** Leave year start month, the sandwich rule (weekly offs and holidays, both sides or either side), and comp-off (credit days, expiry days, minimum minutes worked).
+2. **Leave configuration → settings.** The sandwich rule (weekly offs and holidays, both sides or either side), and comp-off (credit days, expiry days, minimum minutes worked).
 3. **Leave configuration → Leave policies** (Administration). Create a policy per group of people: who it applies to (country, branch, employee type or one employee), start and end dates, statutory or company, and for each leave type the days per year, whether credited upfront or monthly, how joiners part-way through the year are prorated, rounding, minimum and maximum, and optional length-of-service slabs. The "Check an employee" box shows which policy applies and how the days were worked out, without saving anything. A policy that has produced entitlements is locked: end it and start a new one to change a rule.
 4. **Credits are created by the nightly accrual job** (02:30) or manually with **Credit leave now** in Leave configuration. Running it twice does not double-credit. A leave type with no policy and no accrual of its own credits nothing, which is the usual reason an employee cannot apply.
-5. **Leave balances** (Administration). Choose employees, a branch, a country or the whole company. For one employee to see their balances and history, or several to add or take away the same days from all of them, with a reason. Use it for opening balances when going live part-way through the year. Do not also let a policy credit the same year-to-date days.
+5. **Leave balances** (Administration). Choose employees, a site, a branch, a country or the whole company. For one employee to see their balances and history, or several to add or take away the same days from all of them, with a reason. Use it for opening balances when going live part-way through the year. Do not also let a policy credit the same year-to-date days.
 
 Full step-by-step guides with examples: `planning/Leave_Setup_Guide.html` (leave) and `planning/Attendance_Setup_Guide.html` (attendance policy and rules).
 
-Not built yet: probation lock, carry-forward, lapse and encashment at year end, exit settlement, leave across two leave years. These wait for the business answers in `planning/leave_entitlement_requirements.md`, section 13.
+Built: a policy credit method "monthly until confirmed, then the rest of the year at once" (see the Leave guide). Not built yet: probation lock, carry-forward, lapse and encashment at year end, exit settlement, leave across two leave years. These wait for the business answers in `planning/leave_entitlement_requirements.md`, section 13.
 
 ### B8. Add employees
 

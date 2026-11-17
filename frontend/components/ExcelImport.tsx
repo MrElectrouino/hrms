@@ -91,6 +91,14 @@ export default function ExcelImport({
             </p>
           )}
 
+          {result.calendars && result.calendars.length > 0 && (
+            <ul className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700">
+              {result.calendars.map((c) => (
+                <li key={c.name}>{c.name}: <b>{c.rows}</b> holiday{c.rows === 1 ? '' : 's'}{c.created && <span className="ml-2 rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">{result.committed ? 'new calendar created' : 'new calendar will be created'}</span>}</li>
+              ))}
+            </ul>
+          )}
+
           {result.errors.length > 0 && (
             <div className="max-h-56 overflow-auto rounded-lg border border-gray-200">
               <table className="min-w-full text-sm">

@@ -29,6 +29,13 @@ export interface CalcDay {
   reason: CalcReason;
 }
 
+/** Whether weekly offs / holidays inside the request are left out of the days counted (the default) or count like working days. */
+export interface DayExclusions {
+  weeklyOffs: boolean;
+  holidays: boolean;
+}
+const EXCLUDE_BOTH: DayExclusions = { weeklyOffs: true, holidays: true };
+
 export interface CalcResult {
   requestedDays: number;
   sandwichDays: number;
@@ -57,6 +64,7 @@ export function countLeaveDays(
   halfDay: boolean,
   sandwich: SandwichConfig,
   existingLeave: Set<string> = new Set(),
+  exclude: DayExclusions = EXCLUDE_BOTH,
 ): CalcResult {
   const byDate = new Map(timeline.map((d) => [d.date, d.kind]));
   const range: TimelineDay[] = [];
@@ -65,7 +73,9 @@ export function countLeaveDays(
   const days: CalcDay[] = [];
   const mine = new Set<string>();
   for (const d of range) {
-    if (d.kind === 'WORKING') {
+    // A weekly off or holiday is left out unless this leave type counts it.
+    const counted = d.kind === 'WORKING' || (d.kind === 'WEEKLY_OFF' && !exclude.weeklyOffs) || (d.kind === 'HOLIDAY' && !exclude.holidays);
+    if (counted) {
       const half = halfDay && from === to;
       days.push({ date: d.date, kind: d.kind, days: half ? 0.5 : 1, reason: half ? 'HALF_DAY' : 'LEAVE' });
       mine.add(d.date);
@@ -100,6 +110,8 @@ export function countLeaveDays(
           const counts = (kind === 'WEEKLY_OFF' && sandwich.weeklyOffs) || (kind === 'HOLIDAY' && sandwich.holidays);
           if (!counts) continue;
           const existing = days.find((x) => x.date === dates[k]);
+          // Already counted as a leave day (this leave type does not leave it out): the sandwich rule adds nothing.
+          if (existing && existing.days > 0) continue;
           const entry: CalcDay = { date: dates[k], kind, days: 1, reason: kind === 'WEEKLY_OFF' ? 'SANDWICH_WEEKLY_OFF' : 'SANDWICH_HOLIDAY' };
           if (existing) Object.assign(existing, entry);
           else days.push(entry);

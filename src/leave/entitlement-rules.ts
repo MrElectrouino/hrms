@@ -261,3 +261,21 @@ export function pickPolicy<T extends ScopedPolicy>(policies: T[], who: PolicySub
   live.sort((a, b) => b.score - a.score || b.p.priority - a.p.priority || (a.p.effectiveFrom < b.p.effectiveFrom ? 1 : -1) || b.p.id - a.p.id);
   return live[0]?.p ?? null;
 }
+
+/* ------------------------------------------------------------------ monthly until confirmation, then the rest of the year at once */
+
+export const MONTHLY_LUMP = 'MONTHLY_LUMP';
+
+/**
+ * Which months of the leave year to credit now, as the index of the last one (0 = the first month of the year).
+ * Normally that is the current month. For a "monthly, then the rest at once on confirmation" rule, an employee whose
+ * date of confirmation falls in this leave year and has been reached gets every remaining month of the year now.
+ * A confirmation date in an earlier year changes nothing (the year simply runs monthly), and a date still in the
+ * future changes nothing yet.
+ */
+export function lastMonthToCredit(i: { currentMonthIndex: number; creditMethod: string; confirmedOn: string | null; asOf: string; yearStart: string; yearEnd: string }): number {
+  if (i.creditMethod !== MONTHLY_LUMP || !i.confirmedOn) return i.currentMonthIndex;
+  const reached = i.confirmedOn <= i.asOf;
+  const inThisYear = i.confirmedOn >= i.yearStart && i.confirmedOn <= i.yearEnd;
+  return reached && inThisYear ? 11 : i.currentMonthIndex;
+}

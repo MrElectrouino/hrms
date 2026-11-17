@@ -95,8 +95,8 @@ export class LeaveController {
   }
 
   @Get('adjust-group/count')
-  async adjustGroupCount(@Query('scope') scope: string, @Query('branchId') branchId: string | undefined, @Query('countryCode') countryCode: string | undefined, @CurrentUser() u: CurrentUserPayload) {
-    return ok(await this.service.groupCount(u, scope, branchId ? Number(branchId) || undefined : undefined, countryCode), 'Counted');
+  async adjustGroupCount(@Query('scope') scope: string, @Query('branchId') branchId: string | undefined, @Query('countryCode') countryCode: string | undefined, @Query('siteId') siteId: string | undefined, @CurrentUser() u: CurrentUserPayload) {
+    return ok(await this.service.groupCount(u, scope, branchId ? Number(branchId) || undefined : undefined, countryCode, siteId ? Number(siteId) || undefined : undefined), 'Counted');
   }
 
   @Post('adjust-group')

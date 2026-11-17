@@ -21,8 +21,11 @@ export interface EmployeeFacts {
   id: number;
   joinDate: string;
   branchId: number | null;
+  siteId: number | null;
   employeeTypeId: number | null;
   countryCode: string | null;
+  /** Date of confirmation (on payroll); null while on probation or when never set. */
+  confirmedOn: string | null;
 }
 
 /** Works out entitlement from the leave policies. It never decides anything itself: all numbers come from policy rows. */
@@ -34,7 +37,7 @@ export class EntitlementService {
   async facts(employeeIds?: number[]): Promise<EmployeeFacts[]> {
     const emps = await this.prisma.employee.findMany({
       where: { isActive: true, ...(employeeIds ? { id: { in: employeeIds } } : {}) },
-      select: { id: true, dateOfJoining: true, branchId: true, employeeTypeId: true },
+      select: { id: true, dateOfJoining: true, dateOfConfirmation: true, branchId: true, siteId: true, employeeTypeId: true },
     });
     const sections = await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'organization', employeeId: { in: emps.map((e) => e.id) } }, select: { employeeId: true, data: true } });
     const org = new Map(sections.map((s) => [s.employeeId, (s.data ?? {}) as { legalEntityCountry?: unknown; employmentType?: unknown }]));
@@ -44,7 +47,7 @@ export class EntitlementService {
       const o = org.get(e.id);
       const c = o?.legalEntityCountry;
       const t = typeof o?.employmentType === 'string' ? typeIds.get(o.employmentType) : undefined;
-      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, employeeTypeId: e.employeeTypeId ?? t ?? null, countryCode: typeof c === 'string' && c ? c : null };
+      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, siteId: e.siteId, employeeTypeId: e.employeeTypeId ?? t ?? null, countryCode: typeof c === 'string' && c ? c : null, confirmedOn: e.dateOfConfirmation ? iso(e.dateOfConfirmation) : null };
     });
   }
 
@@ -130,6 +133,7 @@ export class EntitlementService {
       employee: who,
       yearStart,
       yearEnd: addDaysIso(addMonthsIso(yearStart, 12), -1),
+      confirmedOn: who.confirmedOn,
       applied: rules.map((r) => ({ policyId: r.policyId, policy: r.policyName, layer: r.layer, creditMethod: r.creditMethod })),
       winner: calc ? { policyId: calc.winner.policyId, policy: calc.winner.policyName, layer: calc.winner.layer, creditMethod: calc.winner.creditMethod } : null,
       quantity: calc?.result.quantity ?? null,

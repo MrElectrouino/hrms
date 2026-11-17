@@ -49,7 +49,7 @@ export class HolidayCalendarDto {
   @IsString() @IsNotEmpty() @MaxLength(100)
   name: string;
 
-  @IsIn(['COMPANY', 'COUNTRY', 'BRANCH'])
+  @IsIn(['COMPANY', 'COUNTRY', 'BRANCH', 'SITE'])
   scope: string;
 
   @IsOptional() @IsString() @MaxLength(2)
@@ -57,6 +57,9 @@ export class HolidayCalendarDto {
 
   @IsOptional() @Type(() => Number) @IsInt()
   branchId?: number;
+
+  @IsOptional() @Type(() => Number) @IsInt()
+  siteId?: number;
 
   @IsOptional() @IsBoolean()
   isActive?: boolean;
@@ -78,7 +81,7 @@ export class HolidayDto {
 }
 
 export class HolidayOrderDto {
-  @IsArray() @ArrayMaxSize(4) @IsString({ each: true })
+  @IsArray() @ArrayMaxSize(5) @IsString({ each: true })
   order: string[];
 }
 
@@ -133,9 +136,10 @@ export class RosterEntryDto {
 
 export class AssignGroupDto {
   @IsIn(['WORK_SCHEDULE', 'WEEKLY_OFF', 'ROSTER_PATTERN']) kind: string;
-  @IsIn(['COMPANY', 'COUNTRY', 'BRANCH']) scope: string;
+  @IsIn(['COMPANY', 'COUNTRY', 'BRANCH', 'SITE']) scope: string;
   @IsOptional() @IsString() @MaxLength(10) countryCode?: string;
   @IsOptional() @Type(() => Number) @IsInt() branchId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() siteId?: number;
   @Type(() => Number) @IsInt() refId: number;
   @IsString() effectiveFrom: string;
   /** Roster pattern only: date where cycle day 1 falls; defaults to effectiveFrom. */

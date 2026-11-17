@@ -48,7 +48,7 @@ export class RosterService {
     if (span < 0) throw new BadRequestException('"to" cannot be before "from"');
     if (span + 1 > MAX_RANGE_DAYS) throw new BadRequestException(`Ask for at most ${MAX_RANGE_DAYS} days at a time`);
 
-    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, branchId: true } });
+    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true, branchId: true, siteId: true } });
     if (!employee) throw new NotFoundException('Employee not found');
 
     const overlap = { employeeId, effectiveFrom: { lte: to }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: from } }] };
@@ -62,7 +62,7 @@ export class RosterService {
       this.prisma.holidayCalendar.findMany({
         where: {
           isActive: true,
-          OR: [{ scope: 'COMPANY' }, { scope: 'COUNTRY', countryCode: country }, ...(employee.branchId ? [{ scope: 'BRANCH', branchId: employee.branchId }] : [])],
+          OR: [{ scope: 'COMPANY' }, { scope: 'COUNTRY', countryCode: country }, ...(employee.branchId ? [{ scope: 'BRANCH', branchId: employee.branchId }] : []), ...(employee.siteId ? [{ scope: 'SITE', siteId: employee.siteId }] : [])],
         },
         orderBy: { id: 'asc' },
       }),
@@ -72,11 +72,11 @@ export class RosterService {
         where: {
           effectiveFrom: { lte: to },
           AND: [{ OR: [{ effectiveTo: null }, { effectiveTo: { gte: from } }] }],
-          OR: [{ scope: 'COMPANY' }, { scope: 'COUNTRY', countryCode: country }, ...(employee.branchId ? [{ scope: 'BRANCH', branchId: employee.branchId }] : [])],
+          OR: [{ scope: 'COMPANY' }, { scope: 'COUNTRY', countryCode: country }, ...(employee.branchId ? [{ scope: 'BRANCH', branchId: employee.branchId }] : []), ...(employee.siteId ? [{ scope: 'SITE', siteId: employee.siteId }] : [])],
         },
       }),
     ]);
-    const who = { branchId: employee.branchId, country };
+    const who = { branchId: employee.branchId, siteId: employee.siteId, country };
     const groupOf = (kind: string) => groupRows.filter((g) => g.kind === kind);
     const groupSchedules = groupOf('WORK_SCHEDULE');
     const groupTemplates = groupOf('WEEKLY_OFF');
@@ -111,6 +111,7 @@ export class RosterService {
       const emp = empCalendars.find((a) => covers(a, date));
       const byLevel: Partial<Record<HolidayLevel, number | null>> = {
         EMPLOYEE: emp?.calendarId ?? null,
+        SITE: levelCalendar('SITE'),
         BRANCH: levelCalendar('BRANCH'),
         COUNTRY: levelCalendar('COUNTRY'),
         COMPANY: levelCalendar('COMPANY'),

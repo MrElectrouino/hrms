@@ -22,9 +22,9 @@ export const daysBetween = (from: Date, to: Date): number => Math.round((to.getT
 
 /* ------------------------------------------------------------------ holiday calendar order */
 
-export const HOLIDAY_LEVELS = ['EMPLOYEE', 'BRANCH', 'COUNTRY', 'COMPANY'] as const;
+export const HOLIDAY_LEVELS = ['EMPLOYEE', 'SITE', 'BRANCH', 'COUNTRY', 'COMPANY'] as const;
 export type HolidayLevel = (typeof HOLIDAY_LEVELS)[number];
-export const DEFAULT_HOLIDAY_ORDER: HolidayLevel[] = ['EMPLOYEE', 'BRANCH', 'COUNTRY', 'COMPANY'];
+export const DEFAULT_HOLIDAY_ORDER: HolidayLevel[] = ['EMPLOYEE', 'SITE', 'BRANCH', 'COUNTRY', 'COMPANY'];
 
 /** Reads the stored order (a JSON list). Unknown or repeated entries are dropped; missing levels are appended. */
 export function parseHolidayOrder(value: string | null | undefined): HolidayLevel[] {
@@ -38,6 +38,9 @@ export function parseHolidayOrder(value: string | null | undefined): HolidayLeve
   for (const v of Array.isArray(list) ? list : []) {
     if ((HOLIDAY_LEVELS as readonly string[]).includes(v) && !out.includes(v as HolidayLevel)) out.push(v as HolidayLevel);
   }
+  // An order saved before sites existed: a site calendar goes just before the branch one, not at the very end.
+  const branchAt = out.indexOf('BRANCH');
+  if (!out.includes('SITE') && branchAt >= 0) out.splice(branchAt, 0, 'SITE');
   for (const level of DEFAULT_HOLIDAY_ORDER) if (!out.includes(level)) out.push(level);
   return out;
 }
@@ -176,6 +179,50 @@ export function validateHolidayRows(rows: HolidayRowInput[]): { valid: HolidayRo
   return { valid, errors };
 }
 
+/* ------------------------------------------------------------------ which calendar a holiday row belongs to */
+
+export type CalendarTarget =
+  | { scope: 'COMPANY'; key: string; label: string }
+  | { scope: 'COUNTRY'; countryCode: string; key: string; label: string }
+  | { scope: 'BRANCH'; branchId: number; key: string; label: string }
+  | { scope: 'SITE'; siteId: number; key: string; label: string };
+
+export interface TargetLists {
+  countries: { isoCode: string; name: string }[];
+  branches: { id: number; name: string; code: string }[];
+  sites: { id: number; name: string }[];
+}
+
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/**
+ * The "Applies to" and "Value" columns of the holiday import. Applies to is Company, Country, Branch or Site; Value is the
+ * country (name or code), branch (name or code) or site name. Both empty means the calendar chosen on screen.
+ */
+export function resolveCalendarTarget(appliesTo: string | null, value: string | null, lists: TargetLists): { target: CalendarTarget | null; error?: string } {
+  const kind = (appliesTo ?? '').trim().toUpperCase();
+  const v = (value ?? '').trim();
+  if (!kind) return v ? { target: null, error: 'Value is filled in but "Applies to" is empty. Use Company, Country, Branch or Site' } : { target: null };
+  if (kind === 'COMPANY') return { target: { scope: 'COMPANY', key: 'COMPANY', label: 'Company' } };
+  if (!v) return { target: null, error: `Value is required when Applies to is ${kind.charAt(0)}${kind.slice(1).toLowerCase()} (enter the name)` };
+  if (kind === 'COUNTRY') {
+    const hits = lists.countries.filter((c) => same(c.isoCode, v) || same(c.name, v));
+    if (hits.length !== 1) return { target: null, error: hits.length ? `More than one country matches "${v}"` : `No country "${v}" in System settings → Countries` };
+    return { target: { scope: 'COUNTRY', countryCode: hits[0].isoCode, key: `COUNTRY:${hits[0].isoCode}`, label: `Country · ${hits[0].name}` } };
+  }
+  if (kind === 'BRANCH') {
+    const hits = lists.branches.filter((b) => same(b.name, v) || same(b.code, v));
+    if (hits.length !== 1) return { target: null, error: hits.length ? `More than one branch matches "${v}"` : `No branch named "${v}"` };
+    return { target: { scope: 'BRANCH', branchId: hits[0].id, key: `BRANCH:${hits[0].id}`, label: `Branch · ${hits[0].name}` } };
+  }
+  if (kind === 'SITE') {
+    const hits = lists.sites.filter((x) => same(x.name, v));
+    if (hits.length !== 1) return { target: null, error: hits.length ? `More than one site matches "${v}"` : `No site named "${v}"` };
+    return { target: { scope: 'SITE', siteId: hits[0].id, key: `SITE:${hits[0].id}`, label: `Site · ${hits[0].name}` } };
+  }
+  return { target: null, error: 'Applies to must be Company, Country, Branch or Site' };
+}
+
 export interface RosterRowInput {
   row: number;
   employeeCode: string | null;
@@ -228,23 +275,25 @@ export function validateRosterRows(
 
 /* ------------------------------------------------------------------ assignments given to a branch, country or the company */
 
-export type GroupScope = 'BRANCH' | 'COUNTRY' | 'COMPANY';
+export type GroupScope = 'SITE' | 'BRANCH' | 'COUNTRY' | 'COMPANY';
 
 export interface GroupAssignmentLike {
   scope: string;
   countryCode: string | null;
   branchId: number | null;
+  siteId?: number | null;
   effectiveFrom: Date;
   effectiveTo: Date | null;
 }
 
 /**
  * The assignment that applies to an employee on a date when they have none of their own:
- * their branch's first, then their country's, then the company's.
+ * their site's first, then their branch's, then their country's, then the company's.
  */
-export function pickGroupAssignment<T extends GroupAssignmentLike>(list: T[], who: { branchId: number | null; country: string }, date: Date): T | null {
+export function pickGroupAssignment<T extends GroupAssignmentLike>(list: T[], who: { branchId: number | null; siteId?: number | null; country: string }, date: Date): T | null {
   const live = list.filter((a) => a.effectiveFrom <= date && (a.effectiveTo === null || a.effectiveTo >= date));
   return (
+    live.find((a) => a.scope === 'SITE' && !!a.siteId && a.siteId === who.siteId) ??
     live.find((a) => a.scope === 'BRANCH' && a.branchId !== null && a.branchId === who.branchId) ??
     live.find((a) => a.scope === 'COUNTRY' && a.countryCode === who.country) ??
     live.find((a) => a.scope === 'COMPANY') ??

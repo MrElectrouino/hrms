@@ -4,6 +4,7 @@ import {
   parseHolidayOrder,
   parseIsoDate,
   pickGroupAssignment,
+  resolveCalendarTarget,
   pickHolidayCalendar,
   validateHolidayRows,
   validateRosterRows,
@@ -12,14 +13,21 @@ import {
 } from './attendance-logic';
 
 describe('holiday calendar order', () => {
-  it('defaults to employee, branch, country, company', () => {
-    expect(parseHolidayOrder(null)).toEqual(['EMPLOYEE', 'BRANCH', 'COUNTRY', 'COMPANY']);
+  it('defaults to employee, site, branch, country, company', () => {
+    expect(parseHolidayOrder(null)).toEqual(['EMPLOYEE', 'SITE', 'BRANCH', 'COUNTRY', 'COMPANY']);
   });
 
   it('keeps a custom order and appends anything missing', () => {
-    expect(parseHolidayOrder('["COUNTRY","COMPANY"]')).toEqual(['COUNTRY', 'COMPANY', 'EMPLOYEE', 'BRANCH']);
-    expect(parseHolidayOrder('["COMPANY","COMPANY","BOGUS","BRANCH"]')).toEqual(['COMPANY', 'BRANCH', 'EMPLOYEE', 'COUNTRY']);
-    expect(parseHolidayOrder('not json')).toEqual(['EMPLOYEE', 'BRANCH', 'COUNTRY', 'COMPANY']);
+    expect(parseHolidayOrder('["COUNTRY","COMPANY"]')).toEqual(['COUNTRY', 'COMPANY', 'EMPLOYEE', 'SITE', 'BRANCH']);
+  });
+
+  it('an order saved before sites existed gets the site level just before the branch level', () => {
+    expect(parseHolidayOrder('["EMPLOYEE","BRANCH","COUNTRY","COMPANY"]')).toEqual(['EMPLOYEE', 'SITE', 'BRANCH', 'COUNTRY', 'COMPANY']);
+  });
+
+  it('drops repeated and unknown entries, and a bad value falls back to the default', () => {
+    expect(parseHolidayOrder('["COMPANY","COMPANY","BOGUS","BRANCH"]')).toEqual(['COMPANY', 'SITE', 'BRANCH', 'EMPLOYEE', 'COUNTRY']);
+    expect(parseHolidayOrder('not json')).toEqual(['EMPLOYEE', 'SITE', 'BRANCH', 'COUNTRY', 'COMPANY']);
   });
 
   it('the first level that has a calendar wins, so changing the order changes the result', () => {
@@ -138,6 +146,14 @@ describe('pickGroupAssignment', () => {
     expect(pickGroupAssignment([company], who, d('2026-06-01'))).toBe(company);
   });
 
+  it('a site beats its branch', () => {
+    const site = mk('SITE', { siteId: 3 });
+    const branch = mk('BRANCH', { branchId: 5 });
+    expect(pickGroupAssignment([branch, site], { ...who, siteId: 3 }, d('2026-06-01'))).toBe(site);
+    expect(pickGroupAssignment([branch, site], { ...who, siteId: 4 }, d('2026-06-01'))).toBe(branch);
+    expect(pickGroupAssignment([branch, site], who, d('2026-06-01'))).toBe(branch);
+  });
+
   it('ignores other branches and countries', () => {
     expect(pickGroupAssignment([mk('BRANCH', { branchId: 9 }), mk('COUNTRY', { countryCode: 'IN' })], who, d('2026-06-01'))).toBeNull();
   });
@@ -154,5 +170,37 @@ describe('pickGroupAssignment', () => {
     const branch = mk('BRANCH', { branchId: 5, effectiveTo: d('2026-02-28') });
     const company = mk('COMPANY');
     expect(pickGroupAssignment([branch, company], who, d('2026-06-01'))).toBe(company);
+  });
+});
+
+describe('resolveCalendarTarget (Applies to / Value columns of the holiday import)', () => {
+  const lists = {
+    countries: [{ isoCode: 'IN', name: 'India' }, { isoCode: 'AE', name: 'United Arab Emirates' }],
+    branches: [{ id: 1, name: 'Pune HQ', code: 'PUN' }, { id: 2, name: 'Dubai Office', code: 'DXB' }],
+    sites: [{ id: 7, name: 'Plant 1' }],
+  };
+  const r = (a: string | null, v: string | null) => resolveCalendarTarget(a, v, lists);
+
+  it('both empty means the calendar chosen on screen', () => {
+    expect(r(null, null)).toEqual({ target: null });
+    expect(r('', '  ')).toEqual({ target: null });
+  });
+  it('Company needs no value', () => {
+    expect(r('Company', null).target).toMatchObject({ scope: 'COMPANY' });
+  });
+  it('finds a branch by name or code, ignoring case', () => {
+    expect(r('branch', 'pune hq').target).toMatchObject({ scope: 'BRANCH', branchId: 1 });
+    expect(r('Branch', 'DXB').target).toMatchObject({ scope: 'BRANCH', branchId: 2 });
+  });
+  it('finds a country by name or code, and a site by name', () => {
+    expect(r('Country', 'India').target).toMatchObject({ scope: 'COUNTRY', countryCode: 'IN' });
+    expect(r('COUNTRY', 'ae').target).toMatchObject({ scope: 'COUNTRY', countryCode: 'AE' });
+    expect(r('Site', 'plant 1').target).toMatchObject({ scope: 'SITE', siteId: 7 });
+  });
+  it('says what is wrong', () => {
+    expect(r('Branch', 'Nowhere').error).toMatch(/No branch named "Nowhere"/);
+    expect(r('Branch', '').error).toMatch(/Value is required/);
+    expect(r('Planet', 'x').error).toMatch(/Company, Country, Branch or Site/);
+    expect(r('', 'Pune HQ').error).toMatch(/Applies to/);
   });
 });

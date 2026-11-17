@@ -9,10 +9,34 @@ import LeavePoliciesPanel from '../leave/LeavePoliciesPanel';
 
 const blankType: LeaveTypePayload = {
   code: '', name: '', isPaid: true, balanceTracking: true, accrual: 'NONE', annualDays: 0, allowHalfDay: true, allowNegative: false,
-  requiresDocument: false, documentAfterDays: 0, maxDaysPerRequest: null, isSandwichEligible: false, isCompOff: false, isActive: true,
+  requiresDocument: false, documentAfterDays: 0, maxDaysPerRequest: null, isSandwichEligible: false, requiresApproval: true, isEncashable: false, excludeWeeklyOffs: true, excludeHolidays: true, resetBalance: true, carryForwardType: 'NONE', calendarStartMonth: 1, isCompOff: false, isActive: true,
   countryCodes: [],
 };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** A titled block of related settings in the leave type form. */
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3 border-t border-gray-200 pt-4 first:border-t-0 first:pt-0">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500">{title}</h4>
+      {children}
+    </section>
+  );
+}
+
+/** An on / off switch with a label and a line of help. */
+function Switch({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 text-sm text-gray-700">
+      <span className="relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center">
+        <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
+        <span className="absolute inset-0 rounded-full bg-gray-300 transition peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/40" />
+        <span className="absolute left-0.5 h-4 w-4 rounded-full bg-white shadow transition peer-checked:translate-x-4" />
+      </span>
+      <span><span className="font-medium">{label}</span>{hint && <span className="block text-xs text-gray-500">{hint}</span>}</span>
+    </label>
+  );
+}
 
 /** System Settings > Leave configuration: leave types, the sandwich leave switch, comp off, and the leave year. */
 export default function LeaveConfigPanel() {
@@ -171,10 +195,7 @@ export default function LeaveConfigPanel() {
           </div>
 
           <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h3 className="text-base font-semibold text-gray-900">Leave year and comp off</h3>
-            <label className="block text-sm font-medium text-gray-700">Leave year starts in
-              <Select className={fieldClass} value={settings.leaveYearStartMonth} onChange={(e) => set({ leaveYearStartMonth: Number(e.target.value) })}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</Select>
-            </label>
+            <h3 className="text-base font-semibold text-gray-900">Comp off</h3>
             <label className="flex items-start gap-3 text-sm text-gray-700">
               <input type="checkbox" className={`${check} mt-0.5`} checked={settings.compOffEnabled} onChange={(e) => set({ compOffEnabled: e.target.checked })} />
               <span><span className="font-medium">Earn comp off for working on a weekly off or holiday</span><span className="block text-xs text-gray-500">Credited the moment a manager ticks "Eligible for comp off" while approving the day, if enough time was worked.</span></span>
@@ -205,52 +226,98 @@ export default function LeaveConfigPanel() {
           </>}
         >
           {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
-          <div className="grid grid-cols-3 gap-4">
-            <label className="col-span-1 block text-sm font-medium text-gray-700">Code<input className={`${fieldClass} font-mono uppercase`} maxLength={10} value={editing.form.code} onChange={(e) => setF({ code: e.target.value })} /></label>
-            <label className="col-span-2 block text-sm font-medium text-gray-700">Name<input className={fieldClass} maxLength={60} value={editing.form.name} onChange={(e) => setF({ name: e.target.value })} /></label>
-          </div>
-          <label className="block text-sm font-medium text-gray-700">
-            Countries
-            <Select
-              multiple
-              className={fieldClass}
-              values={editing.form.countryCodes}
-              onValuesChange={(v) => setF({ countryCodes: v })}
-              options={countries.map((c) => ({ value: c.isoCode, label: c.name }))}
-              allText="All countries"
-              noun="countries"
-              placeholder={countries.length === 0 ? 'Add countries in System Settings first' : 'Select…'}
-            />
-            <span className="mt-1 block text-xs text-gray-500">Leave empty for every country, or pick which ones this leave type applies to.</span>
-          </label>
-          <div className="space-y-3">
-            {([
-              ['isPaid', 'Paid leave', ''],
-              ['balanceTracking', 'Keep a balance', 'Off for types such as loss of pay, where days are recorded but not limited.'],
-              ['allowHalfDay', 'Allow half days', ''],
-              ['allowNegative', 'Allow going over the balance', 'The days beyond the balance are recorded, not blocked.'],
-              ['isCompOff', 'Comp off', 'Earned by working on an off day instead of being credited each year.'],
-              ['isSandwichEligible', 'Eligible for the sandwich leave policy', 'Used only when the sandwich policy is switched on above.'],
-              ['requiresDocument', 'Needs a supporting document', 'Shown to the employee as a reminder; HR keeps the document.'],
-              ['isActive', 'Active', ''],
-            ] as const).map(([k, label, hint]) => (
-              <label key={k} className="flex items-start gap-3 text-sm text-gray-700">
-                <input type="checkbox" className={`${check} mt-0.5`} checked={!!editing.form[k]} onChange={(e) => setF({ [k]: e.target.checked } as Partial<LeaveTypePayload>)} />
-                <span><span className="font-medium">{label}</span>{hint && <span className="block text-xs text-gray-500">{hint}</span>}</span>
-              </label>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <label className="block text-sm font-medium text-gray-700">How days are credited
-              <Select className={fieldClass} value={editing.form.accrual} onChange={(e) => setF({ accrual: e.target.value as LeaveType['accrual'] })}>
-                <option value="NONE">Not credited automatically</option><option value="ANNUAL">All at the start of the leave year</option><option value="MONTHLY">A twelfth each month</option>
-              </Select>
+
+          <Group title="Basics">
+            <div className="grid grid-cols-3 gap-4">
+              <label className="col-span-1 block text-sm font-medium text-gray-700">Code<input className={`${fieldClass} font-mono uppercase`} maxLength={10} value={editing.form.code} onChange={(e) => setF({ code: e.target.value })} /></label>
+              <label className="col-span-2 block text-sm font-medium text-gray-700">Name<input className={fieldClass} maxLength={60} value={editing.form.name} onChange={(e) => setF({ name: e.target.value })} /></label>
+            </div>
+            <label className="block text-sm font-medium text-gray-700">Countries
+              <Select
+                multiple
+                className={fieldClass}
+                values={editing.form.countryCodes}
+                onValuesChange={(v) => setF({ countryCodes: v })}
+                options={countries.map((c) => ({ value: c.isoCode, label: c.name }))}
+                allText="All countries"
+                noun="countries"
+                placeholder={countries.length === 0 ? 'Add countries in System Settings first' : 'Select…'}
+              />
+              <span className="mt-1 block text-xs text-gray-500">Leave empty for every country, or pick which ones this leave type applies to.</span>
             </label>
-            <label className="block text-sm font-medium text-gray-700">Days per year<input type="number" min="0" step="0.5" disabled={editing.form.accrual === 'NONE'} className={fieldClass} value={editing.form.annualDays} onChange={(e) => setF({ annualDays: e.target.value })} /></label>
+          </Group>
+
+          <Group title="Days">
+            <Switch label="Paid leave" checked={editing.form.isPaid} onChange={(v) => setF({ isPaid: v })} />
+            <Switch label="Keep a balance" hint="Off for types such as loss of pay, where days are recorded but not limited." checked={editing.form.balanceTracking} onChange={(v) => setF({ balanceTracking: v, ...(v ? {} : { accrual: 'NONE' as const, resetBalance: true }) })} />
+            {editing.form.balanceTracking && !editing.form.isCompOff && (
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block text-sm font-medium text-gray-700">How days are credited
+                  <Select className={fieldClass} value={editing.form.accrual} onChange={(e) => setF({ accrual: e.target.value as LeaveType['accrual'] })}>
+                    <option value="NONE">Not credited automatically</option><option value="ANNUAL">All at the start of the calendar</option><option value="MONTHLY">A twelfth each month</option>
+                  </Select>
+                </label>
+                <label className="block text-sm font-medium text-gray-700">Days per year<input type="number" min="0" step="0.5" disabled={editing.form.accrual === 'NONE'} className={fieldClass} value={editing.form.annualDays} onChange={(e) => setF({ annualDays: e.target.value })} /></label>
+                <p className="col-span-2 -mt-2 text-xs text-gray-500">Used only when no leave policy covers the employee. Policies are under the Leave policies tab.</p>
+              </div>
+            )}
             <label className="block text-sm font-medium text-gray-700">Longest request (days)<input type="number" min="1" placeholder="No limit" className={fieldClass} value={editing.form.maxDaysPerRequest ?? ''} onChange={(e) => setF({ maxDaysPerRequest: e.target.value ? Number(e.target.value) : null })} /></label>
-            <label className="block text-sm font-medium text-gray-700">Document needed after (days)<input type="number" min="0" className={fieldClass} value={editing.form.documentAfterDays} onChange={(e) => setF({ documentAfterDays: Number(e.target.value) })} /></label>
-          </div>
-          <p className="text-xs text-gray-500">Entitlement, service slabs and the statutory amounts vary by country and company policy. Set the values your policy needs; none are assumed.</p>
+            <Switch label="Allow half days" checked={editing.form.allowHalfDay} onChange={(v) => setF({ allowHalfDay: v })} />
+            {editing.form.balanceTracking && <Switch label="Allow going over the balance" hint="The days beyond the balance are recorded, not blocked." checked={editing.form.allowNegative} onChange={(v) => setF({ allowNegative: v })} />}
+          </Group>
+
+          <Group title="Approval and documents">
+            <Switch label="Require approval" hint="Off: the leave is approved the moment the employee sends it, and the days come off the balance at once." checked={editing.form.requiresApproval} onChange={(v) => setF({ requiresApproval: v })} />
+            <Switch label="Require attachment" hint="Reminds the employee that a document is needed. Uploading a file with the request is not built yet; HR keeps the document." checked={editing.form.requiresDocument} onChange={(v) => setF({ requiresDocument: v })} />
+            {editing.form.requiresDocument && (
+              <label className="block text-sm font-medium text-gray-700">Needed when the leave is longer than (days)<input type="number" min="0" className={fieldClass} value={editing.form.documentAfterDays} onChange={(e) => setF({ documentAfterDays: Number(e.target.value) })} /><span className="mt-1 block text-xs text-gray-500">0 means always.</span></label>
+            )}
+          </Group>
+
+          <Group title="Days that count">
+            <Switch label="Exclude company weekly off" hint="A weekly off inside the request is not counted as leave. Off: it counts like a working day." checked={editing.form.excludeWeeklyOffs} onChange={(v) => setF({ excludeWeeklyOffs: v })} />
+            <Switch label="Exclude holidays" hint="A holiday inside the request is not counted as leave. Off: it counts like a working day." checked={editing.form.excludeHolidays} onChange={(v) => setF({ excludeHolidays: v })} />
+            <Switch label="Eligible for the sandwich leave policy" hint="Used only when the sandwich policy is switched on in this page." checked={editing.form.isSandwichEligible} onChange={(v) => setF({ isSandwichEligible: v })} />
+          </Group>
+
+          {editing.form.balanceTracking && (
+            <Group title="Reset and calendar">
+              <Switch label="Reset leave balance" hint="On: the days credited end with the calendar period you choose below. Off: they never expire." checked={editing.form.resetBalance} onChange={(v) => setF({ resetBalance: v, ...(v ? {} : { carryForwardType: 'NONE' as const }) })} />
+              {editing.form.resetBalance && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="block text-sm font-medium text-gray-700">Calendar starts in
+                      <Select className={fieldClass} value={editing.form.calendarStartMonth ?? 1} onChange={(e) => setF({ calendarStartMonth: Number(e.target.value) })}>
+                        {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                      </Select>
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700">Calendar ends in
+                      <Select className={fieldClass} value={(((editing.form.calendarStartMonth ?? 1) + 10) % 12) + 1} onChange={(e) => setF({ calendarStartMonth: (Number(e.target.value) % 12) + 1 })}>
+                        {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                      </Select>
+                    </label>
+                    <p className="col-span-2 -mt-2 text-xs text-gray-500">The days credited for this leave type follow this calendar. Choosing the start sets the end. Do not change it once days have been credited.</p>
+                  </div>
+                  <label className="block text-sm font-medium text-gray-700">Carryforward type
+                    <Select className={fieldClass} value={editing.form.carryForwardType} onChange={(e) => setF({ carryForwardType: e.target.value as LeaveTypePayload['carryForwardType'] })}>
+                      <option value="NONE">No carryforward</option>
+                      <option value="CARRY_FORWARD">Carryforward</option>
+                    </Select>
+                    <span className="mt-1 block text-xs text-gray-500">{editing.form.carryForwardType === 'CARRY_FORWARD' ? 'Unused days move on into the next calendar period instead of being lost. There is no limit on how many.' : 'Unused days are lost when the calendar period ends.'}</span>
+                  </label>
+                </>
+              )}
+            </Group>
+          )}
+
+          <details className="group rounded-lg border border-gray-200 px-4 py-3" open={editing.form.isCompOff || editing.form.isEncashable || !editing.form.isActive}>
+            <summary className="cursor-pointer text-sm font-semibold text-gray-900">More options</summary>
+            <div className="mt-3 space-y-3">
+              <Switch label="Encashable" hint="Marks leave that may be paid out when unused. Recorded for later: nothing pays it out yet." checked={editing.form.isEncashable} onChange={(v) => setF({ isEncashable: v })} />
+              <Switch label="Comp off" hint="Earned by working on an off day instead of being credited by a calendar." checked={editing.form.isCompOff} onChange={(v) => setF({ isCompOff: v, ...(v ? { accrual: 'NONE' as const } : {}) })} />
+              <Switch label="Active" checked={editing.form.isActive} onChange={(v) => setF({ isActive: v })} />
+            </div>
+          </details>
         </Drawer>
       )}
     </div>

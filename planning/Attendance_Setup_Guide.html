@@ -89,9 +89,9 @@
     <li><b class="where">Countries, branches, employees</b>Each employee needs a branch and country of employment, and a date of joining. Policies and holiday calendars find people through these.</li>
     <li><b class="where">Work schedules</b>Attendance setup → <b>Work schedules</b>. Create at least one, for example "General 9 hours": fixed start and end, required minutes, optional automatic break.</li>
     <li><b class="where">Weekly off</b>Attendance setup → <b>Weekly off</b>. Create a template (for example Saturday and Sunday, or alternate Saturdays).</li>
-    <li><b class="where">Holiday calendars</b>Attendance setup → <b>Holiday calendars</b>. One per company, country or branch, with the holiday dates.</li>
+    <li><b class="where">Holiday calendars</b>Attendance setup → <b>Holiday calendars</b>. One per company, country, branch or site, with the holiday dates. The Excel import has Applies to (Company, Country, Branch or Site) and Value (the country, branch or site name) columns, so one file can fill several calendars at once; a calendar is created if there is none yet.</li>
     <li><b class="where">Roster (only if you use shifts)</b>Attendance setup → <b>Roster</b>: repeating shift patterns, or import from Excel.</li>
-    <li><b class="where">Assignments</b>Attendance setup → <b>Assignments</b>: choose <b>Employees</b> (one or many), <b>A branch</b>, <b>A country</b> or <b>Whole company</b>, and give them a work schedule, weekly off and roster pattern with an effective date. Group assignments reach everyone there, including later joiners; an employee's own assignment wins, then branch, then country, then company. Holiday calendars are set on the calendar itself.</li>
+    <li><b class="where">Assignments</b>Attendance setup → <b>Assignments</b>: choose <b>Employees</b> (one or many), <b>A site</b>, <b>A branch</b>, <b>A country</b> or <b>Whole company</b>, and give them a work schedule, weekly off and roster pattern with an effective date. Group assignments reach everyone there, including later joiners; an employee's own assignment wins, then site, branch, country, company. Holiday calendars are set on the calendar itself.</li>
     <li><b class="where">Shifts</b>Late and half-day thresholds live on the <b>Shift</b> (start time, "late after" minutes, "half day after" minutes). Make sure each employee who clocks in against a start time has a shift.</li>
     <li><b class="where">Attendance policy</b>System settings → <b>Attendance configuration</b> → edit the default policy, or add one per country or branch (section 6), then assign it (section 7).</li>
     <li><b class="where">Everyone-settings</b>Same page: mood and GPS requirements (section 8). Add Ramadan periods if you use a different start time then.</li>
@@ -201,12 +201,12 @@
   <h2>10. Weekly off, holidays, roster</h2>
   <p>For each day the system decides in this order, and the first one found wins:</p>
   <div class="flow">
-    <div><b>1. Holiday</b>The employee's holiday calendar. A holiday can span a date range.</div>
+    <div><b>1. Holiday</b>The employee's holiday calendar, chosen by the order set on the Holiday calendars tab (default: the employee's own, then their site, branch, country, company). A holiday can span a date range.</div>
     <div><b>2. Roster entry</b>A specific shift or off for that employee on that date.</div>
     <div><b>3. Roster pattern</b>A repeating shift pattern assigned to the employee.</div>
     <div><b>4. Weekly off template</b>Fixed days (such as Saturday and Sunday), or rules like "2nd and 4th Saturday" or alternate weeks. Assigned with an effective date.</div>
   </div>
-  <p>Holiday calendars apply by company, country or branch; the most specific one for the employee is used. If none of 2 to 4 applies, the day is "unknown" and the system will not mark it Absent.</p>
+  <p>Holiday calendars apply by company, country, branch or site; the most specific one for the employee is used. If none of 2 to 4 applies, the day is "unknown" and the system will not mark it Absent.</p>
 </section>
 
 <section id="nightly">

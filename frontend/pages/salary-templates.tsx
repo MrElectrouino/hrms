@@ -1,16 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { SalaryTemplate, createSalaryTemplate, getSalaryTemplates, updateSalaryTemplate } from '../lib/api';
+import { CountryItem, SalaryTemplate, createSalaryTemplate, getCountries, getSalaryTemplates, updateSalaryTemplate } from '../lib/api';
 import Select from '../components/Select';
 
-const COUNTRIES = [
-  ['ALL', 'All countries'],
-  ['IN', 'India'],
-  ['AE', 'United Arab Emirates'],
-  ['GB', 'United Kingdom'],
-  ['US', 'United States'],
-];
-const countryName = (code: string) => COUNTRIES.find(([c]) => c === code)?.[1] ?? code;
 
 type Row = { label: string; code?: string };
 type Form = { id?: number; name: string; countryCode: string; components: Row[] };
@@ -26,6 +18,9 @@ const inputClass =
 export default function SalaryTemplatesPage() {
   const { isAuthenticated, user } = useAuth();
   const [templates, setTemplates] = useState<SalaryTemplate[]>([]);
+  // The countries added in System settings → Countries.
+  const [countries, setCountries] = useState<CountryItem[]>([]);
+  const countryName = (code: string) => (code === 'ALL' ? 'All countries' : countries.find((c) => c.isoCode === code)?.name ?? code);
   const [form, setForm] = useState<Form>(blank());
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -47,8 +42,10 @@ export default function SalaryTemplatesPage() {
   };
 
   useEffect(() => {
-    if (isAuthenticated && allowed) load();
-    else if (isAuthenticated) setLoading(false);
+    if (isAuthenticated && allowed) {
+      load();
+      getCountries().then((r) => setCountries(r.data)).catch(() => setCountries([]));
+    } else if (isAuthenticated) setLoading(false);
   }, [isAuthenticated, allowed]);
 
   const setRow = (i: number, label: string) =>
@@ -150,8 +147,9 @@ export default function SalaryTemplatesPage() {
           <div>
             <label htmlFor="tpl-country" className="mb-1.5 block text-xs font-medium text-gray-600">Country</label>
             <Select id="tpl-country" value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })} className={inputClass}>
-              {COUNTRIES.map(([c, n]) => (
-                <option key={c} value={c}>{n}</option>
+              <option value="ALL">All countries</option>
+              {countries.filter((c) => c.isActive || c.isoCode === form.countryCode).map((c) => (
+                <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
               ))}
             </Select>
           </div>

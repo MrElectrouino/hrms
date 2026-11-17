@@ -10,6 +10,8 @@ import {
   parseIsoDate,
   toIsoDate,
   validateHolidayRows,
+  resolveCalendarTarget,
+  CalendarTarget,
   MAX_HOLIDAY_DAYS,
   validateSchedule,
 } from './attendance-logic';
@@ -127,19 +129,21 @@ export class AttendanceSetupService {
   async listCalendars() {
     const rows = await this.prisma.holidayCalendar.findMany({
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-      include: { _count: { select: { holidays: true, assignments: true } }, branch: { select: { id: true, name: true } } },
+      include: { _count: { select: { holidays: true, assignments: true } }, branch: { select: { id: true, name: true } }, site: { select: { id: true, name: true } } },
     });
-    return rows.map(({ _count, branch, ...c }) => ({ ...c, holidayCount: _count.holidays, employeeCount: _count.assignments, branchName: branch?.name ?? null }));
+    return rows.map(({ _count, branch, site, ...c }) => ({ ...c, holidayCount: _count.holidays, employeeCount: _count.assignments, branchName: branch?.name ?? null, siteName: site?.name ?? null }));
   }
 
   private calendarData(dto: HolidayCalendarDto) {
     if (dto.scope === 'COUNTRY' && !dto.countryCode) throw new BadRequestException('Choose the country for a country calendar');
     if (dto.scope === 'BRANCH' && !dto.branchId) throw new BadRequestException('Choose the branch for a branch calendar');
+    if (dto.scope === 'SITE' && !dto.siteId) throw new BadRequestException('Choose the site for a site calendar');
     return {
       name: dto.name.trim(),
       scope: dto.scope,
       countryCode: dto.scope === 'COUNTRY' ? dto.countryCode!.toUpperCase() : null,
       branchId: dto.scope === 'BRANCH' ? dto.branchId! : null,
+      siteId: dto.scope === 'SITE' ? dto.siteId! : null,
       isActive: dto.isActive ?? true,
     };
   }
@@ -150,9 +154,15 @@ export class AttendanceSetupService {
     if (!ok) throw new BadRequestException('Unknown branch');
   }
 
+  private async assertSite(siteId: number | null) {
+    if (!siteId) return;
+    if (!(await this.prisma.site.count({ where: { id: siteId } }))) throw new BadRequestException('Unknown site');
+  }
+
   async createCalendar(dto: HolidayCalendarDto, user: CurrentUserPayload, ip?: string) {
     const data = this.calendarData(dto);
     await this.assertBranch(data.branchId);
+    await this.assertSite(data.siteId);
     try {
       const created = await this.prisma.holidayCalendar.create({ data });
       await this.log(user, 'HOLIDAY_CALENDAR_CREATED', 'HolidayCalendar', created.id, ip);
@@ -166,6 +176,7 @@ export class AttendanceSetupService {
     if (!(await this.prisma.holidayCalendar.findUnique({ where: { id } }))) throw new NotFoundException('Holiday calendar not found');
     const data = this.calendarData(dto);
     await this.assertBranch(data.branchId);
+    await this.assertSite(data.siteId);
     try {
       const updated = await this.prisma.holidayCalendar.update({ where: { id }, data });
       await this.log(user, 'HOLIDAY_CALENDAR_UPDATED', 'HolidayCalendar', id, ip);
@@ -234,35 +245,109 @@ export class AttendanceSetupService {
   }
 
   holidayTemplate() {
-    return buildTemplate('Holidays', ['Date', 'Name', 'Type', 'End date'], ['2026-01-26', 'Republic Day', 'PUBLIC', '']);
+    return buildTemplate(
+      'Holidays',
+      ['Date', 'Name', 'End date', 'Applies to', 'Value'],
+      [
+        ['2026-01-26', 'Republic Day', '', 'Country', 'India'],
+        ['2026-05-01', 'Founders day', '', 'Company', ''],
+        ['2026-03-20', 'Local festival', '2026-03-21', 'Branch', 'Name of the branch'],
+        ['2026-04-14', 'Plant shutdown', '', 'Site', 'Name of the site'],
+      ],
+    );
   }
 
   /**
-   * Excel import for one calendar. Without `commit` it only checks the file (preview). With `commit`,
-   * valid rows are saved (existing dates are updated) and the rest are reported: partial import.
+   * Excel import of holidays. Each row goes to the calendar named by its "Applies to" (Company, Country, Branch or Site) and
+   * "Value" (the country, branch or site); the calendar is created if there is none yet. A row with both empty goes to the
+   * calendar chosen on screen (`calendarId`). Without `commit` it only checks the file. With `commit`, valid rows are saved
+   * (existing dates are updated) and the rest are reported: partial import.
    */
-  async importHolidays(calendarId: number, file: { buffer: Buffer; originalname: string; size: number }, commit: boolean, user: CurrentUserPayload, ip?: string) {
-    if (!(await this.prisma.holidayCalendar.findUnique({ where: { id: calendarId } }))) throw new NotFoundException('Holiday calendar not found');
+  async importHolidays(calendarId: number | null, file: { buffer: Buffer; originalname: string; size: number }, commit: boolean, user: CurrentUserPayload, ip?: string) {
+    const chosen = calendarId === null ? null : await this.prisma.holidayCalendar.findUnique({ where: { id: calendarId } });
+    if (calendarId !== null && !chosen) throw new NotFoundException('Holiday calendar not found');
     if (file.size > IMPORT_MAX_BYTES) throw new BadRequestException('File must be 2 MB or smaller');
-    const sheet = await readSheet(file.buffer, ['Date', 'Name', 'Type'], ['End date']);
-    const { valid, errors } = validateHolidayRows(sheet.map((r) => ({ row: r.row, date: r.cells[0], name: r.cells[1], type: r.cells[2], endDate: r.cells[3] })));
+    const sheet = await readSheet(file.buffer, ['Date', 'Name'], ['End date', 'Applies to', 'Value']);
+    const lists = {
+      countries: await this.prisma.country.findMany({ where: { isActive: true }, select: { isoCode: true, name: true } }),
+      branches: await this.prisma.branch.findMany({ select: { id: true, name: true, code: true } }),
+      sites: await this.prisma.site.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+    };
 
-    if (!commit) return { committed: false, totalRows: sheet.length, validRows: valid.length, errors, preview: valid.slice(0, 50) };
+    // Work out where each row goes, then check the rows of each calendar together (a date may repeat across different calendars).
+    const errors: { row: number; message: string }[] = [];
+    const groups = new Map<string, { target: CalendarTarget | null; rows: { row: number; date: string; name: string; endDate: string }[] }>();
+    for (const r of sheet) {
+      const { target, error } = resolveCalendarTarget(r.cells[3], r.cells[4], lists);
+      if (error) {
+        errors.push({ row: r.row, message: error });
+        continue;
+      }
+      if (!target && !chosen) {
+        errors.push({ row: r.row, message: 'Fill in "Applies to" (Company, Country, Branch or Site), or choose a calendar on screen first' });
+        continue;
+      }
+      const key = target ? target.key : 'CHOSEN';
+      if (!groups.has(key)) groups.set(key, { target, rows: [] });
+      groups.get(key)!.rows.push({ row: r.row, date: r.cells[0] as string, name: r.cells[1] as string, endDate: r.cells[2] as string });
+    }
 
-    await this.prisma.$transaction(
-      valid.map((v) =>
-        this.prisma.holiday.upsert({
-          where: { calendarId_date: { calendarId, date: parseIsoDate(v.date)! } },
-          create: { calendarId, date: parseIsoDate(v.date)!, endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name, holidayType: v.holidayType },
-          update: { endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name, holidayType: v.holidayType },
-        }),
-      ),
-    );
+    const plan: { target: CalendarTarget | null; label: string; existingId: number | null; valid: ReturnType<typeof validateHolidayRows>['valid'] }[] = [];
+    for (const g of groups.values()) {
+      const checked = validateHolidayRows(g.rows.map((x) => ({ row: x.row, date: x.date, name: x.name, type: null, endDate: x.endDate })));
+      errors.push(...checked.errors);
+      if (!checked.valid.length) continue;
+      const existing = g.target ? await this.findCalendarFor(g.target) : chosen;
+      plan.push({ target: g.target, label: g.target ? g.target.label : `${chosen!.name} (chosen calendar)`, existingId: existing?.id ?? null, valid: checked.valid });
+    }
+    errors.sort((a, b) => a.row - b.row);
+    const validCount = plan.reduce((n, p) => n + p.valid.length, 0);
+    const calendars = plan.map((p) => ({ name: p.label, rows: p.valid.length, created: p.existingId === null }));
+
+    if (!commit) return { committed: false, totalRows: sheet.length, validRows: validCount, errors, calendars, preview: plan.flatMap((p) => p.valid).slice(0, 50) };
+
+    for (const p of plan) {
+      const id = p.existingId ?? (await this.createCalendarFor(p.target!, user, ip));
+      await this.prisma.$transaction(
+        p.valid.map((v) =>
+          this.prisma.holiday.upsert({
+            where: { calendarId_date: { calendarId: id, date: parseIsoDate(v.date)! } },
+            create: { calendarId: id, date: parseIsoDate(v.date)!, endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name, holidayType: v.holidayType },
+            // The file has no type column, so a holiday that already exists keeps the type it has.
+            update: { endDate: v.endDate ? parseIsoDate(v.endDate) : null, name: v.name },
+          }),
+        ),
+      );
+    }
     await this.prisma.attendanceImportLog.create({
-      data: { kind: 'HOLIDAY', fileName: file.originalname.slice(0, 200), totalRows: sheet.length, importedRows: valid.length, failedRows: errors.length, errors: errors as unknown as Prisma.InputJsonValue, createdById: user.profileId },
+      data: { kind: 'HOLIDAY', fileName: file.originalname.slice(0, 200), totalRows: sheet.length, importedRows: validCount, failedRows: errors.length, errors: errors as unknown as Prisma.InputJsonValue, createdById: user.profileId },
     });
-    await this.log(user, 'HOLIDAYS_IMPORTED', 'HolidayCalendar', calendarId, ip, { imported: valid.length, failed: errors.length });
-    return { committed: true, totalRows: sheet.length, validRows: valid.length, importedRows: valid.length, errors };
+    await this.log(user, 'HOLIDAYS_IMPORTED', 'HolidayCalendar', calendarId ?? 0, ip, { imported: validCount, failed: errors.length, calendars: calendars.length });
+    return { committed: true, totalRows: sheet.length, validRows: validCount, importedRows: validCount, errors, calendars };
+  }
+
+  /** The calendar that already exists for a company, country, branch or site (the active one first). */
+  private findCalendarFor(t: CalendarTarget) {
+    const where = t.scope === 'COMPANY' ? { scope: 'COMPANY' } : t.scope === 'COUNTRY' ? { scope: 'COUNTRY', countryCode: t.countryCode } : t.scope === 'BRANCH' ? { scope: 'BRANCH', branchId: t.branchId } : { scope: 'SITE', siteId: t.siteId };
+    return this.prisma.holidayCalendar.findFirst({ where, orderBy: [{ isActive: 'desc' }, { id: 'asc' }], select: { id: true } });
+  }
+
+  /** A new calendar for a group that had none, named after the group (made unique if the name is taken). */
+  private async createCalendarFor(t: CalendarTarget, user: CurrentUserPayload, ip?: string): Promise<number> {
+    const base = t.scope === 'COMPANY' ? 'Company holidays' : `${t.label} holidays`;
+    let name = base;
+    for (let n = 2; await this.prisma.holidayCalendar.findUnique({ where: { name } }); n++) name = `${base} (${n})`;
+    const created = await this.prisma.holidayCalendar.create({
+      data: {
+        name,
+        scope: t.scope,
+        countryCode: t.scope === 'COUNTRY' ? t.countryCode : null,
+        branchId: t.scope === 'BRANCH' ? t.branchId : null,
+        siteId: t.scope === 'SITE' ? t.siteId : null,
+      },
+    });
+    await this.log(user, 'HOLIDAY_CALENDAR_CREATED', 'HolidayCalendar', created.id, ip, { by: 'import' });
+    return created.id;
   }
 
   /* ------------------------------------------------------------------ roster patterns */
@@ -371,6 +456,7 @@ export class AttendanceSetupService {
       scope: r.scope,
       countryCode: r.countryCode,
       branchId: r.branchId,
+      siteId: r.siteId,
       ref: { id: r.refId, name: nameOf(r.kind, r.refId) },
       effectiveFrom: toIsoDate(r.effectiveFrom),
       effectiveTo: r.effectiveTo ? toIsoDate(r.effectiveTo) : null,
@@ -380,6 +466,7 @@ export class AttendanceSetupService {
 
   /** A restricted HR user (limited to some branches) may only work on those branches. */
   private assertGroupAllowed(user: CurrentUserPayload, scope: string, branchId: number | null) {
+    // A site is not tied to a branch, so a branch-limited user cannot set one.
     if (!user.activeBranchIds) return;
     if (scope !== 'BRANCH' || branchId === null || !user.activeBranchIds.includes(branchId)) throw new ForbiddenException('You can only set this for the branches you manage');
   }
@@ -388,9 +475,13 @@ export class AttendanceSetupService {
     const from = mustDate(dto.effectiveFrom, 'Effective from');
     const countryCode = dto.scope === 'COUNTRY' ? (dto.countryCode ?? '').trim().toUpperCase() : null;
     const branchId = dto.scope === 'BRANCH' ? dto.branchId ?? null : null;
+    const siteId = dto.scope === 'SITE' ? dto.siteId ?? null : null;
     if (dto.scope === 'COUNTRY' && !countryCode) throw new BadRequestException('Choose a country');
     if (dto.scope === 'BRANCH') {
       if (branchId === null || !(await this.prisma.branch.findUnique({ where: { id: branchId }, select: { id: true } }))) throw new BadRequestException('Choose a branch');
+    }
+    if (dto.scope === 'SITE') {
+      if (siteId === null || !(await this.prisma.site.findUnique({ where: { id: siteId }, select: { id: true } }))) throw new BadRequestException('Choose a site');
     }
     this.assertGroupAllowed(user, dto.scope, branchId);
     if (dto.kind === 'WORK_SCHEDULE') {
@@ -404,14 +495,14 @@ export class AttendanceSetupService {
       if (!x || !x.isActive) throw new BadRequestException('Choose an active roster pattern');
     }
     const anchor = dto.kind === 'ROSTER_PATTERN' ? (dto.anchorDate ? mustDate(dto.anchorDate, 'Cycle start date') : from) : null;
-    const where = { kind: dto.kind, scope: dto.scope, countryCode, branchId };
+    const where = { kind: dto.kind, scope: dto.scope, countryCode, branchId, siteId };
     const created = await this.newAssignment(
       from,
       () => this.prisma.attendanceGroupAssignment.findMany({ where }),
       (id, to) => this.prisma.attendanceGroupAssignment.update({ where: { id }, data: { effectiveTo: to } }),
       () => this.prisma.attendanceGroupAssignment.create({ data: { ...where, refId: dto.refId, anchorDate: anchor, effectiveFrom: from } }),
     );
-    await this.log(user, 'ATTENDANCE_GROUP_ASSIGNED', 'AttendanceGroupAssignment', (created as { id: number }).id, ip, { kind: dto.kind, scope: dto.scope, countryCode, branchId, refId: dto.refId, from: dto.effectiveFrom });
+    await this.log(user, 'ATTENDANCE_GROUP_ASSIGNED', 'AttendanceGroupAssignment', (created as { id: number }).id, ip, { kind: dto.kind, scope: dto.scope, countryCode, branchId, siteId, refId: dto.refId, from: dto.effectiveFrom });
     return created;
   }
 

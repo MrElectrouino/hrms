@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { CustomFieldAdmin, createCustomField, deleteCustomField, getCustomFieldDefinitions, updateCustomField } from '../lib/api';
+import { CountryItem, CustomFieldAdmin, createCustomField, getCountries, deleteCustomField, getCustomFieldDefinitions, updateCustomField } from '../lib/api';
 import Select from '../components/Select';
 
 const TABS = [
@@ -16,18 +16,13 @@ const TABS = [
 ];
 const TYPES = ['Text', 'Textarea', 'Number', 'Decimal', 'Date', 'Dropdown', 'Multi-select', 'Radio', 'Checkbox', 'Email', 'Phone', 'URL', 'Yes/No'];
 const OPTIONS_REQUIRED = ['Dropdown', 'Multi-select', 'Radio'];
-const COUNTRIES = [
-  ['ALL', 'All countries'],
-  ['IN', 'India'],
-  ['AE', 'United Arab Emirates'],
-  ['GB', 'United Kingdom'],
-  ['US', 'United States'],
-];
 
 const blank = { label: '', tabKey: 'personal', sectionName: '', fieldType: 'Text', options: '', countryCode: 'ALL', isRequired: false, placeholder: '', helpText: '' };
 
 export default function CustomFieldsPage() {
   const { isAuthenticated, user } = useAuth();
+  // The countries added in System settings → Countries.
+  const [countries, setCountries] = useState<CountryItem[]>([]);
   const [fields, setFields] = useState<CustomFieldAdmin[]>([]);
   const [form, setForm] = useState(blank);
   const [message, setMessage] = useState('');
@@ -49,7 +44,10 @@ export default function CustomFieldsPage() {
   };
 
   useEffect(() => {
-    if (isAuthenticated && isSystemAdmin) load();
+    if (isAuthenticated && isSystemAdmin) {
+      load();
+      getCountries().then((r) => setCountries(r.data)).catch(() => setCountries([]));
+    }
     else if (isAuthenticated) setLoading(false);
   }, [isAuthenticated, isSystemAdmin]);
 
@@ -206,7 +204,8 @@ export default function CustomFieldsPage() {
           <div>
             <label className="mb-1.5 block text-xs font-medium text-gray-600">Applies to</label>
             <Select className={inputClass} value={form.countryCode} onChange={(e) => setForm({ ...form, countryCode: e.target.value })}>
-              {COUNTRIES.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
+              <option value="ALL">All countries</option>
+              {countries.filter((c) => c.isActive || c.isoCode === form.countryCode).map((c) => <option key={c.isoCode} value={c.isoCode}>{c.name}</option>)}
             </Select>
           </div>
           <div>

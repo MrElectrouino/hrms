@@ -18,15 +18,17 @@ export interface WorkSchedule {
 }
 export type WorkSchedulePayload = Omit<WorkSchedule, 'id'>;
 
-export type HolidayLevel = 'EMPLOYEE' | 'BRANCH' | 'COUNTRY' | 'COMPANY';
+export type HolidayLevel = 'EMPLOYEE' | 'SITE' | 'BRANCH' | 'COUNTRY' | 'COMPANY';
 
 export interface HolidayCalendar {
   id: number;
   name: string;
-  scope: 'COMPANY' | 'COUNTRY' | 'BRANCH';
+  scope: 'COMPANY' | 'COUNTRY' | 'BRANCH' | 'SITE';
   countryCode: string | null;
   branchId: number | null;
   branchName: string | null;
+  siteId: number | null;
+  siteName: string | null;
   isActive: boolean;
   holidayCount: number;
   employeeCount: number;
@@ -36,6 +38,7 @@ export interface HolidayCalendarPayload {
   scope: string;
   countryCode?: string;
   branchId?: number;
+  siteId?: number;
   isActive?: boolean;
 }
 export interface Holiday {
@@ -72,6 +75,8 @@ export interface ImportResult {
   importedRows?: number;
   errors: ImportRowError[];
   preview?: Record<string, unknown>[];
+  /** Holiday import: the calendars the rows go to, and whether a new one is created. */
+  calendars?: { name: string; rows: number; created: boolean }[];
 }
 
 export interface AssignmentRow {
@@ -131,16 +136,17 @@ export const removeAssignment = (employeeId: number, kind: 'work-schedule' | 'ro
 export interface GroupAssignment {
   id: number;
   kind: 'WORK_SCHEDULE' | 'WEEKLY_OFF' | 'ROSTER_PATTERN';
-  scope: 'COMPANY' | 'COUNTRY' | 'BRANCH';
+  scope: 'COMPANY' | 'COUNTRY' | 'BRANCH' | 'SITE';
   countryCode: string | null;
   branchId: number | null;
+  siteId: number | null;
   ref: { id: number; name: string };
   effectiveFrom: string;
   effectiveTo: string | null;
   anchorDate: string | null;
 }
 export const getGroupAssignments = () => request<GroupAssignment[]>('/attendance/group-assignments');
-export const assignToGroup = (p: { kind: GroupAssignment['kind']; scope: GroupAssignment['scope']; countryCode?: string; branchId?: number; refId: number; effectiveFrom: string; anchorDate?: string }) =>
+export const assignToGroup = (p: { kind: GroupAssignment['kind']; scope: GroupAssignment['scope']; countryCode?: string; branchId?: number; siteId?: number; refId: number; effectiveFrom: string; anchorDate?: string }) =>
   request<unknown>('/attendance/group-assignments', { method: 'POST', body: json(p) });
 export const removeGroupAssignment = (id: number) => request<null>(`/attendance/group-assignments/${id}`, { method: 'DELETE' });
 export const getEmployeeCalendar = (employeeId: number, from: string, to: string) =>
@@ -154,7 +160,8 @@ function upload(path: string, file: File, commit: boolean) {
   form.append('file', file);
   return request<ImportResult>(`${path}?commit=${commit}`, { method: 'POST', body: form });
 }
-export const importHolidays = (calendarId: number, file: File, commit: boolean) => upload(`/attendance/holiday-calendars/${calendarId}/import`, file, commit);
+/** With no calendar, every row must say what it applies to (Company, Country, Branch or Site). */
+export const importHolidays = (calendarId: number | null, file: File, commit: boolean) => upload(calendarId === null ? '/attendance/holiday-calendars/import' : `/attendance/holiday-calendars/${calendarId}/import`, file, commit);
 export const importRoster = (file: File, commit: boolean) => upload('/attendance/roster/import', file, commit);
 
 /** Downloads a file from the API with the sign-in token and hands it to the browser. */

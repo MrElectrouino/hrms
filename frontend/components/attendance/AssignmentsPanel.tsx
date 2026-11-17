@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
-import { BranchOption, CountryItem, ShiftItem, getBranches, getCountries, getShifts } from '../../lib/api';
+import { BranchOption, CountryItem, MasterItem, ShiftItem, getBranches, getCountries, getShifts, getSites } from '../../lib/api';
 import { searchEmployeeOptions } from '../../lib/bulk-api';
 import {
   AssignmentRow,
@@ -33,7 +33,7 @@ import Select from '../Select';
 const today = () => new Date().toISOString().slice(0, 10);
 const monthStart = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}-01`;
 const monthEnd = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10);
-const LEVEL = { EMPLOYEE: 'Employee', BRANCH: 'Branch', COUNTRY: 'Country', COMPANY: 'Company' } as const;
+const LEVEL = { EMPLOYEE: 'Employee', SITE: 'Site', BRANCH: 'Branch', COUNTRY: 'Country', COMPANY: 'Company' } as const;
 
 type Kind = 'work-schedule' | 'roster-pattern' | 'holiday-calendar' | 'weekly-off';
 
@@ -128,10 +128,12 @@ export default function AssignmentsPanel() {
   const [names, setNames] = useState<Record<number, string>>({});
   const [picked, setPicked] = useState<number[]>([]);
   // Who the assignment is for: people, or a whole branch, country or the company.
-  const [level, setLevel] = useState<'EMPLOYEE' | 'BRANCH' | 'COUNTRY' | 'COMPANY'>('EMPLOYEE');
+  const [level, setLevel] = useState<'EMPLOYEE' | 'SITE' | 'BRANCH' | 'COUNTRY' | 'COMPANY'>('EMPLOYEE');
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [countries, setCountries] = useState<CountryItem[]>([]);
   const [branchId, setBranchId] = useState('');
+  const [sites, setSites] = useState<MasterItem[]>([]);
+  const [siteId, setSiteId] = useState('');
   const [countryCode, setCountryCode] = useState('');
   const [groupRows, setGroupRows] = useState<GroupAssignment[]>([]);
   // One employee: their own schedule history and month preview. Several: assign the same thing to all of them.
@@ -156,6 +158,7 @@ export default function AssignmentsPanel() {
     getWeeklyOffTemplates().then((r) => setWeeklyOffs(r.data.filter((t) => t.isActive))).catch(() => {});
     getShifts().then((r) => setShifts(r.data.filter((s) => s.isActive))).catch(() => {});
     getBranches().then((r) => setBranches(r.data)).catch(() => {});
+    getSites().then((r) => setSites(r.data)).catch(() => setSites([]));
     getCountries().then((r) => setCountries(r.data.filter((c) => c.isActive))).catch(() => {});
   }, [isAuthenticated]);
 
@@ -223,15 +226,16 @@ export default function AssignmentsPanel() {
   const target = useMemo(() => {
     if (level === 'COMPANY') return { scope: 'COMPANY' as const };
     if (level === 'BRANCH' && branchId) return { scope: 'BRANCH' as const, branchId: Number(branchId) };
+    if (level === 'SITE' && siteId) return { scope: 'SITE' as const, siteId: Number(siteId) };
     if (level === 'COUNTRY' && countryCode) return { scope: 'COUNTRY' as const, countryCode };
     return null;
-  }, [level, branchId, countryCode]);
-  const targetName = level === 'COMPANY' ? 'the whole company' : level === 'BRANCH' ? branches.find((b) => String(b.id) === branchId)?.name ?? '' : countries.find((c) => c.isoCode === countryCode)?.name ?? '';
+  }, [level, branchId, siteId, countryCode]);
+  const targetName = level === 'COMPANY' ? 'the whole company' : level === 'BRANCH' ? branches.find((b) => String(b.id) === branchId)?.name ?? '' : level === 'SITE' ? sites.find((x) => String(x.id) === siteId)?.name ?? '' : countries.find((c) => c.isoCode === countryCode)?.name ?? '';
   const rowsFor = (kind: GroupAssignment['kind']): AssignmentRow[] =>
     !target
       ? []
       : groupRows
-          .filter((g) => g.kind === kind && g.scope === target.scope && (g.scope !== 'BRANCH' || g.branchId === target.branchId) && (g.scope !== 'COUNTRY' || g.countryCode === target.countryCode))
+          .filter((g) => g.kind === kind && g.scope === target.scope && (g.scope !== 'BRANCH' || g.branchId === target.branchId) && (g.scope !== 'SITE' || g.siteId === target.siteId) && (g.scope !== 'COUNTRY' || g.countryCode === target.countryCode))
           .map((g) => ({ id: g.id, ref: g.ref, effectiveFrom: g.effectiveFrom, effectiveTo: g.effectiveTo, anchorDate: g.anchorDate }));
   const runGroup = async (fn: () => Promise<unknown>, ok: string) => {
     setError('');
@@ -272,13 +276,21 @@ export default function AssignmentsPanel() {
       </div>
 
       <div role="tablist" aria-label="Who is this for" className="inline-flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1">
-        {([['EMPLOYEE', 'Employees'], ['BRANCH', 'A branch'], ['COUNTRY', 'A country'], ['COMPANY', 'Whole company']] as const).map(([key, text]) => (
+        {([['EMPLOYEE', 'Employees'], ['SITE', 'A site'], ['BRANCH', 'A branch'], ['COUNTRY', 'A country'], ['COMPANY', 'Whole company']] as const).map(([key, text]) => (
           <button key={key} type="button" role="tab" aria-selected={level === key} onClick={() => { setLevel(key); setError(''); setNotice(''); }} className={`rounded-md px-3.5 py-1.5 text-sm font-medium ${level === key ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'}`}>{text}</button>
         ))}
       </div>
 
       {level !== 'EMPLOYEE' && (
         <>
+          {level === 'SITE' && (
+            <div className="max-w-sm">
+              <Select label="Site" value={siteId} onChange={(e) => setSiteId(e.target.value)} placeholder="Select a site…">
+                <option value="">Select a site…</option>
+                {sites.filter((x) => x.isActive).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </Select>
+            </div>
+          )}
           {level === 'BRANCH' && (
             <div className="max-w-sm">
               <Select label="Branch" value={branchId} onChange={(e) => setBranchId(e.target.value)} placeholder="Select a branch…">
@@ -298,11 +310,11 @@ export default function AssignmentsPanel() {
           {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">{error}</p>}
           {notice && <p className="rounded-lg border border-green-200 bg-green-50 px-3.5 py-2.5 text-sm text-green-700">{notice}</p>}
           {!target ? (
-            <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">{level === 'BRANCH' ? 'Choose a branch.' : 'Choose a country.'}</p>
+            <p className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">{level === 'BRANCH' ? 'Choose a branch.' : level === 'SITE' ? 'Choose a site.' : 'Choose a country.'}</p>
           ) : (
             <>
               <p className="rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-sm text-blue-800">
-                What you assign here applies to everyone in <b>{targetName}</b>, including people who join later, from the date you give. It is used for anyone who has no assignment of their own; a branch beats a country, and a country beats the company.
+                What you assign here applies to everyone in <b>{targetName}</b>, including people who join later, from the date you give. It is used for anyone who has no assignment of their own; a site beats its branch, a branch beats a country, and a country beats the company.
               </p>
               <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
                 <AssignmentCard title="Work schedule" hint="Required hours and start model." rows={rowsFor('WORK_SCHEDULE')} options={schedules.map((x) => ({ id: x.id, name: `${x.name} (${x.code})` }))} onAssign={(id, from) => giveToGroup('WORK_SCHEDULE', id, from)} onRemove={(id) => runGroup(() => removeGroupAssignment(id), 'Assignment removed')} />

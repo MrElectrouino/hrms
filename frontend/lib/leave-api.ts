@@ -14,6 +14,14 @@ export interface LeaveType {
   documentAfterDays: number;
   maxDaysPerRequest: number | null;
   isSandwichEligible: boolean;
+  requiresApproval: boolean;
+  isEncashable: boolean;
+  excludeWeeklyOffs: boolean;
+  excludeHolidays: boolean;
+  resetBalance: boolean;
+  carryForwardType: 'NONE' | 'CARRY_FORWARD';
+  /** Month (1-12) this type's calendar starts in; null = the company leave year. */
+  calendarStartMonth: number | null;
   isCompOff: boolean;
   isActive: boolean;
   /** Country.isoCode values this type applies to. Empty = every country. */
@@ -58,6 +66,8 @@ export interface LeavePreview {
   totalDays: number;
   days: CalcDay[];
   leaveType: { id: number; name: string; isPaid: boolean };
+  /** false = the leave is approved the moment it is sent. */
+  requiresApproval?: boolean;
   available: number | null;
   enough: boolean;
   warnings: string[];
@@ -144,12 +154,13 @@ export const cancelLeave = (id: number) => request<null>(`/leave/applications/${
 export const getLeaveCalendar = (from: string, to: string, scope: 'me' | 'team') => request<LeaveApplication[]>(`/leave/calendar?from=${from}&to=${to}&scope=${scope}`);
 export const getLedger = (employeeId?: number) => request<LedgerRow[]>(`/leave/ledger${employeeId ? `?employeeId=${employeeId}` : ''}`);
 export interface GroupTarget {
-  scope: 'BRANCH' | 'COUNTRY' | 'COMPANY';
+  scope: 'BRANCH' | 'COUNTRY' | 'COMPANY' | 'SITE';
   branchId?: number;
+  siteId?: number;
   countryCode?: string;
 }
 export const getGroupCount = (t: GroupTarget) =>
-  request<{ count: number }>(`/leave/adjust-group/count?scope=${t.scope}${t.branchId ? `&branchId=${t.branchId}` : ''}${t.countryCode ? `&countryCode=${encodeURIComponent(t.countryCode)}` : ''}`);
+  request<{ count: number }>(`/leave/adjust-group/count?scope=${t.scope}${t.branchId ? `&branchId=${t.branchId}` : ''}${t.siteId ? `&siteId=${t.siteId}` : ''}${t.countryCode ? `&countryCode=${encodeURIComponent(t.countryCode)}` : ''}`);
 export const adjustGroup = (p: GroupTarget & { leaveTypeId: number; days: number; note: string; expiresOn?: string }) =>
   request<{ total: number; done: number; failed: { employeeId: number; code: string; reason: string }[] }>('/leave/adjust-group', { method: 'POST', body: json(p) });
 export const adjustBalance = (p: { employeeId: number; leaveTypeId: number; days: number; note: string; expiresOn?: string }) => request<LeaveBalance[]>('/leave/adjust', { method: 'POST', body: json(p) });

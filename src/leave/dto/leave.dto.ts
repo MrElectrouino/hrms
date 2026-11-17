@@ -16,6 +16,14 @@ export class LeaveTypeDto {
   @Type(() => Number) @IsInt() @Min(0) documentAfterDays: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) maxDaysPerRequest?: number | null;
   @IsBoolean() isSandwichEligible: boolean;
+  @IsOptional() @IsBoolean() requiresApproval?: boolean;
+  @IsOptional() @IsBoolean() isEncashable?: boolean;
+  @IsOptional() @IsBoolean() excludeWeeklyOffs?: boolean;
+  @IsOptional() @IsBoolean() excludeHolidays?: boolean;
+  @IsOptional() @IsBoolean() resetBalance?: boolean;
+  @IsOptional() @IsIn(['NONE', 'CARRY_FORWARD']) carryForwardType?: string;
+  /** Month (1-12) this type's calendar starts in; empty = the company leave year. */
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(12) calendarStartMonth?: number | null;
   @IsBoolean() isCompOff: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;
   /** Country.isoCode values this type applies to (checked against the Countries list). Empty/omitted = every country. */
@@ -63,8 +71,9 @@ export class AdjustBalanceDto {
 
 /** The same days for everyone in a branch, a country or the whole company. */
 export class AdjustGroupDto {
-  @IsIn(['BRANCH', 'COUNTRY', 'COMPANY']) scope: string;
+  @IsIn(['BRANCH', 'COUNTRY', 'COMPANY', 'SITE']) scope: string;
   @IsOptional() @Type(() => Number) @IsInt() branchId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() siteId?: number;
   @IsOptional() @IsString() @MaxLength(10) countryCode?: string;
   @Type(() => Number) @IsInt() leaveTypeId: number;
   /** Positive adds days, negative takes days away. */

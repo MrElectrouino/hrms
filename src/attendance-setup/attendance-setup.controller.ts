@@ -153,6 +153,12 @@ export class AttendanceSetupController {
     await this.setup.removeHoliday(id, holidayId, u, ip);
     return this.ok(null, 'Holiday removed');
   }
+  @Post('holiday-calendars/import')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', FILE_OPTS))
+  async importHolidaysAny(@UploadedFile() f: Upload, @Query('commit') commit: string, @CurrentUser() u: CurrentUserPayload, @Ip() ip: string) {
+    return this.ok(await this.setup.importHolidays(null, this.file(f), commit === 'true', u, ip), 'Holiday file checked');
+  }
   @Post('holiday-calendars/:id/import')
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FileInterceptor('file', FILE_OPTS))

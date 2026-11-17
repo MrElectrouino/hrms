@@ -1,4 +1,4 @@
-import { EntitlementInput, annualForService, completedMonths, entitlementForYear, milestoneDate, pickPolicy, roundDays, validateSlabs } from './entitlement-rules';
+import { EntitlementInput, MONTHLY_LUMP, annualForService, completedMonths, entitlementForYear, lastMonthToCredit, milestoneDate, pickPolicy, roundDays, validateSlabs } from './entitlement-rules';
 
 const base: EntitlementInput = { annualDays: 24, yearStart: '2026-01-01', serviceStart: '2026-07-01', joinDate: '2026-07-01', method: 'COMPLETED_MONTHS', rounding: 'NONE' };
 const q = (o: Partial<EntitlementInput>) => entitlementForYear({ ...base, ...o });
@@ -135,5 +135,40 @@ describe('choosing the policy', () => {
     expect(pickPolicy(list, who, '2026-06-30')?.id).toBe(1);
     expect(pickPolicy(list, who, '2026-07-01')?.id).toBe(2);
     expect(pickPolicy(list, who, '2025-12-31')).toBeNull();
+  });
+});
+
+describe('lastMonthToCredit (monthly until confirmed, then the rest of the year at once)', () => {
+  // Leave year April to March. Index 0 = April.
+  const year = { yearStart: '2026-04-01', yearEnd: '2027-03-31' };
+  const at = (confirmedOn: string | null, asOf: string, currentMonthIndex: number, creditMethod = MONTHLY_LUMP) => lastMonthToCredit({ currentMonthIndex, creditMethod, confirmedOn, asOf, ...year });
+
+  it('is just the current month while on probation (no confirmation date)', () => {
+    expect(at(null, '2026-06-15', 2)).toBe(2);
+  });
+  it('is just the current month while the confirmation date is still ahead', () => {
+    expect(at('2026-07-01', '2026-06-30', 2)).toBe(2);
+  });
+  it('brings every remaining month forward once the date in this leave year is reached', () => {
+    expect(at('2026-07-01', '2026-07-01', 3)).toBe(11);
+    expect(at('2026-07-01', '2026-09-20', 5)).toBe(11);
+  });
+  it('does nothing for a confirmation in an earlier leave year (that year just runs monthly)', () => {
+    expect(at('2025-10-01', '2026-06-15', 2)).toBe(2);
+  });
+  it('does nothing for the ordinary monthly and upfront methods', () => {
+    expect(at('2026-07-01', '2026-09-20', 5, 'MONTHLY')).toBe(5);
+    expect(at('2026-07-01', '2026-09-20', 5, 'UPFRONT')).toBe(5);
+  });
+
+  it('the year adds up to the full entitlement: 3 monthly days on probation, then 9 at once', () => {
+    // 12 days a year, joined 1 April, whole months
+    const r = entitlementForYear({ annualDays: 12, yearStart: '2026-04-01', serviceStart: '2026-04-01', joinDate: '2026-04-01', method: 'COMPLETED_MONTHS', rounding: 'NONE' });
+    expect(r.quantity).toBe(12);
+    const perMonth = r.lines.map((l) => l.days);
+    const probation = perMonth.slice(0, 3).reduce((s, d) => s + d, 0); // April, May, June
+    const rest = perMonth.slice(3).reduce((s, d) => s + d, 0); // July to March, credited together at confirmation
+    expect(probation).toBe(3);
+    expect(rest).toBe(9);
   });
 });

@@ -85,3 +85,33 @@ describe('leave year and accrual', () => {
     expect(compOffExpiry('2026-12-01', null)).toBeNull();
   });
 });
+
+describe('countLeaveDays: exclusions per leave type', () => {
+  // Friday 4 Dec 2026 to Monday 7 Dec: Saturday and Sunday are weekly offs.
+  const tl = (): TimelineDay[] => ['2026-12-03', '2026-12-04', '2026-12-05', '2026-12-06', '2026-12-07', '2026-12-08'].map((date) => ({ date, kind: date === '2026-12-05' || date === '2026-12-06' ? ('WEEKLY_OFF' as const) : ('WORKING' as const) }));
+  const off = { enabled: false, typeEligible: false, weeklyOffs: true, holidays: true, requireBothSides: false };
+
+  it('leaves weekly offs out by default', () => {
+    expect(countLeaveDays(tl(), '2026-12-04', '2026-12-07', false, off).totalDays).toBe(2);
+  });
+  it('counts weekly offs like working days when they are not excluded', () => {
+    const r = countLeaveDays(tl(), '2026-12-04', '2026-12-07', false, off, new Set(), { weeklyOffs: false, holidays: true });
+    expect(r.totalDays).toBe(4);
+    expect(r.days.find((d) => d.date === '2026-12-05')).toMatchObject({ days: 1, reason: 'LEAVE' });
+  });
+  it('holidays are controlled separately from weekly offs', () => {
+    const t: TimelineDay[] = tl().map((d) => (d.date === '2026-12-07' ? { ...d, kind: 'HOLIDAY' as const } : d));
+    expect(countLeaveDays(t, '2026-12-04', '2026-12-08', false, off, new Set(), { weeklyOffs: true, holidays: true }).totalDays).toBe(2);
+    expect(countLeaveDays(t, '2026-12-04', '2026-12-08', false, off, new Set(), { weeklyOffs: true, holidays: false }).totalDays).toBe(3);
+    expect(countLeaveDays(t, '2026-12-04', '2026-12-08', false, off, new Set(), { weeklyOffs: false, holidays: false }).totalDays).toBe(5);
+  });
+});
+
+describe('countLeaveDays: a weekly off that is already counted is not counted again by the sandwich rule', () => {
+  const tl = (): TimelineDay[] => ['2026-12-03', '2026-12-04', '2026-12-05', '2026-12-06', '2026-12-07', '2026-12-08'].map((date) => ({ date, kind: date === '2026-12-05' || date === '2026-12-06' ? ('WEEKLY_OFF' as const) : ('WORKING' as const) }));
+  it('Friday to Monday with the sandwich rule on and weekly offs counted is 4 days, all plain leave', () => {
+    const r = countLeaveDays(tl(), '2026-12-04', '2026-12-07', false, { enabled: true, typeEligible: true, weeklyOffs: true, holidays: true, requireBothSides: false }, new Set(), { weeklyOffs: false, holidays: true });
+    expect(r.totalDays).toBe(4);
+    expect(r.sandwichDays).toBe(0);
+  });
+});

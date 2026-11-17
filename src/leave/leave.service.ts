@@ -10,7 +10,7 @@ import { parseIsoDate, toIsoDate } from '../attendance-setup/attendance-logic';
 import { AttendanceProcessingService } from '../attendance/attendance-processing.service';
 import { AdjustBalanceDto, AdjustGroupDto, LeaveRequestDto } from './dto/leave.dto';
 import { EntitlementService } from './entitlement.service';
-import { addMonthsIso } from './entitlement-rules';
+import { MONTHLY_LUMP, addMonthsIso, lastMonthToCredit } from './entitlement-rules';
 import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLeaveDays, isoAdd, leaveYear, monthlyCredit } from './leave-rules';
 
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
@@ -83,7 +83,7 @@ export class LeaveService {
     return { days, noRoster };
   }
 
-  private async calculate(employeeId: number, type: { id: number; isSandwichEligible: boolean }, from: string, to: string, halfDay: boolean, excludeApplicationId?: number) {
+  private async calculate(employeeId: number, type: { id: number; isSandwichEligible: boolean; excludeWeeklyOffs: boolean; excludeHolidays: boolean }, from: string, to: string, halfDay: boolean, excludeApplicationId?: number) {
     const settings = await this.prisma.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
     const { days, noRoster } = await this.timeline(employeeId, from, to);
     // Other leave of types that take part in sandwich leave, so leave on the far side of a weekend is seen.
@@ -93,7 +93,7 @@ export class LeaveService {
     });
     const existing = new Set<string>();
     for (const o of others) for (const d of o.calculation as { date: string; reason: string }[]) if (d.reason === 'LEAVE' || d.reason === 'HALF_DAY') existing.add(d.date);
-    const result = countLeaveDays(days, from, to, halfDay, { enabled: settings.sandwichEnabled, typeEligible: type.isSandwichEligible, weeklyOffs: settings.sandwichWeeklyOffs, holidays: settings.sandwichHolidays, requireBothSides: settings.sandwichRequireBothSides }, existing);
+    const result = countLeaveDays(days, from, to, halfDay, { enabled: settings.sandwichEnabled, typeEligible: type.isSandwichEligible, weeklyOffs: settings.sandwichWeeklyOffs, holidays: settings.sandwichHolidays, requireBothSides: settings.sandwichRequireBothSides }, existing, { weeklyOffs: type.excludeWeeklyOffs, holidays: type.excludeHolidays });
     return { result, noRoster };
   }
 
@@ -172,7 +172,7 @@ export class LeaveService {
     if (noRoster) warnings.push('You have no roster assigned, so every day is counted as a working day. Ask HR to assign your roster.');
     if (type.requiresDocument && result.totalDays > type.documentAfterDays) warnings.push(`${type.name} over ${type.documentAfterDays} day(s) needs a supporting document. Give it to HR.`);
     const enough = !type.balanceTracking || type.allowNegative || (available ?? 0) >= result.totalDays;
-    return { ...result, leaveType: { id: type.id, name: type.name, isPaid: type.isPaid }, available, enough, warnings };
+    return { ...result, leaveType: { id: type.id, name: type.name, isPaid: type.isPaid }, requiresApproval: type.requiresApproval, available, enough, warnings };
   }
 
   async apply(user: CurrentUserPayload, dto: LeaveRequestDto, ip?: string) {
@@ -185,6 +185,11 @@ export class LeaveService {
     const created = await this.prisma.leaveApplication.create({
       data: { employeeId, leaveTypeId: type.id, fromDate: from, toDate: to, halfDayPart: dto.halfDayPart ?? null, requestedDays: result.requestedDays, sandwichDays: result.sandwichDays, totalDays: result.totalDays, reason: dto.reason?.trim() || null, calculation: result.days as unknown as Prisma.InputJsonValue },
     });
+    // A leave type that needs no approval is approved the moment it is sent (days taken from the balance, attendance marked).
+    if (!type.requiresApproval) {
+      const app = await this.prisma.leaveApplication.findUniqueOrThrow({ where: { id: created.id }, include: { leaveType: true } });
+      await this.approveApplication(user, app, ip);
+    }
     await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_APPLIED', entityType: 'LeaveApplication', entityId: String(created.id), ipAddress: ip, metadata: { type: type.code, days: result.totalDays, sandwich: result.sandwichDays } });
     return this.present(await this.prisma.leaveApplication.findUniqueOrThrow({ where: { id: created.id }, include: this.include }));
   }
@@ -203,10 +208,15 @@ export class LeaveService {
       return;
     }
 
+    await this.approveApplication(user, app, ip, note);
+  }
+
+  /** Approves one pending application: counts the days again, takes them from the balance and marks the attendance. */
+  private async approveApplication(user: CurrentUserPayload, app: Prisma.LeaveApplicationGetPayload<{ include: { leaveType: true } }>, ip?: string, note?: string) {
     // The days are worked out again now: the roster or the holidays may have changed since it was sent.
     const fromStr = toIsoDate(app.fromDate);
     const toStr = toIsoDate(app.toDate);
-    const { result } = await this.calculate(app.employeeId, app.leaveType, fromStr, toStr, !!app.halfDayPart, id);
+    const { result } = await this.calculate(app.employeeId, app.leaveType, fromStr, toStr, !!app.halfDayPart, app.id);
     const total = result.totalDays;
 
     await this.prisma.$transaction(async (tx) => {
@@ -216,14 +226,14 @@ export class LeaveService {
         if (shortfall > 0 && !app.leaveType.allowNegative) throw new BadRequestException(`The balance does not cover ${total} days (${shortfall} short). Adjust the balance first.`);
         for (const a of allocations) {
           await tx.leaveCredit.update({ where: { id: a.creditId }, data: { remaining: { decrement: a.days } } });
-          await tx.leaveAllocation.create({ data: { applicationId: id, creditId: a.creditId, days: a.days } });
+          await tx.leaveAllocation.create({ data: { applicationId: app.id, creditId: a.creditId, days: a.days } });
         }
         const covered = total - shortfall;
-        await tx.leaveTransaction.create({ data: { employeeId: app.employeeId, leaveTypeId: app.leaveTypeId, kind: 'DEBIT', days: -covered, applicationId: id, note: shortfall > 0 ? `${shortfall} day(s) beyond the balance` : null, createdById: user.profileId } });
+        await tx.leaveTransaction.create({ data: { employeeId: app.employeeId, leaveTypeId: app.leaveTypeId, kind: 'DEBIT', days: -covered, applicationId: app.id, note: shortfall > 0 ? `${shortfall} day(s) beyond the balance` : null, createdById: user.profileId } });
       }
-      await tx.leaveApplication.update({ where: { id }, data: { status: 'APPROVED', requestedDays: result.requestedDays, sandwichDays: result.sandwichDays, totalDays: total, calculation: result.days as unknown as Prisma.InputJsonValue, decidedById: user.profileId, decidedAt: new Date(), decisionNote: note?.trim() || null } });
+      await tx.leaveApplication.update({ where: { id: app.id }, data: { status: 'APPROVED', requestedDays: result.requestedDays, sandwichDays: result.sandwichDays, totalDays: total, calculation: result.days as unknown as Prisma.InputJsonValue, decidedById: user.profileId, decidedAt: new Date(), decisionNote: note?.trim() || null } });
     });
-    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_APPROVED', entityType: 'LeaveApplication', entityId: String(id), ipAddress: ip, metadata: { days: total } });
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_APPROVED', entityType: 'LeaveApplication', entityId: String(app.id), ipAddress: ip, metadata: { days: total } });
     await this.refreshAttendance(app.employeeId, [...result.days.map((d) => d.date), ...rangeDates(fromStr, toStr)]);
   }
 
@@ -392,10 +402,10 @@ export class LeaveService {
   /* ------------------------------------------------------------------ accrual, expiry, adjustments, comp off */
 
   /** One credit with its ledger row. Returns false when the same credit already exists (so running twice adds nothing). */
-  private async creditOnce(e: { employeeId: number; leaveTypeId: number }, days: number, creditedOn: string, expiresOn: string, ref: string, note: string, userId?: number) {
+  private async creditOnce(e: { employeeId: number; leaveTypeId: number }, days: number, creditedOn: string, expiresOn: string | null, ref: string, note: string, userId?: number) {
     try {
       await this.prisma.$transaction(async (tx) => {
-        await tx.leaveCredit.create({ data: { ...e, quantity: days, remaining: days, creditedOn: parseIsoDate(creditedOn)!, expiresOn: parseIsoDate(expiresOn), source: 'ACCRUAL', sourceRef: ref, createdById: userId } });
+        await tx.leaveCredit.create({ data: { ...e, quantity: days, remaining: days, creditedOn: parseIsoDate(creditedOn)!, expiresOn: expiresOn ? parseIsoDate(expiresOn) : null, source: 'ACCRUAL', sourceRef: ref, createdById: userId } });
         await tx.leaveTransaction.create({ data: { ...e, kind: 'CREDIT', days, note, createdById: userId } });
       });
       return true;
@@ -412,14 +422,18 @@ export class LeaveService {
    */
   async runAccrual(user: CurrentUserPayload | null, asOf = today()) {
     const settings = await this.prisma.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
-    const year = leaveYear(asOf, settings.leaveYearStartMonth);
+    const defaultYear = leaveYear(asOf, settings.leaveYearStartMonth);
     const types = await this.prisma.leaveType.findMany({ where: { isActive: true, balanceTracking: true, isCompOff: false } });
     const facts = await this.entitlement.facts();
-    const monthIndex = (Number(asOf.slice(0, 4)) - Number(year.start.slice(0, 4))) * 12 + Number(asOf.slice(5, 7)) - Number(year.start.slice(5, 7));
     let credited = 0;
     let skipped = 0;
     const count = (ok: boolean) => (ok ? credited++ : skipped++);
     for (const t of types) {
+      // A leave type can have its own calendar (starting in another month); otherwise it follows the company leave year.
+      const year = t.calendarStartMonth ? leaveYear(asOf, t.calendarStartMonth) : defaultYear;
+      const monthIndex = (Number(asOf.slice(0, 4)) - Number(year.start.slice(0, 4))) * 12 + Number(asOf.slice(5, 7)) - Number(year.start.slice(5, 7));
+      // The days end with the calendar (the balance is reset), unless this type is set never to reset.
+      const expiry = t.resetBalance ? year.end : null;
       const policies = await this.entitlement.load(t.id);
       for (const e of facts) {
         if (e.joinDate > asOf) continue;
@@ -429,13 +443,18 @@ export class LeaveService {
           const { winner, result } = calc;
           await this.entitlement.record(e.id, t.id, year.start, winner, e, result);
           if (winner.creditMethod === 'UPFRONT') {
-            if (result.quantity > 0) count(await this.creditOnce(key, result.quantity, year.start, year.end, `P:${year.label}`, `${t.name} ${year.label}`, user?.profileId));
-          } else if (winner.creditMethod === 'MONTHLY') {
-            const schedule = this.entitlement.monthlySchedule(result, winner.input.rounding, winner.input.tie ?? 'UP', monthIndex);
+            if (result.quantity > 0) count(await this.creditOnce(key, result.quantity, year.start, expiry, `P:${year.label}`, `${t.name} ${year.label}`, user?.profileId));
+          } else if (winner.creditMethod === 'MONTHLY' || winner.creditMethod === MONTHLY_LUMP) {
+            // Monthly. With the confirmation rule, the month the person is confirmed in this year brings every remaining month forward.
+            const upTo = lastMonthToCredit({ currentMonthIndex: monthIndex, creditMethod: winner.creditMethod, confirmedOn: e.confirmedOn, asOf, yearStart: year.start, yearEnd: year.end });
+            const schedule = this.entitlement.monthlySchedule(result, winner.input.rounding, winner.input.tie ?? 'UP', upTo);
             for (let k = 0; k < schedule.length; k++) {
               if (schedule[k] <= 0) continue;
               const on = addMonthsIso(year.start, k);
-              count(await this.creditOnce(key, schedule[k], on, year.end, `P:${year.label}:${on.slice(0, 7)}`, `${t.name} ${on.slice(0, 7)}`, user?.profileId));
+              // A month that is not yet due is credited today; its reference is still that month's, so nothing is ever credited twice.
+              const creditedOn = k > monthIndex ? asOf : on;
+              const lumped = k > monthIndex;
+              count(await this.creditOnce(key, schedule[k], creditedOn, expiry, `P:${year.label}:${on.slice(0, 7)}`, lumped ? `${t.name} ${on.slice(0, 7)} (on confirmation)` : `${t.name} ${on.slice(0, 7)}`, user?.profileId));
             }
           }
           continue;
@@ -447,17 +466,27 @@ export class LeaveService {
         const days = monthly ? monthlyCredit(num(t.annualDays)) : num(t.annualDays);
         if (days <= 0) continue;
         const ref = monthly ? asOf.slice(0, 7) : year.label;
-        count(await this.creditOnce(key, days, monthly ? `${asOf.slice(0, 7)}-01` : year.start, year.end, ref, `${t.name} ${ref}`, user?.profileId));
+        count(await this.creditOnce(key, days, monthly ? `${asOf.slice(0, 7)}-01` : year.start, expiry, ref, `${t.name} ${ref}`, user?.profileId));
       }
     }
     if (user) await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_ACCRUAL_RUN', entityType: 'LeaveCredit', entityId: asOf, metadata: { credited, skipped } });
-    return { asOf, leaveYear: year.label, credited, alreadyCredited: skipped };
+    return { asOf, leaveYear: defaultYear.label, credited, alreadyCredited: skipped };
   }
 
   /** Balance that has passed its expiry date is closed, with a record of what expired. */
   async expireCredits(): Promise<number> {
-    const due = await this.prisma.leaveCredit.findMany({ where: { remaining: { gt: 0 }, expiresOn: { lt: parseIsoDate(today())! } } });
+    const due = await this.prisma.leaveCredit.findMany({ where: { remaining: { gt: 0 }, expiresOn: { lt: parseIsoDate(today())! } }, include: { leaveType: { select: { carryForwardType: true, calendarStartMonth: true } } } });
+    const settings = await this.prisma.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
     for (const c of due) {
+      // A leave type set to carry forward keeps the unused days of its own credits: they move on to the end of the calendar period we are in now.
+      if (c.source === 'ACCRUAL' && c.leaveType.carryForwardType === 'CARRY_FORWARD') {
+        const next = leaveYear(today(), c.leaveType.calendarStartMonth ?? settings.leaveYearStartMonth).end;
+        await this.prisma.$transaction([
+          this.prisma.leaveCredit.update({ where: { id: c.id }, data: { expiresOn: parseIsoDate(next)! } }),
+          this.prisma.leaveTransaction.create({ data: { employeeId: c.employeeId, leaveTypeId: c.leaveTypeId, kind: 'CARRY_FORWARD', days: 0, note: `Carried forward ${num(c.remaining)} day(s) from ${toIsoDate(c.expiresOn!)} to ${next}` } }),
+        ]);
+        continue;
+      }
       await this.prisma.$transaction([
         this.prisma.leaveCredit.update({ where: { id: c.id }, data: { remaining: 0 } }),
         this.prisma.leaveTransaction.create({ data: { employeeId: c.employeeId, leaveTypeId: c.leaveTypeId, kind: 'EXPIRY', days: -num(c.remaining), note: `Expired on ${toIsoDate(c.expiresOn!)}` } }),
@@ -489,24 +518,25 @@ export class LeaveService {
   }
 
   /** Active employees in a branch, a country (from the Organization tab) or the whole company, within what the caller may see. */
-  async groupEmployees(user: CurrentUserPayload, scope: string, branchId?: number, countryCode?: string): Promise<number[]> {
+  async groupEmployees(user: CurrentUserPayload, scope: string, branchId?: number, countryCode?: string, siteId?: number): Promise<number[]> {
     if (!HR_TYPES.includes(user.userTypeId)) throw new ForbiddenException('Only HR can change balances');
     if (scope === 'BRANCH' && !branchId) throw new BadRequestException('Choose a branch');
+    if (scope === 'SITE' && !siteId) throw new BadRequestException('Choose a site');
     const country = (countryCode ?? '').trim().toUpperCase();
     if (scope === 'COUNTRY' && !country) throw new BadRequestException('Choose a country');
     const facts = await this.entitlement.facts();
     return facts
-      .filter((f) => (!user.branchAccess || (f.branchId !== null && user.branchAccess.includes(f.branchId))) && (scope === 'COMPANY' || (scope === 'BRANCH' ? f.branchId === branchId : f.countryCode === country)))
+      .filter((f) => (!user.branchAccess || (f.branchId !== null && user.branchAccess.includes(f.branchId))) && (scope === 'COMPANY' || (scope === 'BRANCH' ? f.branchId === branchId : scope === 'SITE' ? f.siteId === siteId : f.countryCode === country)))
       .map((f) => f.id);
   }
 
-  async groupCount(user: CurrentUserPayload, scope: string, branchId?: number, countryCode?: string) {
-    return { count: (await this.groupEmployees(user, scope, branchId, countryCode)).length };
+  async groupCount(user: CurrentUserPayload, scope: string, branchId?: number, countryCode?: string, siteId?: number) {
+    return { count: (await this.groupEmployees(user, scope, branchId, countryCode, siteId)).length };
   }
 
   /** The same adjustment for each person in the group, one at a time; says who it could not be done for. */
   async adjustGroup(user: CurrentUserPayload, dto: AdjustGroupDto, ip?: string) {
-    const ids = await this.groupEmployees(user, dto.scope, dto.branchId, dto.countryCode);
+    const ids = await this.groupEmployees(user, dto.scope, dto.branchId, dto.countryCode, dto.siteId);
     if (!ids.length) throw new BadRequestException('There are no active employees in that group');
     const codes = new Map((await this.prisma.employee.findMany({ where: { id: { in: ids } }, select: { id: true, employeeCode: true } })).map((e) => [e.id, e.employeeCode]));
     const failed: { employeeId: number; code: string; reason: string }[] = [];
@@ -519,7 +549,7 @@ export class LeaveService {
         failed.push({ employeeId, code: codes.get(employeeId) ?? String(employeeId), reason: (e as Error).message });
       }
     }
-    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_BALANCE_ADJUSTED_GROUP', entityType: 'LeaveType', entityId: String(dto.leaveTypeId), ipAddress: ip, metadata: { scope: dto.scope, branchId: dto.branchId ?? null, countryCode: dto.countryCode ?? null, days: dto.days, done, failed: failed.length } });
+    await this.audit.log({ actorProfileId: user.profileId, action: 'LEAVE_BALANCE_ADJUSTED_GROUP', entityType: 'LeaveType', entityId: String(dto.leaveTypeId), ipAddress: ip, metadata: { scope: dto.scope, branchId: dto.branchId ?? null, siteId: dto.siteId ?? null, countryCode: dto.countryCode ?? null, days: dto.days, done, failed: failed.length } });
     return { total: ids.length, done, failed };
   }
 

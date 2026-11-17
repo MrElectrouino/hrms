@@ -12,7 +12,7 @@ export class SlabDto {
 export class PolicyRuleDto {
   @Type(() => Number) @IsInt() leaveTypeId: number;
   @Type(() => Number) @IsNumber() @Min(0) @Max(366) annualDays: number;
-  @IsIn(['UPFRONT', 'MONTHLY', 'NONE']) creditMethod: string;
+  @IsIn(['UPFRONT', 'MONTHLY', 'MONTHLY_LUMP', 'NONE']) creditMethod: string;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SlabDto) slabs?: SlabDto[];
   @IsIn(['NEXT_YEAR', 'IMMEDIATE']) slabTiming: string;
   @IsIn(['NONE', 'COMPLETED_MONTHS', 'STARTED_MONTHS', 'CUTOFF_DAY', 'EXACT_DAYS']) proration: string;

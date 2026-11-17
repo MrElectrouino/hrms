@@ -131,7 +131,7 @@
   <ol class="steps">
     <li><b class="where">Countries and branches</b>System settings → <b>Countries</b>: add your countries. Administration → <b>Masters</b> → <b>Branches</b>: add each branch and choose its country.</li>
     <li><b class="where">Employee details</b>On every employee's profile set the <b>Country of employment</b> and <b>Branch</b> (Organization tab), and the <b>Employment type</b> and <b>Date of joining</b> (Employment tab). Bulk update can set branch and employment type for many people at once.</li>
-    <li><b class="where">Leave year</b>System settings → <b>Leave configuration</b> → <i>Leave year starts in</i>. Choose January for a calendar year, April for April–March, and so on. All balances and expiry follow this.</li>
+    <li><b class="where">Calendar of each leave type</b>There is no company-wide leave year setting any more. Each leave type has its own calendar (<i>Calendar starts in</i> and <i>ends in</i>, in whole months), set in the next step.</li>
     <li><b class="where">Leave types</b>Same page → <b>Add leave type</b>. Create Annual, Casual, Medical, Unpaid and so on (settings in section 5). <b>Leave "Comp off" unticked</b> unless the type is only earned by working on off days. Leave <b>Countries</b> empty unless the type is only for employees working in one or more specific countries.</li>
     <li><b class="where">Leave policies</b>System settings → <b>Leave configuration</b> → <b>Leave policies</b> → <b>New policy</b>. Choose who it applies to, the start date, and add each leave type with its days per year and how it is credited (settings in section 6). Create one policy per group that has different rules, for example one per country.</li>
     <li><b class="where">Check one employee</b>On the Leave configuration → Leave policies tab, use <b>Check an employee</b>: choose an employee, a leave type and the leave year start. It shows which policy applies and how the days were worked out, month by month, without saving anything. If it says "No policy covers this employee", fix the scope or the employee's details.</li>
@@ -150,13 +150,19 @@
     <tr><td>Accrual and days per year</td><td>The type's <b>own</b> rule, used only when <b>no leave policy covers the employee</b>: <code>No accrual</code>, <code>Annual</code> (all at the start of the leave year) or <code>Monthly</code> (a twelfth each month).</td></tr>
     <tr><td>Allow half day</td><td>Employees may take a single day as the first or second half.</td></tr>
     <tr><td>Allow negative balance</td><td>Employees may apply for more days than they have. Off by default.</td></tr>
-    <tr><td>Needs a document</td><td>A reminder only: whether a document is expected, and after how many days.</td></tr>
+    <tr><td>Reset leave balance</td><td>On (the default): the days credited for a calendar period end with it. Off: they never expire. Credits you add by hand keep the expiry you gave them.</td></tr>
+    <tr><td>Carryforward type</td><td>Shown while reset is on. <b>No carryforward</b>: unused days are lost when the period ends. <b>Carryforward</b>: unused days move on into the next period (no limit), with a "Carried forward" line in the ledger.</td></tr>
+    <tr><td>Calendar starts in / ends in</td><td>The leave type's own calendar, in whole months (for example April to March). Choosing the start sets the end, and the other way round. Empty means the company leave year. Credits, monthly shares and expiry for this type follow it. Do not change it once days have been credited.</td></tr>
+    <tr><td>Require approval</td><td>On (the default): a manager or HR must approve. Off: the leave is approved the moment the employee sends it, and the days come off the balance at once.</td></tr>
+    <tr><td>Require attachment</td><td>A reminder only: a document is expected, after the number of days you set. Uploading a file with the request is not built yet.</td></tr>
+    <tr><td>Encashable</td><td>Marks leave that may be paid out when unused. Recorded for later; nothing pays it out yet.</td></tr>
+    <tr><td>Exclude company weekly off / Exclude holidays</td><td>On (the default): a weekly off or holiday inside the request does not use up leave days. Off: it counts like a working day. Each is set separately per leave type.</td></tr>
     <tr><td>Maximum days per request</td><td>The longest single request allowed.</td></tr>
     <tr><td>Sandwich leave</td><td>Whether this type takes part in the sandwich rule (off days between two leave days count as leave). Also needs the organization switch below the types.</td></tr>
     <tr><td><b>Comp off</b></td><td>The type is earned only by comp off. It is <b>left out of leave policies</b> and not credited yearly. Tick it only for a real comp off type.</td></tr>
     <tr><td><b>Countries</b></td><td>Which countries this type applies to. Empty means every country. An employee only sees types that apply to their own country of employment (Organization tab) when applying for leave; a type they already hold a balance for still shows even if it no longer applies to their country.</td></tr>
   </table>
-  <p>The same page has <b>Leave year and comp off</b> and the <b>sandwich leave</b> switch with its options (weekly offs, holidays, both sides or either side).</p>
+  <p>The same page has the <b>Comp off</b> settings and the <b>sandwich leave</b> switch with its options (weekly offs, holidays, both sides or either side).</p>
   <div class="note info">Countries come from System settings → <b>Countries</b>. Leave configuration → <b>Leave policies</b> and <b>Balances</b> always show every leave type regardless of country, since HR there manages any employee.</div>
 </section>
 
@@ -172,11 +178,12 @@
     <tr><td>Priority</td><td>Breaks a tie between equally specific policies.</td></tr>
     <tr><td>Switched on</td><td>Off hides the policy from calculations.</td></tr>
   </table>
+  <div class="note info"><b>Probation, then payroll: "monthly until confirmed, then the rest at once".</b> Choose <i>A share each month; the rest of the year at once when confirmed</i> and set the policy to the employee type (for example Trainee or Probation). The employee is credited one share a month, usable straight away. When their <b>Date of confirmation</b> (Employment tab) is set and reached, every remaining month of that leave year is credited at once, on top of what they already have. Example: 12 days a year, April to June on probation gives 3 days; confirmed on 1 July, the other 9 are credited that day, 12 in all. It only brings the <i>current</i> leave year forward; later years run monthly as normal, and a confirmation date in an earlier year changes nothing. Running the credit again never doubles anything. The 24 days after 2 years is done with a service slab (0 to 24 months: 12 days, from 24 months: 24 days, starting immediately).</div>
   <h3>The rule for each leave type in the policy</h3>
   <table>
     <tr><th>Field</th><th>Meaning</th></tr>
     <tr><td>Days per year</td><td>The full yearly amount. Half days are fine (for example 1.5).</td></tr>
-    <tr><td>Credited</td><td><b>Whole year on the first day</b> (upfront), <b>A share each month</b>, or <b>Not credited automatically</b> (you add days by hand).</td></tr>
+    <tr><td>Credited</td><td><b>Whole year on the first day</b> (upfront), <b>A share each month</b>, <b>A share each month; the rest of the year at once when confirmed</b> (probation rule, see below), or <b>Not credited automatically</b> (you add days by hand).</td></tr>
     <tr><td>Joining part-way through the year</td><td><b>No proration</b> (full year), <b>Completed months</b> (only full months after joining), <b>Started months</b> (the joining month counts), <b>Cut-off day</b> (the joining month counts if they joined by that day), or <b>Exact calendar days</b>.</td></tr>
     <tr><td>Rounding</td><td>None, down, up, nearest, nearest half day, up to a half day, down to a half day. "Exactly halfway rounds" up or down.</td></tr>
     <tr><td>At least / At most</td><td>A floor and a ceiling after rounding.</td></tr>
@@ -230,7 +237,7 @@
   <h2>9. Adding or removing days by hand</h2>
   <ol class="steps">
     <li><b class="where">Open the page</b>Administration → <b>Leave balances</b> (HR Admin or System Admin).</li>
-    <li><b class="where">Choose the employee</b>Use the Employees list (it has a search box). You can tick several employees to give them all the same days at once, or choose <b>A branch</b>, <b>A country</b> or <b>Whole company</b> to change everyone there in one go (you are asked to confirm, with the number of people, first).</li>
+    <li><b class="where">Choose the employee</b>Use the Employees list (it has a search box). You can tick several employees to give them all the same days at once, or choose <b>A site</b>, <b>A branch</b>, <b>A country</b> or <b>Whole company</b> to change everyone there in one go (you are asked to confirm, with the number of people, first).</li>
     <li><b class="where">Fill "Add or take away days"</b>Pick the leave type, type the days (use a minus sign to take days away, for example <code>-2</code>), write a <b>reason</b> (required), and optionally an <b>Expires</b> date.</li>
     <li><b class="where">Save</b>The balance card and the ledger below update at once. Every change is recorded with who, when and why.</li>
   </ol>
@@ -243,7 +250,7 @@
 
 <section id="compoff">
   <h2>10. Comp off</h2>
-  <p>System settings → Leave configuration → <b>Leave year and comp off</b>.</p>
+  <p>System settings → Leave configuration → <b>Comp off</b>.</p>
   <table>
     <tr><th>Setting</th><th>Meaning</th></tr>
     <tr><td>Earn comp off for working on a weekly off or holiday</td><td>The switch. Off means nothing is earned.</td></tr>
@@ -270,7 +277,7 @@
 <section id="expiry">
   <h2>12. When days disappear</h2>
   <p>Credits made by a policy or by a leave type's own setting <b>expire on the last day of the leave year</b>. The nightly job then closes them and writes an "Expired" line in the ledger, so the employee can see what was lost.</p>
-  <div class="note bad"><b>There is no carry-forward yet.</b> Unused days do not move into the next year, and they are not paid out. If your policy lets people carry days forward, tell HR to add the carried days by hand at the start of the new year, with an expiry date, until carry-forward is built.</div>
+  <div class="note info"><b>Carry-forward is per leave type.</b> Set the leave type to <b>Carryforward</b> (System settings → Leave configuration) and its unused days move into the next period instead of being lost; leave it on <b>No carryforward</b> and they are lost. There is no limit on how many days carry, and unused days are never paid out.</div>
 </section>
 
 <section id="trouble">
@@ -281,7 +288,7 @@
     <tr><td>Is there a policy rule for the type?</td><td>A leave type set to <i>No accrual</i> with no policy gives nothing. Add the type to a policy, or give the type its own accrual setting.</td></tr>
     <tr><td>Is the type marked <b>Comp off</b>?</td><td>A comp off type is skipped by policies and yearly credit. Edit the type and untick Comp off if it is a normal type such as Casual leave.</td></tr>
     <tr><td>Does the policy match the employee?</td><td>Use <b>Check an employee</b>. If it says no policy covers them, check the policy's country, branch and employee type against the employee's Organization and Employment tabs, and its start date.</td></tr>
-    <tr><td>Is the leave year right?</td><td>Leave configuration → Leave year starts in. The year shown by <i>Check an employee</i> must contain today.</td></tr>
+    <tr><td>Is the calendar right?</td><td>The leave type's <i>Calendar starts in</i> (Leave configuration → edit the leave type). The year shown by <i>Check an employee</i> must contain today.</td></tr>
     <tr><td>Has the credit run?</td><td>Press <b>Credit leave now</b>. The message says how many credits were added. "0 credited, N already done" means they were created earlier.</td></tr>
     <tr><td>Is the employee active, with a past joining date?</td><td>Inactive employees, or employees whose joining date is in the future, are skipped.</td></tr>
     <tr><td>Did the policy produce 0 days?</td><td>Joining on the last day of a month with <i>Completed months</i> can give 0. Use a minimum ("At least"), or another proration method.</td></tr>
@@ -295,8 +302,8 @@
   <h2>14. Not built yet</h2>
   <p>These are not in the system today, so plan around them:</p>
   <ul>
-    <li>Carry-forward of unused days into the next year, and paying out (encashment) of unused days.</li>
-    <li>Probation rules (days locked until confirmation).</li>
+    <li>A limit on how many days can be carried forward, and paying out (encashment) of unused days.</li>
+    <li>Locking probation leave until confirmation. (Probation leave is usable as it is credited; the rule below only changes <i>when</i> the days are credited.)</li>
     <li>End-of-service settlement of unused leave.</li>
     <li>A leave request that crosses two leave years is counted against one balance, not split.</li>
     <li>Recalculating a whole year when a policy changes in the middle of it. Create a new policy from the change date instead.</li>

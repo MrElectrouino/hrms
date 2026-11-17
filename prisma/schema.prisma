@@ -449,7 +449,9 @@ model Site {
   name     String  @unique
   isActive Boolean @default(true)
 
-  employees Employee[]
+  employees        Employee[]
+  holidayCalendars HolidayCalendar[]
+  groupAssignments AttendanceGroupAssignment[]
 
   @@map("sites")
 }
@@ -1035,14 +1037,17 @@ model HolidayCalendar {
   scope       String
   countryCode String?
   branchId    Int?
+  siteId      Int?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
   branch      Branch?                   @relation(fields: [branchId], references: [id])
+  site        Site?                     @relation(fields: [siteId], references: [id])
   holidays    Holiday[]
   assignments EmployeeHolidayCalendar[]
 
+  @@index([siteId])
   @@map("holiday_calendars")
 }
 
@@ -1086,6 +1091,7 @@ model AttendanceGroupAssignment {
   scope         String
   countryCode   String?
   branchId      Int?
+  siteId        Int?
   /// The work schedule, weekly off template or roster pattern, depending on kind.
   refId         Int
   /// Roster pattern only: where day 1 of the cycle falls.
@@ -1095,9 +1101,11 @@ model AttendanceGroupAssignment {
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
 
   branch Branch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([kind, scope])
   @@index([branchId])
+  @@index([siteId])
   @@map("attendance_group_assignments")
 }
 
@@ -1444,6 +1452,19 @@ model LeaveType {
   maxDaysPerRequest  Int?
   /// Whether this type takes part in sandwich leave (also needs the organization switch).
   isSandwichEligible Boolean  @default(false)
+  /// false = an application is approved the moment it is sent.
+  requiresApproval   Boolean  @default(true)
+  /// Recorded for later: unused days may be paid out. Nothing pays them out yet.
+  isEncashable       Boolean  @default(false)
+  /// true = weekly offs / holidays inside a request do not use up leave days; false = they count like working days.
+  excludeWeeklyOffs  Boolean  @default(true)
+  excludeHolidays    Boolean  @default(true)
+  /// true = the days credited for a calendar period end with it (the balance is reset). false = they never expire.
+  resetBalance       Boolean  @default(true)
+  /// NONE | CARRY_FORWARD: what happens to the unused days when the balance is reset.
+  carryForwardType   String   @default("NONE")
+  /// Month (1-12) this leave type's calendar starts in; it ends the month before. Empty = the company leave year.
+  calendarStartMonth Int?
   /// Earned through comp off credits instead of accrual.
   isCompOff          Boolean  @default(false)
   isActive           Boolean  @default(true)

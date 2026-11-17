@@ -4,14 +4,12 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
-  IsIn,
   IsOptional,
   IsString,
   Length,
   Matches,
   ValidateNested,
 } from 'class-validator';
-import { COUNTRIES } from '../profile-schema';
 
 export class SalaryComponentInputDto {
   @IsString()
@@ -31,7 +29,8 @@ export class CreateSalaryTemplateDto {
   name!: string;
 
   @IsOptional()
-  @IsIn(['ALL', ...COUNTRIES])
+  @IsString()
+  @Length(2, 10)
   countryCode?: string;
 
   @IsArray()
@@ -50,7 +49,8 @@ export class UpdateSalaryTemplateDto {
   name?: string;
 
   @IsOptional()
-  @IsIn(['ALL', ...COUNTRIES])
+  @IsString()
+  @Length(2, 10)
   countryCode?: string;
 
   @IsOptional()

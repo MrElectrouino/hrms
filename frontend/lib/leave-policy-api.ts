@@ -10,7 +10,7 @@ export interface PolicyRule {
   leaveTypeId: number;
   leaveType?: string;
   annualDays: number;
-  creditMethod: 'UPFRONT' | 'MONTHLY' | 'NONE';
+  creditMethod: 'UPFRONT' | 'MONTHLY' | 'MONTHLY_LUMP' | 'NONE';
   slabs: Slab[];
   slabTiming: 'NEXT_YEAR' | 'IMMEDIATE';
   proration: 'NONE' | 'COMPLETED_MONTHS' | 'STARTED_MONTHS' | 'CUTOFF_DAY' | 'EXACT_DAYS';
@@ -41,6 +41,8 @@ export type LeavePolicyPayload = Omit<LeavePolicy, 'id' | 'used'>;
 export interface EntitlementPreview {
   yearStart: string;
   yearEnd: string;
+  /** Date of confirmation (on payroll), if set. */
+  confirmedOn?: string | null;
   applied: { policyId: number; policy: string; layer: string; creditMethod: string }[];
   winner: { policyId: number; policy: string; layer: string; creditMethod: string } | null;
   quantity: number | null;
@@ -74,5 +76,6 @@ export const ROUNDING_LABEL: Record<PolicyRule['rounding'], string> = {
 export const CREDIT_LABEL: Record<PolicyRule['creditMethod'], string> = {
   UPFRONT: 'Whole year on the first day',
   MONTHLY: 'A share each month',
+  MONTHLY_LUMP: 'A share each month; the rest of the year at once when confirmed',
   NONE: 'Not credited automatically',
 };

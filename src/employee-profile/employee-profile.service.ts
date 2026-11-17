@@ -395,6 +395,7 @@ export class EmployeeProfileService {
 
   async createCustomField(dto: CreateCustomFieldDto, user: CurrentUserPayload, ip: string) {
     if (!this.isSystemAdmin(user)) throw new ForbiddenException('Only System Admin can create custom fields');
+    await this.assertCountryOrAll(dto.countryCode);
     const code = codeFromLabel(dto.label);
     if (!code || code === 'CUSTOM_') throw new BadRequestException('Label must contain letters or numbers');
     if (await this.prisma.customFieldDefinition.findUnique({ where: { code } })) {
@@ -599,8 +600,15 @@ export class EmployeeProfileService {
     return out;
   }
 
+  /** For all countries, or for one of the countries added in System settings → Countries (salary templates, custom fields). */
+  private async assertCountryOrAll(code?: string) {
+    if (!code || code === 'ALL') return;
+    if (!(await this.prisma.country.findFirst({ where: { isoCode: code, isActive: true }, select: { id: true } }))) throw new BadRequestException('Choose a country that is added and active in System settings → Countries');
+  }
+
   async createSalaryTemplate(dto: { name: string; countryCode?: string; components: { label: string; code?: string }[] }, user: CurrentUserPayload, ip: string) {
     if (!this.isHr(user)) throw new ForbiddenException('Only HR or System Admin can manage salary templates');
+    await this.assertCountryOrAll(dto.countryCode);
     const name = dto.name.trim();
     if (await this.prisma.salaryTemplate.findUnique({ where: { name } })) throw new ConflictException(`A template named "${name}" already exists`);
     const created = await this.prisma.salaryTemplate.create({
@@ -624,6 +632,7 @@ export class EmployeeProfileService {
     if (!this.isHr(user)) throw new ForbiddenException('Only HR or System Admin can manage salary templates');
     const existing = await this.prisma.salaryTemplate.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Salary template not found');
+    if (dto.countryCode !== undefined && dto.countryCode !== existing.countryCode) await this.assertCountryOrAll(dto.countryCode);
     if (dto.name && dto.name.trim() !== existing.name) {
       const clash = await this.prisma.salaryTemplate.findUnique({ where: { name: dto.name.trim() } });
       if (clash) throw new ConflictException(`A template named "${dto.name.trim()}" already exists`);

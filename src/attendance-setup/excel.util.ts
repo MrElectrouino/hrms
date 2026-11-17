@@ -60,11 +60,11 @@ export async function readSheet(buffer: Buffer, expectedHeaders: string[], optio
 }
 
 /** Builds a template workbook: bold header, one sample row, readable column widths. */
-export async function buildTemplate(sheetName: string, headers: string[], sample: string[]): Promise<Buffer> {
+export async function buildTemplate(sheetName: string, headers: string[], sample: string[] | string[][]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(sheetName);
   ws.addRow(headers).font = { bold: true };
-  ws.addRow(sample);
+  for (const row of Array.isArray(sample[0]) ? (sample as string[][]) : [sample as string[]]) ws.addRow(row);
   ws.columns = headers.map(() => ({ width: 24 }));
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
