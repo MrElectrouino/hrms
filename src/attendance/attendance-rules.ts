@@ -147,6 +147,16 @@ export function statusForMarkedDay(i: DayStatusInput): string {
   return 'PRESENT';
 }
 
+/**
+ * A day is waiting for approval only when the policy it was recorded under asks for
+ * approval and nobody has approved it yet. A policy with "Days need approval" off
+ * never shows a day as pending. `requiresApproval` is undefined only when the record
+ * has no policy; that case keeps the old behaviour (pending until approved).
+ */
+export function isAwaitingApproval(approvedAt: Date | null, requiresApproval: boolean | undefined): boolean {
+  return !approvedAt && (requiresApproval ?? true);
+}
+
 /* ------------------------------------------------------------------ punches */
 
 export interface PunchLike {

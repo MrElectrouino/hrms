@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { UserType } from '../common/constants/user-types';
 import { parseIsoDate, toIsoDate } from '../attendance-setup/attendance-logic';
+import { isAwaitingApproval } from './attendance-rules';
 
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
 const MAX_RANGE_DAYS = 92;
@@ -36,8 +37,9 @@ export class AttendanceReportsService {
     const rows = await this.prisma.attendance.findMany({
       where: { date: { gte: from, lte: to }, ...(await this.scope(user)) },
       take: MAX_ROWS,
-      select: { employeeId: true, statusCode: true, lateMinutes: true, workedMinutes: true, shortMinutes: true, overtimeMinutes: true, approvedAt: true, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } },
+      select: { employeeId: true, statusCode: true, lateMinutes: true, workedMinutes: true, shortMinutes: true, overtimeMinutes: true, approvedAt: true, policyId: true, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } },
     });
+    const approval = await this.approvalByPolicy(rows.map((r) => r.policyId));
     const by = new Map<number, { employeeId: number; employeeCode: string; employeeName: string; days: Record<string, number>; lateDays: number; lateMinutes: number; workedMinutes: number; shortMinutes: number; overtimeMinutes: number; pending: number }>();
     for (const r of rows) {
       const row = by.get(r.employeeId) ?? { employeeId: r.employeeId, employeeCode: r.employee.employeeCode, employeeName: [r.employee.profile.name, r.employee.profile.lastName].filter(Boolean).join(' '), days: {}, lateDays: 0, lateMinutes: 0, workedMinutes: 0, shortMinutes: 0, overtimeMinutes: 0, pending: 0 };
@@ -46,7 +48,7 @@ export class AttendanceReportsService {
       row.workedMinutes += r.workedMinutes ?? 0;
       row.shortMinutes += r.shortMinutes;
       row.overtimeMinutes += r.overtimeMinutes;
-      if (!r.approvedAt) row.pending++;
+      if (isAwaitingApproval(r.approvedAt, r.policyId == null ? undefined : approval.get(r.policyId))) row.pending++;
       by.set(r.employeeId, row);
     }
     const statuses = await this.prisma.attendanceStatus.findMany({ orderBy: { sortOrder: 'asc' }, select: { code: true, name: true, color: true } });
@@ -71,7 +73,10 @@ export class AttendanceReportsService {
       take: 1000,
       include: { status: { select: { name: true, color: true } }, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } },
     });
-    return rows.map((r) => ({
+    const approval = await this.approvalByPolicy(rows.map((r) => r.policyId));
+    // "pending" depends on the policy, so it is filtered here rather than in the query.
+    const shown = kind === 'pending' ? rows.filter((r) => isAwaitingApproval(r.approvedAt, r.policyId == null ? undefined : approval.get(r.policyId))) : rows;
+    return shown.map((r) => ({
       date: toIsoDate(r.date),
       employeeId: r.employeeId,
       employeeCode: r.employee.employeeCode,
@@ -85,7 +90,15 @@ export class AttendanceReportsService {
       requiredMinutes: r.requiredMinutes,
       shortMinutes: r.shortMinutes,
       overtimeMinutes: r.overtimeMinutes,
-      approved: !!r.approvedAt,
+      approved: !isAwaitingApproval(r.approvedAt, r.policyId == null ? undefined : approval.get(r.policyId)),
     }));
+  }
+
+  /** Whether each policy id asks for approval of its days (see isAwaitingApproval). */
+  private async approvalByPolicy(policyIds: Array<number | null>): Promise<Map<number, boolean>> {
+    const ids = [...new Set(policyIds.filter((id): id is number => id != null))];
+    if (!ids.length) return new Map();
+    const policies = await this.prisma.attendancePolicy.findMany({ where: { id: { in: ids } }, select: { id: true, requiresApproval: true } });
+    return new Map(policies.map((p) => [p.id, p.requiresApproval]));
   }
 }

@@ -18,6 +18,7 @@ import {
   nextPunchType,
   statusForMarkedDay,
   workedMinutesFromPunches,
+  isAwaitingApproval,
 } from './attendance-rules';
 import { EditAttendanceDto, MarkAttendanceDto } from './dto/attendance.dto';
 import { evaluateHours, flexibleLate, statusAfterHours, statusWhenHoursOk } from './hours-rules';
@@ -183,7 +184,7 @@ export class AttendanceService {
       canMark: allowed.ok,
       blockedReason: allowed.ok ? null : allowed.message,
       settings: { moodEnabled: ctx.settings.moodEnabled, gpsRequirement: ctx.settings.gpsRequirement, addressRequirement: ctx.settings.addressRequirement, moods: moods.map((m) => m.text) },
-      record: record ? this.present(record) : null,
+      record: record ? this.present(record, await this.approvalByPolicy([record.policyId])) : null,
       punches: (record?.punches ?? []).map((p) => ({ type: p.punchType, at: p.at, source: p.source })),
     };
   }
@@ -394,7 +395,8 @@ export class AttendanceService {
     });
 
     await this.audit.log({ actorProfileId: user.profileId, action: 'ATTENDANCE_EDITED', entityType: 'Attendance', entityId: String(saved.record.id), ipAddress: ip, metadata: { employeeId, date: dateStr, status: finalStatus, by: actor, compOffGranted: saved.compOffGranted, compOffRemoved: saved.compOffRemoved } });
-    return { ...this.present(await this.prisma.attendance.findUniqueOrThrow({ where: { id: saved.record.id }, include: { status: true } })), compOffGranted: saved.compOffGranted, compOffRemoved: saved.compOffRemoved };
+    const reloaded = await this.prisma.attendance.findUniqueOrThrow({ where: { id: saved.record.id }, include: { status: true } });
+    return { ...this.present(reloaded, await this.approvalByPolicy([reloaded.policyId])), compOffGranted: saved.compOffGranted, compOffRemoved: saved.compOffRemoved };
   }
 
   /**
@@ -453,7 +455,15 @@ export class AttendanceService {
 
   /* ------------------------------------------------------------------ reading */
 
-  private present(r: { id: bigint; employeeId: number; date: Date; statusCode: string; status: { name: string; color: string }; isPresent: boolean; firstInAt: Date | null; lastOutAt: Date | null; lateMinutes: number; workedMinutes: number | null; approvedAt: Date | null; source: string; remarks: string | null }) {
+  /** Whether each policy id asks for approval of its days (see isAwaitingApproval). */
+  private async approvalByPolicy(policyIds: Array<number | null | undefined>): Promise<Map<number, boolean>> {
+    const ids = [...new Set(policyIds.filter((id): id is number => id != null))];
+    if (!ids.length) return new Map();
+    const policies = await this.prisma.attendancePolicy.findMany({ where: { id: { in: ids } }, select: { id: true, requiresApproval: true } });
+    return new Map(policies.map((p) => [p.id, p.requiresApproval]));
+  }
+
+  private present(r: { id: bigint; employeeId: number; date: Date; statusCode: string; status: { name: string; color: string }; isPresent: boolean; firstInAt: Date | null; lastOutAt: Date | null; lateMinutes: number; workedMinutes: number | null; approvedAt: Date | null; policyId: number | null; source: string; remarks: string | null }, approval: Map<number, boolean>) {
     return {
       id: r.id.toString(),
       employeeId: r.employeeId,
@@ -466,7 +476,7 @@ export class AttendanceService {
       lastOutAt: r.lastOutAt,
       lateMinutes: r.lateMinutes,
       workedMinutes: r.workedMinutes,
-      approved: !!r.approvedAt,
+      approved: !isAwaitingApproval(r.approvedAt, r.policyId == null ? undefined : approval.get(r.policyId)),
       source: r.source,
       remarks: r.remarks,
     };
@@ -495,6 +505,7 @@ export class AttendanceService {
       include: { status: true, employee: { select: { employeeCode: true, profile: { select: { name: true, lastName: true } } } } },
     });
     const zones = await this.timeZones([...new Set(rows.map((r) => r.employeeId))]);
+    const approval = await this.approvalByPolicy(rows.map((r) => r.policyId));
     // Days that already carry a comp off credit, so the approve popup can show the box ticked.
     const compOff = rows.length
       ? await this.prisma.leaveCredit.findMany({ where: { source: 'COMP_OFF', employeeId: { in: [...new Set(rows.map((r) => r.employeeId))] }, sourceRef: { in: [...new Set(rows.map((r) => toIsoDate(r.date)))] } }, select: { employeeId: true, sourceRef: true } })
@@ -508,7 +519,7 @@ export class AttendanceService {
     return rows.map((r) => {
       const tz = zones.get(r.employeeId) ?? 'UTC';
       return {
-        ...this.present(r),
+        ...this.present(r, approval),
         hasCompOff: hasCompOff.has(`${r.employeeId}:${toIsoDate(r.date)}`),
         timeZone: tz,
         inLocal: hm(r.firstInAt, tz),
