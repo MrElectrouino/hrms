@@ -5,10 +5,12 @@ import WeeklyOffPanel from '../components/attendance/WeeklyOffPanel';
 import HolidayCalendarsPanel from '../components/attendance/HolidayCalendarsPanel';
 import RostersPanel from '../components/attendance/RostersPanel';
 import AssignmentsPanel from '../components/attendance/AssignmentsPanel';
+import ShiftsPanel from '../components/attendance/ShiftsPanel';
 
-type Tab = 'schedules' | 'weeklyoff' | 'holidays' | 'roster' | 'assignments';
+type Tab = 'shifts' | 'schedules' | 'weeklyoff' | 'holidays' | 'roster' | 'assignments';
 
 const TABS: { key: Tab; label: string; hint: string }[] = [
+  { key: 'shifts', label: 'Shifts', hint: 'Work shifts with timing and grace rules' },
   { key: 'schedules', label: 'Work schedules', hint: 'Required hours, fixed or flexible start, breaks' },
   { key: 'weeklyoff', label: 'Weekly off', hint: 'Templates of weekly off days' },
   { key: 'holidays', label: 'Holiday calendars', hint: 'Holidays by company, country or branch, and their order' },
@@ -19,7 +21,7 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
 /** Administration > Attendance setup: everything attendance reads from, in one place. */
 export default function AttendanceSetupPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('schedules');
+  const [tab, setTab] = useState<Tab>('shifts');
 
   // Deep links arrive as ?tab=…
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function AttendanceSetupPage() {
     <div className="space-y-5">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Attendance setup</h2>
-        <p className="mt-1 text-gray-500">Work schedules, holidays, rosters and who they apply to. Shifts and branches are managed under Masters.</p>
+        <p className="mt-1 text-gray-500">Shifts, work schedules, holidays, rosters and who they apply to. Branches are managed under Masters.</p>
       </div>
 
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-gray-200">
@@ -55,6 +57,7 @@ export default function AttendanceSetupPage() {
         ))}
       </div>
 
+      {tab === 'shifts' && <ShiftsPanel />}
       {tab === 'schedules' && <WorkSchedulesPanel />}
       {tab === 'weeklyoff' && <WeeklyOffPanel />}
       {tab === 'holidays' && <HolidayCalendarsPanel />}

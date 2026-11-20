@@ -111,7 +111,10 @@ export class AttendanceService {
   /** Shift of the day (roster first, then the employee's own shift), and what kind of day it is. */
   async dayInfo(employeeId: number, dateStr: string, fallbackShiftId: number | null) {
     const day = (await this.roster.resolveRange(employeeId, dateStr, dateStr)).days[0];
-    const shiftId = day.roster.shift?.id ?? (day.roster.source === 'NONE' ? fallbackShiftId : null);
+    // The roster names a shift only for ENTRY and PATTERN days. A weekly-off template (TEMPLATE) or no roster (NONE)
+    // leaves the day's shift to the employee's own shift, so late rules still apply.
+    const rosterSetsShift = day.roster.source === 'ENTRY' || day.roster.source === 'PATTERN';
+    const shiftId = day.roster.shift?.id ?? (rosterSetsShift ? null : fallbackShiftId);
     const shift = shiftId ? await this.prisma.shift.findUnique({ where: { id: shiftId } }) : null;
     const schedule = day.workSchedule ? await this.prisma.workSchedule.findUnique({ where: { id: day.workSchedule.id } }) : null;
     return { day, shift, schedule };
