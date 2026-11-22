@@ -189,7 +189,7 @@ export default function AttendanceConfigPanel() {
     <div className="space-y-5">
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Attendance configuration</h2>
-        <p className="mt-1 text-gray-500">Rules and values for each country. Late and half-day minutes stay on the Shift under Masters.</p>
+        <p className="mt-1 text-gray-500">Rules and values for each country. Late and half-day minutes stay on the Shift under Administration &gt; Attendance setup.</p>
       </div>
 
       <div role="tablist" className="flex flex-wrap gap-1 border-b border-gray-200">

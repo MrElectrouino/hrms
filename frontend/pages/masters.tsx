@@ -6,13 +6,11 @@ import BranchesPanel from '../components/BranchesPanel';
 import Select from '../components/Select';
 import {
   MasterItem,
-  ShiftItem,
   DocumentTypeItem,
   CountryItem,
   getSites,
   getDocumentTypes,
   getLanguages,
-  getShifts,
   getCountries,
   createSite,
   updateSite,
@@ -24,47 +22,28 @@ import {
   createDocumentType,
   updateDocumentType,
   deactivateDocumentType,
-  createShift,
-  updateShift,
-  deactivateShift,
-  ShiftPayload,
 } from '../lib/api';
 
-type MasterTab = 'sites' | 'languages' | 'shifts' | 'document-types';
+// Shifts are managed under Administration > Attendance setup, not here.
+type MasterTab = 'sites' | 'languages' | 'document-types';
 
 const tabs: { key: MasterTab; label: string; description: string }[] = [
   { key: 'sites', label: 'Sites', description: 'Work locations and office sites.' },
   { key: 'languages', label: 'Languages', description: 'Mother tongue options for employee profiles.' },
-  { key: 'shifts', label: 'Shifts', description: 'Work shifts with timing and grace rules.' },
   { key: 'document-types', label: 'Document Types', description: 'Categories for employee documents.' },
 ];
 
 const api = {
   sites: { list: getSites, create: createSite, update: updateSite, deactivate: deactivateSite },
   languages: { list: getLanguages, create: createLanguage, update: updateLanguage, deactivate: deactivateLanguage },
-  shifts: { list: getShifts, create: createShift, update: updateShift, deactivate: deactivateShift },
   'document-types': { list: getDocumentTypes, create: createDocumentType, update: updateDocumentType, deactivate: deactivateDocumentType },
 } as const;
 
 const emptyForm = {
   name: '',
-  startTime: '',
-  endTime: '',
-  lateMinutes: '0',
-  halfDayMinutes: '0',
-  altStartTime: '',
-  altEndTime: '',
   hasExpiry: false,
   countryCodes: [] as string[],
 };
-
-/** The backend stores shift times as 1970-01-01T<HH:mm> parsed in the server's local timezone. */
-function toTimeInput(value?: string | null): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return '';
-  return d.toISOString().slice(11, 16);
-}
 
 export default function MastersPage() {
   const { isAuthenticated } = useAuth();
@@ -78,10 +57,9 @@ export default function MastersPage() {
     if (q === 'parameters' || q === 'branches') setSpecial(q);
   }, [router.query.tab]);
   const [activeTab, setActiveTab] = useState<MasterTab>('sites');
-  const [items, setItems] = useState<Record<MasterTab, (MasterItem | ShiftItem | DocumentTypeItem)[]>>({
+  const [items, setItems] = useState<Record<MasterTab, (MasterItem | DocumentTypeItem)[]>>({
     sites: [],
     languages: [],
-    shifts: [],
     'document-types': [],
   });
   const [loading, setLoading] = useState(true);
@@ -97,7 +75,7 @@ export default function MastersPage() {
     setError('');
     return Promise.all(tabs.map((t) => api[t.key].list()))
       .then((results) => {
-        const next: typeof items = { sites: [], languages: [], shifts: [], 'document-types': [] };
+        const next: typeof items = { sites: [], languages: [], 'document-types': [] };
         tabs.forEach((t, i) => {
           next[t.key] = results[i].data;
         });
@@ -129,24 +107,9 @@ export default function MastersPage() {
     setNotice('');
   };
 
-  const startEdit = (item: MasterItem | ShiftItem) => {
+  const startEdit = (item: MasterItem) => {
     setEditingId(item.id);
-    if (activeTab === 'shifts') {
-      const s = item as ShiftItem;
-      setForm({
-        name: s.name,
-        startTime: toTimeInput(s.startTime),
-        endTime: toTimeInput(s.endTime),
-        lateMinutes: String(s.lateMinutes ?? 0),
-        halfDayMinutes: String(s.halfDayMinutes ?? 0),
-        altStartTime: toTimeInput(s.altStartTime),
-        altEndTime: toTimeInput(s.altEndTime),
-        hasExpiry: false,
-        countryCodes: [],
-      });
-    } else {
-      setForm({ ...emptyForm, name: item.name, hasExpiry: !!(item as DocumentTypeItem).hasExpiry, countryCodes: (item as DocumentTypeItem).countryCodes ?? [] });
-    }
+    setForm({ ...emptyForm, name: item.name, hasExpiry: !!(item as DocumentTypeItem).hasExpiry, countryCodes: (item as DocumentTypeItem).countryCodes ?? [] });
     setError('');
     setNotice('');
   };
@@ -158,12 +121,6 @@ export default function MastersPage() {
 
   const validate = (): string => {
     if (!form.name.trim()) return 'Name is required';
-    if (activeTab === 'shifts') {
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.startTime)) return 'Start time is required (HH:mm)';
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(form.endTime)) return 'End time is required (HH:mm)';
-      if (!/^\d+$/.test(form.lateMinutes)) return 'Late minutes must be a whole number';
-      if (!/^\d+$/.test(form.halfDayMinutes)) return 'Half-day minutes must be a whole number';
-    }
     return '';
   };
 
@@ -177,28 +134,14 @@ export default function MastersPage() {
     setError('');
     try {
       const { create, update } = api[activeTab];
-      if (activeTab === 'shifts') {
-        const payload: ShiftPayload = {
-          name: form.name.trim(),
-          startTime: form.startTime,
-          endTime: form.endTime,
-          lateMinutes: Number(form.lateMinutes),
-          halfDayMinutes: Number(form.halfDayMinutes),
-          altStartTime: form.altStartTime || undefined,
-          altEndTime: form.altEndTime || undefined,
-        };
-        if (editingId === 'new') await (create as typeof createShift)(payload);
-        else await (update as typeof updateShift)(editingId as number, payload);
+      if (activeTab === 'document-types') {
+        const dp = { name: form.name.trim(), hasExpiry: form.hasExpiry, countryCodes: form.countryCodes };
+        if (editingId === 'new') await (create as typeof createDocumentType)(dp);
+        else await (update as typeof updateDocumentType)(editingId as number, dp);
       } else {
-        if (activeTab === 'document-types') {
-          const dp = { name: form.name.trim(), hasExpiry: form.hasExpiry, countryCodes: form.countryCodes };
-          if (editingId === 'new') await (create as typeof createDocumentType)(dp);
-          else await (update as typeof updateDocumentType)(editingId as number, dp);
-        } else {
-          const payload = { name: form.name.trim() };
-          if (editingId === 'new') await (create as typeof createSite)(payload);
-          else await (update as typeof updateSite)(editingId as number, payload);
-        }
+        const payload = { name: form.name.trim() };
+        if (editingId === 'new') await (create as typeof createSite)(payload);
+        else await (update as typeof updateSite)(editingId as number, payload);
       }
       setNotice(editingId === 'new' ? 'Item created' : 'Item saved');
       setEditingId(null);
@@ -210,7 +153,7 @@ export default function MastersPage() {
     }
   };
 
-  const toggleActive = async (item: MasterItem | ShiftItem) => {
+  const toggleActive = async (item: MasterItem) => {
     setError('');
     setNotice('');
     try {
@@ -227,7 +170,7 @@ export default function MastersPage() {
     }
   };
 
-  const removeItem = async (item: MasterItem | ShiftItem) => {
+  const removeItem = async (item: MasterItem) => {
     if (!window.confirm(`Delete "${item.name}" permanently? This cannot be undone. If it is in use you will be told to deactivate it instead.`)) return;
     setError('');
     setNotice('');
@@ -242,7 +185,6 @@ export default function MastersPage() {
 
   const currentTab = tabs.find((t) => t.key === activeTab)!;
   const currentItems = items[activeTab];
-  const isShifts = activeTab === 'shifts';
   const isDocTypes = activeTab === 'document-types';
 
   const inputClass =
@@ -338,12 +280,6 @@ export default function MastersPage() {
               <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                 <tr>
                   <th className="px-4 py-3">Name</th>
-                  {isShifts && (
-                    <>
-                      <th className="px-4 py-3">Timing</th>
-                      <th className="px-4 py-3">Late / Half-day</th>
-                    </>
-                  )}
                   {isDocTypes && (
                     <>
                       <th className="px-4 py-3">Expiry</th>
@@ -356,21 +292,14 @@ export default function MastersPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 5 : 3} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
+                  <tr><td colSpan={isDocTypes ? 5 : 3} className="px-4 py-8 text-center text-gray-400">Loading…</td></tr>
                 ) : currentItems.length === 0 ? (
-                  <tr><td colSpan={isShifts ? 5 : isDocTypes ? 5 : 3} className="px-4 py-8 text-center text-gray-500">No {currentTab.label.toLowerCase()} yet.</td></tr>
+                  <tr><td colSpan={isDocTypes ? 5 : 3} className="px-4 py-8 text-center text-gray-500">No {currentTab.label.toLowerCase()} yet.</td></tr>
                 ) : (
                   currentItems.map((item) => {
-                    const shift = isShifts ? (item as ShiftItem) : null;
                     return (
                       <tr key={item.id} className={!item.isActive ? 'bg-gray-50/60' : undefined}>
                         <td className={`px-4 py-3 font-medium ${item.isActive ? 'text-gray-900' : 'text-gray-400 line-through'}`}>{item.name}</td>
-                        {isShifts && shift && (
-                          <>
-                            <td className="px-4 py-3 text-gray-700 font-mono text-[13px]">{toTimeInput(shift.startTime)} – {toTimeInput(shift.endTime)}</td>
-                            <td className="px-4 py-3 text-gray-700">{shift.lateMinutes}m / {shift.halfDayMinutes}m</td>
-                          </>
-                        )}
                         {isDocTypes && (
                           <>
                             <td className="px-4 py-3 text-gray-700">{(item as DocumentTypeItem).hasExpiry ? 'Issue + expiry required' : 'No expiry'}</td>
@@ -462,40 +391,6 @@ export default function MastersPage() {
                 </>
               )}
 
-              {isShifts && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Start time
-                      <input type="time" className={inputClass} value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
-                    </label>
-                    <label className="block text-sm font-medium text-gray-700">
-                      End time
-                      <input type="time" className={inputClass} value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
-                    </label>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Late after (minutes)
-                      <input className={inputClass} value={form.lateMinutes} onChange={(e) => setForm({ ...form, lateMinutes: e.target.value })} />
-                    </label>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Half-day threshold (minutes)
-                      <input className={inputClass} value={form.halfDayMinutes} onChange={(e) => setForm({ ...form, halfDayMinutes: e.target.value })} />
-                    </label>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Alternate start time
-                      <input type="time" className={inputClass} value={form.altStartTime} onChange={(e) => setForm({ ...form, altStartTime: e.target.value })} />
-                    </label>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Alternate end time
-                      <input type="time" className={inputClass} value={form.altEndTime} onChange={(e) => setForm({ ...form, altEndTime: e.target.value })} />
-                    </label>
-                  </div>
-                </>
-              )}
             </div>
 
             <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">

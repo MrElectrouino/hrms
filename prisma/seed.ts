@@ -150,6 +150,9 @@ async function seedParameterTypesAndParameters() {
     ]},
   };
 
+  // Rows written with explicit ids do not advance the id sequence, so move it past the largest id first.
+  await prisma.$executeRaw`SELECT setval(pg_get_serial_sequence('parameters', 'id'), COALESCE((SELECT MAX(id) FROM parameters), 1))`;
+
   for (const [typeId, group] of Object.entries(groups)) {
     await prisma.parameterType.upsert({
       where: { id: Number(typeId) },
@@ -158,24 +161,25 @@ async function seedParameterTypesAndParameters() {
     });
 
     for (const p of group.parameters) {
-      await prisma.parameter.upsert({
-        where: { id: p.id },
-        create: {
-          id: p.id,
-          parameterTypeId: Number(typeId),
-          text: p.text,
-          parameterValue: p.value,
-          displayOrder: p.order,
-          isVisible: p.visible,
-          code: p.code ?? null,
-        },
-        update: {
-          text: p.text,
-          parameterValue: p.value,
-          displayOrder: p.order,
-          isVisible: p.visible,
-          code: p.code ?? null,
-        },
+      // Match on the natural key (type + text), which the database enforces as unique.
+      // Some migrations insert parameters with auto-assigned ids, which can already hold
+      // a seed id for another parameter, so a seed id is used only when it is free.
+      const values = {
+        parameterValue: p.value,
+        displayOrder: p.order,
+        isVisible: p.visible,
+        code: p.code ?? null,
+      };
+      const existing = await prisma.parameter.findUnique({
+        where: { parameterTypeId_text: { parameterTypeId: Number(typeId), text: p.text } },
+      });
+      if (existing) {
+        await prisma.parameter.update({ where: { id: existing.id }, data: values });
+        continue;
+      }
+      const idTaken = await prisma.parameter.findUnique({ where: { id: p.id } });
+      await prisma.parameter.create({
+        data: { ...(idTaken ? {} : { id: p.id }), parameterTypeId: Number(typeId), text: p.text, ...values },
       });
     }
   }
