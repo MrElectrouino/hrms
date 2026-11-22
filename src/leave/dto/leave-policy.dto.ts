@@ -15,6 +15,7 @@ export class PolicyRuleDto {
   @IsIn(['UPFRONT', 'MONTHLY', 'MONTHLY_LUMP', 'NONE']) creditMethod: string;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SlabDto) slabs?: SlabDto[];
   @IsIn(['NEXT_YEAR', 'IMMEDIATE']) slabTiming: string;
+  @IsOptional() @IsIn(['JOINING_DATE', 'REJOINING_DATE']) serviceBasis?: string;
   @IsIn(['NONE', 'COMPLETED_MONTHS', 'STARTED_MONTHS', 'CUTOFF_DAY', 'EXACT_DAYS']) proration: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(31) cutoffDay?: number | null;
   @IsIn(['NONE', 'DOWN', 'UP', 'NEAREST', 'NEAREST_HALF', 'UP_HALF', 'DOWN_HALF']) rounding: string;

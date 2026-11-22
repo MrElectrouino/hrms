@@ -291,6 +291,7 @@ function rawSections(country: CountryCode): SectionDef[] {
           F('employmentStatus', 'Employment status', 'select', { optionsParameter: 'Employment Status', required: true }),
           F('dateOfJoining', 'Date of joining', 'date', { required: true }),
           F('confirmationDate', 'Confirmation date', 'date'),
+          F('rejoiningDate', 'Date of rejoining', 'date'),
           F('probationPeriod', 'Probation period', 'select', { optionsParameter: 'Probation Period' }),
           F('contractStartDate', 'Contract start date', 'date', { showWhen: { key: 'employmentType', equals: 'On Contract' } }),
           F('contractEndDate', 'Contract end date', 'date', { showWhen: { key: 'employmentType', equals: 'On Contract' } }),

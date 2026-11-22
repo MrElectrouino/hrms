@@ -20,7 +20,7 @@ export default function MyLeavePage() {
   const [types, setTypes] = useState<LeaveType[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [apps, setApps] = useState<LeaveApplication[]>([]);
-  const [form, setForm] = useState({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '' as '' | 'FIRST' | 'SECOND', reason: '' });
+  const [form, setForm] = useState({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '' as '' | 'FIRST' | 'SECOND', reason: '', eventDate: '' });
   const [preview, setPreview] = useState<LeavePreview | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [error, setError] = useState('');
@@ -58,19 +58,19 @@ export default function MyLeavePage() {
     setPreviewError('');
     if (!form.leaveTypeId || !form.fromDate || !form.toDate || form.toDate < form.fromDate) return;
     const t = setTimeout(() => {
-      previewLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined })
+      previewLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined })
         .then((r) => setPreview(r.data))
         .catch((e) => setPreviewError(e.message || 'Could not work out the days'));
     }, 350);
     return () => clearTimeout(t);
-  }, [form.leaveTypeId, form.fromDate, form.toDate, form.half, single]);
+  }, [form.leaveTypeId, form.fromDate, form.toDate, form.half, form.eventDate, single]);
 
   const openApply = () => {
     setError('');
     setNotice('');
     setPreview(null);
     setPreviewError('');
-    setForm({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '', reason: '' });
+    setForm({ leaveTypeId: '', fromDate: today(), toDate: today(), half: '', reason: '', eventDate: '' });
     setApplying(true);
   };
 
@@ -79,7 +79,7 @@ export default function MyLeavePage() {
     setError('');
     setNotice('');
     try {
-      await applyLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, reason: form.reason.trim() || undefined });
+      await applyLeave({ leaveTypeId: Number(form.leaveTypeId), fromDate: form.fromDate, toDate: form.toDate, halfDayPart: single && form.half ? form.half : undefined, eventDate: form.eventDate || undefined, reason: form.reason.trim() || undefined });
       setNotice('Leave sent for approval');
       setApplying(false);
       await reload();
@@ -151,6 +151,11 @@ export default function MyLeavePage() {
             <label className="block text-sm font-medium text-gray-700">From<input type="date" className={fieldClass} value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value, toDate: form.toDate < e.target.value ? e.target.value : form.toDate })} /></label>
             <label className="block text-sm font-medium text-gray-700">To<input type="date" min={form.fromDate} className={fieldClass} value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} /></label>
           </div>
+          {type?.eventWindowMonths ? (
+            <label className="block text-sm font-medium text-gray-700">{type.eventLabel || 'Event date'}<input type="date" className={fieldClass} value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} />
+              <span className="mt-1 block text-xs text-gray-500">The leave must be taken within {type.eventWindowMonths} months of this date.</span>
+            </label>
+          ) : null}
           {single && type?.allowHalfDay && (
             <label className="block text-sm font-medium text-gray-700">Part of the day
               <Select className={fieldClass} value={form.half} onChange={(e) => setForm({ ...form, half: e.target.value as '' | 'FIRST' | 'SECOND' })}>

@@ -9,7 +9,7 @@ import {
 import Drawer, { fieldClass } from '../Drawer';
 import Select from '../Select';
 
-const blankRule = (leaveTypeId: number): PolicyRule => ({ leaveTypeId, annualDays: 0, creditMethod: 'MONTHLY', slabs: [], slabTiming: 'IMMEDIATE', proration: 'COMPLETED_MONTHS', cutoffDay: null, rounding: 'NONE', tieRule: 'UP', minDays: null, maxDays: null, formula: null });
+const blankRule = (leaveTypeId: number): PolicyRule => ({ leaveTypeId, annualDays: 0, creditMethod: 'MONTHLY', slabs: [], slabTiming: 'IMMEDIATE', proration: 'COMPLETED_MONTHS', cutoffDay: null, rounding: 'NONE', tieRule: 'UP', minDays: null, maxDays: null, formula: null, serviceBasis: 'JOINING_DATE' });
 const blankPolicy = (): LeavePolicyPayload => ({ name: '', layer: 'COMPANY', countryCode: null, branchId: null, employeeTypeId: null, employeeId: null, effectiveFrom: `${new Date().getFullYear()}-01-01`, effectiveTo: null, priority: 0, isActive: true, note: null, rules: [] });
 const numOrNull = (v: string) => (v === '' ? null : Number(v));
 
@@ -164,6 +164,7 @@ export default function LeavePoliciesPanel() {
                     <Label text="Days per year"><input type="number" step="0.5" min={0} className={fieldClass} value={r.annualDays} onChange={(e) => setRule(i, { annualDays: Number(e.target.value) })} /></Label>
                     <Label text="Credited"><Select className={fieldClass} value={r.creditMethod} onChange={(e) => setRule(i, { creditMethod: e.target.value as PolicyRule['creditMethod'] })}>{Object.entries(CREDIT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Label>
                     <Label text="Joining part-way through the year"><Select className={fieldClass} value={r.proration} onChange={(e) => setRule(i, { proration: e.target.value as PolicyRule['proration'] })}>{Object.entries(PRORATION_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Label>
+                    <Label text="Service counts from"><Select className={fieldClass} value={r.serviceBasis ?? 'JOINING_DATE'} onChange={(e) => setRule(i, { serviceBasis: e.target.value as PolicyRule['serviceBasis'] })}><option value="JOINING_DATE">Date of joining</option><option value="REJOINING_DATE">Date of rejoining (when set)</option></Select></Label>
                     <div className="sm:col-span-3"><Label text="Formula (optional)"><input className={`${fieldClass} font-mono`} placeholder="workdays * annualDays / yearDays" value={r.formula ?? ''} onChange={(e) => setRule(i, { formula: e.target.value || null })} /></Label>
                       <p className="mt-1 text-xs text-gray-500">Replaces the joining part-way setting. Use <b>workdays</b> (days employed), <b>yearDays</b> (365/366), <b>annualDays</b> (days a year for this service, from the slabs or the number above) and <b>serviceMonths</b>, with + - * / ( ) and min() max() round() floor() ceil(). Example for the UAE: <span className="font-mono">workdays * 30 / 365</span>. It is worked out for each month and the results are added up.</p></div>
                     {r.proration === 'CUTOFF_DAY' && <Label text="Cut-off day of month"><input type="number" min={1} max={31} className={fieldClass} value={r.cutoffDay ?? ''} onChange={(e) => setRule(i, { cutoffDay: numOrNull(e.target.value) })} /></Label>}

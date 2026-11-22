@@ -34,9 +34,17 @@ const TYPES = [
   T('BRV-FAMILY', 'Bereavement Leave (Parent, Child, Sibling, Grandparent)', { annualDays: 3 }),
   T('COMPOFF', 'Comp Off', { isCompOff: true, allowHalfDay: true }),
 ];
+// Conditions and share of pay, by code.
+const EXTRA = {
+  MAT: { genderRestriction: 'Female' }, 'MAT-HALF': { genderRestriction: 'Female', payPercent: 50 }, 'MAT-UNPAID': { genderRestriction: 'Female' },
+  'MAT-SICK-PAID': { genderRestriction: 'Female' }, 'MAT-SICK-UNPAID': { genderRestriction: 'Female' },
+  PAR: { eventWindowMonths: 6, eventLabel: "Child's date of birth" },
+  HAJJ: { maxTimesInService: 1 },
+  'ML-HALF': { payPercent: 50 },
+};
 // Policy rule per type: how it is credited.
 const RULES = {
-  AL: { creditMethod: 'MONTHLY', annualDays: 30, slabTiming: 'IMMEDIATE', proration: 'EXACT_DAYS', formula: 'workdays * annualDays / yearDays', slabs: [{ fromMonths: 0, toMonths: 6, annualDays: 0 }, { fromMonths: 6, toMonths: 12, annualDays: 24 }, { fromMonths: 12, toMonths: null, annualDays: 30 }] },
+  AL: { serviceBasis: 'REJOINING_DATE', creditMethod: 'MONTHLY', annualDays: 30, slabTiming: 'IMMEDIATE', proration: 'EXACT_DAYS', formula: 'workdays * annualDays / yearDays', slabs: [{ fromMonths: 0, toMonths: 6, annualDays: 0 }, { fromMonths: 6, toMonths: 12, annualDays: 24 }, { fromMonths: 12, toMonths: null, annualDays: 30 }] },
   STUDY: { creditMethod: 'UPFRONT', annualDays: 10, slabTiming: 'IMMEDIATE', proration: 'NONE', slabs: [{ fromMonths: 0, toMonths: 24, annualDays: 0 }, { fromMonths: 24, toMonths: null, annualDays: 10 }] },
   'BRV-SPOUSE': { creditMethod: 'UPFRONT', annualDays: 5, proration: 'NONE' },
   'BRV-FAMILY': { creditMethod: 'UPFRONT', annualDays: 3, proration: 'NONE' },
@@ -62,13 +70,14 @@ const RULES = {
       ...rest, accrual: 'NONE', excludeWeeklyOffs: true, excludeHolidays: true, requiresApproval: true, countryCodes: ['AE'],
       resetBalance: rest.balanceTracking, carryForwardType: carry ? 'CARRY_FORWARD' : 'NONE', calendarStartMonth: rest.balanceTracking ? 1 : null, sortOrder: (order += 10),
     };
+    Object.assign(data, { genderRestriction: null, maxTimesInService: null, eventWindowMonths: null, eventLabel: null, payPercent: rest.isPaid ? 100 : 0 }, EXTRA[t.code] ?? {});
     const row = await p.leaveType.upsert({ where: { code: t.code }, create: data, update: data });
     ids[t.code] = row.id;
   }
   const policy = (await p.leavePolicy.findFirst({ where: { name: 'UAE statutory', countryCode: 'AE' } })) ??
     (await p.leavePolicy.create({ data: { name: 'UAE statutory', layer: 'STATUTORY', countryCode: 'AE', effectiveFrom: new Date('2020-01-01'), note: 'UAE Labour Law leave entitlements' } }));
   for (const [code, r] of Object.entries(RULES)) {
-    const d = { creditMethod: r.creditMethod, annualDays: r.annualDays, slabs: r.slabs ?? [], slabTiming: r.slabTiming ?? 'IMMEDIATE', proration: r.proration ?? 'NONE', serviceBasis: 'JOINING_DATE', rounding: 'NONE', formula: r.formula ?? null };
+    const d = { creditMethod: r.creditMethod, annualDays: r.annualDays, slabs: r.slabs ?? [], slabTiming: r.slabTiming ?? 'IMMEDIATE', proration: r.proration ?? 'NONE', serviceBasis: r.serviceBasis ?? 'JOINING_DATE', rounding: 'NONE', formula: r.formula ?? null };
     await p.leavePolicyRule.upsert({ where: { policyId_leaveTypeId: { policyId: policy.id, leaveTypeId: ids[code] } }, create: { policyId: policy.id, leaveTypeId: ids[code], ...d }, update: d });
   }
   // Carry forward: blue collar -> unpaid leave; white collar -> leave salary.

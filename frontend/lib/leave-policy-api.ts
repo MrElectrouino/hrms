@@ -21,6 +21,8 @@ export interface PolicyRule {
   maxDays: number | null;
   /** Optional formula, for example "workdays * annualDays / yearDays"; replaces the joining-part-way method. */
   formula?: string | null;
+  /** Service counts from the joining date or (when there is one) the rejoining date. */
+  serviceBasis?: 'JOINING_DATE' | 'REJOINING_DATE';
 }
 export interface LeavePolicy {
   id: number;

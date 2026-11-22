@@ -150,12 +150,33 @@ export class LeaveService {
       if (!type.allowHalfDay) throw new BadRequestException(`${type.name} cannot be taken as a half day`);
       if (dto.fromDate !== dto.toDate) throw new BadRequestException('A half day is a single day');
     }
+    await this.checkConditions(employeeId, type, dto, excludeApplicationId);
     const { result, noRoster } = await this.calculate(employeeId, type, dto.fromDate, dto.toDate, halfDay, excludeApplicationId);
     if (result.totalDays <= 0) throw new BadRequestException('The days you chose are all off days or holidays, so there is no leave to take');
     if (type.maxDaysPerRequest && result.totalDays > type.maxDaysPerRequest) throw new BadRequestException(`${type.name} can be at most ${type.maxDaysPerRequest} days at a time`);
     const overlap = await this.prisma.leaveApplication.findFirst({ where: { employeeId, status: { in: ['PENDING', 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined, fromDate: { lte: to }, toDate: { gte: from } } });
     if (overlap) throw new ConflictException(`You already have leave from ${toIsoDate(overlap.fromDate)} to ${toIsoDate(overlap.toDate)} that overlaps these dates`);
     return { type, result, noRoster, from, to, halfDay };
+  }
+
+  /** The conditions a leave type puts on who can take it and when (gender, times in service, event window). */
+  private async checkConditions(employeeId: number, type: { id: number; name: string; genderRestriction: string | null; maxTimesInService: number | null; eventWindowMonths: number | null; eventLabel: string | null }, dto: LeaveRequestDto, excludeApplicationId?: number) {
+    if (type.genderRestriction) {
+      const p = await this.prisma.employeeProfileSection.findUnique({ where: { employeeId_sectionKey: { employeeId, sectionKey: 'personal' } }, select: { data: true } });
+      const gender = (p?.data as { gender?: unknown } | null)?.gender;
+      if (typeof gender !== 'string' || gender.trim().toLowerCase() !== type.genderRestriction.trim().toLowerCase()) throw new BadRequestException(`${type.name} is only for ${type.genderRestriction.toLowerCase()} employees`);
+    }
+    if (type.maxTimesInService) {
+      const used = await this.prisma.leaveApplication.count({ where: { employeeId, leaveTypeId: type.id, status: { in: ['PENDING', 'APPROVED'] }, id: excludeApplicationId ? { not: excludeApplicationId } : undefined } });
+      if (used >= type.maxTimesInService) throw new BadRequestException(`${type.name} can be taken only ${type.maxTimesInService === 1 ? 'once' : type.maxTimesInService + ' times'} during employment, and you have already used it`);
+    }
+    if (type.eventWindowMonths) {
+      const label = type.eventLabel || 'Event date';
+      if (!dto.eventDate) throw new BadRequestException(`Give the ${label.toLowerCase()} for ${type.name}`);
+      if (dto.fromDate < dto.eventDate) throw new BadRequestException(`${type.name} cannot start before the ${label.toLowerCase()}`);
+      const last = addMonthsIso(dto.eventDate, type.eventWindowMonths);
+      if (dto.toDate > last) throw new BadRequestException(`${type.name} must be taken within ${type.eventWindowMonths} month(s) of the ${label.toLowerCase()} (by ${last})`);
+    }
   }
 
   private async available(employeeId: number, typeId: number): Promise<number> {
@@ -184,7 +205,7 @@ export class LeaveService {
       if (available < result.totalDays) throw new BadRequestException(`Not enough ${type.name}: ${available} available, ${result.totalDays} needed`);
     }
     const created = await this.prisma.leaveApplication.create({
-      data: { employeeId, leaveTypeId: type.id, fromDate: from, toDate: to, halfDayPart: dto.halfDayPart ?? null, requestedDays: result.requestedDays, sandwichDays: result.sandwichDays, totalDays: result.totalDays, reason: dto.reason?.trim() || null, calculation: result.days as unknown as Prisma.InputJsonValue },
+      data: { employeeId, leaveTypeId: type.id, fromDate: from, toDate: to, halfDayPart: dto.halfDayPart ?? null, eventDate: dto.eventDate ? parseIsoDate(dto.eventDate)! : null, requestedDays: result.requestedDays, sandwichDays: result.sandwichDays, totalDays: result.totalDays, reason: dto.reason?.trim() || null, calculation: result.days as unknown as Prisma.InputJsonValue },
     });
     // A leave type that needs no approval is approved the moment it is sent (days taken from the balance, attendance marked).
     if (!type.requiresApproval) {

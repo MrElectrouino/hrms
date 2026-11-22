@@ -147,6 +147,7 @@ const drop = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v
           employeeCategory: category,
           dateOfJoining: joining,
           confirmationDate: isoDate(f.value('DateofConfirmation', 'usr.Employee')),
+          rejoiningDate: isoDate(f.value('DateOfRejoining', 'usr.Profile')),
         }),
       },
       organization: {
@@ -179,7 +180,6 @@ const drop = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v
     // Things the old record has that this app has no place for yet.
     if (clean(f.value('ReportingTo', 'usr.Employee'))) notes.push(`Reporting manager (old id ${f.value('ReportingTo', 'usr.Employee')}) is not linked: set it on the Employment tab once that person exists`);
     if (f.value('HomeCountryPhoneNo', 'usr.Profile')) notes.push('Home country phone is not stored (no field for it)');
-    if (f.value('DateOfRejoining', 'usr.Profile')) notes.push('Date of rejoining is not stored (no field for it)');
     if (f.label('VisaType', 'usr.Profile')) notes.push(`Visa type "${f.label('VisaType', 'usr.Profile')}" is not stored on the profile`);
 
     // --- already there?

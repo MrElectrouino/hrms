@@ -22,6 +22,11 @@ export interface LeaveType {
   carryForwardType: 'NONE' | 'CARRY_FORWARD';
   /** What carrying forward means per Employee Category. */
   carryForwardRules: CarryRule[];
+  genderRestriction: string | null;
+  maxTimesInService: number | null;
+  eventWindowMonths: number | null;
+  eventLabel: string | null;
+  payPercent: number;
   /** Month (1-12) this type's calendar starts in; null = the company leave year. */
   calendarStartMonth: number | null;
   isCompOff: boolean;
@@ -114,6 +119,7 @@ export interface LeaveRequestPayload {
   fromDate: string;
   toDate: string;
   halfDayPart?: 'FIRST' | 'SECOND';
+  eventDate?: string;
   reason?: string;
 }
 

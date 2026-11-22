@@ -82,6 +82,11 @@ export class LeaveConfigService {
       // Carrying forward only means something while the balance is reset.
       carryForwardType: (dto.resetBalance ?? true) ? dto.carryForwardType ?? 'NONE' : 'NONE',
       carryForwardRules: (await this.carryRules(dto)) as unknown as Prisma.InputJsonValue,
+      genderRestriction: dto.genderRestriction?.trim() || null,
+      maxTimesInService: dto.maxTimesInService ?? null,
+      eventWindowMonths: dto.eventWindowMonths ?? null,
+      eventLabel: dto.eventWindowMonths ? dto.eventLabel?.trim() || 'Event date' : null,
+      payPercent: dto.payPercent ?? (dto.isPaid ? 100 : 0),
       calendarStartMonth: dto.calendarStartMonth ?? null,
       isCompOff: dto.isCompOff,
       isActive: dto.isActive ?? true,

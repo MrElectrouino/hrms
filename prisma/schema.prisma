@@ -1465,6 +1465,16 @@ model LeaveType {
   carryForwardType   String   @default("NONE")
   /// What happens to carried-forward days per employee category: [{ category, action: KEEP|UNPAID_LEAVE|LEAVE_SALARY|LAPSE, targetLeaveTypeId }].
   carryForwardRules  Json     @default("[]")
+  /// Only this gender can take it (the Gender text of the profile, for example "Female"). Empty = anyone.
+  genderRestriction  String?
+  /// How many times in a whole employment a person may take it (for example Hajj leave: 1). Empty = no limit.
+  maxTimesInService  Int?
+  /// When set, the request must give a date (for example the child's date of birth) and the leave must start within this many months after it.
+  eventWindowMonths  Int?
+  /// What the event date is called on the request form.
+  eventLabel         String?
+  /// Share of salary paid while on this leave (100 full, 50 half, 0 unpaid). Recorded for payroll.
+  payPercent         Int      @default(100)
   /// Month (1-12) this leave type's calendar starts in; it ends the month before. Empty = the company leave year.
   calendarStartMonth Int?
   /// Earned through comp off credits instead of accrual.
@@ -1569,6 +1579,8 @@ model LeaveApplication {
   toDate        DateTime  @db.Date
   /// FIRST | SECOND, only for a single half day
   halfDayPart   String?
+  /// The date the leave depends on (for example the child's date of birth), when the leave type asks for one.
+  eventDate     DateTime? @db.Date
   /// Days asked for, extra days counted by the sandwich rule, and the total taken from the balance.
   requestedDays Decimal   @db.Decimal(6, 2)
   sandwichDays  Decimal   @default(0) @db.Decimal(6, 2)

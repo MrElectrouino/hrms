@@ -27,7 +27,7 @@ export class LeavePolicyService {
       effectiveFrom: iso(p.effectiveFrom), effectiveTo: p.effectiveTo ? iso(p.effectiveTo) : null, priority: p.priority, isActive: p.isActive, note: p.note, used,
       rules: p.rules.map((r) => ({
         id: r.id, leaveTypeId: r.leaveTypeId, leaveType: r.leaveType.name, annualDays: Number(r.annualDays), creditMethod: r.creditMethod, slabs: r.slabs, slabTiming: r.slabTiming,
-        proration: r.proration, cutoffDay: r.cutoffDay, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays === null ? null : Number(r.minDays), maxDays: r.maxDays === null ? null : Number(r.maxDays), formula: r.formula,
+        proration: r.proration, cutoffDay: r.cutoffDay, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays === null ? null : Number(r.minDays), maxDays: r.maxDays === null ? null : Number(r.maxDays), formula: r.formula, serviceBasis: r.serviceBasis,
       })),
     };
   }
@@ -86,7 +86,7 @@ export class LeavePolicyService {
     return dto.rules.map((r) => ({
       leaveTypeId: r.leaveTypeId, annualDays: r.annualDays, creditMethod: r.creditMethod,
       slabs: (r.slabs ?? []).map((s) => ({ fromMonths: s.fromMonths, toMonths: s.toMonths ?? null, annualDays: s.annualDays })) as unknown as Prisma.InputJsonValue,
-      slabTiming: r.slabTiming, proration: r.proration, cutoffDay: r.cutoffDay ?? null, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays ?? null, maxDays: r.maxDays ?? null, formula: r.formula?.trim() || null,
+      slabTiming: r.slabTiming, proration: r.proration, cutoffDay: r.cutoffDay ?? null, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays ?? null, maxDays: r.maxDays ?? null, formula: r.formula?.trim() || null, serviceBasis: r.serviceBasis ?? 'JOINING_DATE',
     }));
   }
 

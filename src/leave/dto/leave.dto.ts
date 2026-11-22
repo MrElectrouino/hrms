@@ -30,6 +30,11 @@ export class LeaveTypeDto {
   @IsOptional() @IsBoolean() resetBalance?: boolean;
   @IsOptional() @IsIn(['NONE', 'CARRY_FORWARD']) carryForwardType?: string;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CarryRuleDto) carryForwardRules?: CarryRuleDto[];
+  @IsOptional() @IsString() @MaxLength(30) genderRestriction?: string | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) maxTimesInService?: number | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(120) eventWindowMonths?: number | null;
+  @IsOptional() @IsString() @MaxLength(60) eventLabel?: string | null;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(100) payPercent?: number;
   /** Month (1-12) this type's calendar starts in; empty = the company leave year. */
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(12) calendarStartMonth?: number | null;
   @IsBoolean() isCompOff: boolean;
@@ -55,6 +60,7 @@ export class LeaveRequestDto {
   @IsString() @Matches(DATE) fromDate: string;
   @IsString() @Matches(DATE) toDate: string;
   @IsOptional() @IsIn(['FIRST', 'SECOND']) halfDayPart?: string;
+  @IsOptional() @IsString() @Matches(DATE) eventDate?: string;
   @IsOptional() @IsString() @MaxLength(300) reason?: string;
 }
 

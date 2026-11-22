@@ -14,6 +14,8 @@ export interface ResolvedRule {
   policyName: string;
   layer: string;
   creditMethod: string;
+  /** JOINING_DATE | REJOINING_DATE (service counts from the rejoining date when there is one). */
+  serviceBasis: string;
   input: Omit<EntitlementInput, 'joinDate' | 'serviceStart' | 'yearStart'>;
 }
 
@@ -26,6 +28,8 @@ export interface EmployeeFacts {
   countryCode: string | null;
   /** Date of confirmation (on payroll); null while on probation or when never set. */
   confirmedOn: string | null;
+  /** Date the person came back after leaving (employment section); null when never rejoined. */
+  rejoinDate: string | null;
 }
 
 /** Works out entitlement from the leave policies. It never decides anything itself: all numbers come from policy rows. */
@@ -40,6 +44,7 @@ export class EntitlementService {
       select: { id: true, dateOfJoining: true, dateOfConfirmation: true, branchId: true, siteId: true, employeeTypeId: true },
     });
     const sections = await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'organization', employeeId: { in: emps.map((e) => e.id) } }, select: { employeeId: true, data: true } });
+    const employment = new Map((await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'employment', employeeId: { in: emps.map((e) => e.id) } }, select: { employeeId: true, data: true } })).map((s) => [s.employeeId, (s.data ?? {}) as { rejoiningDate?: unknown }]));
     const org = new Map(sections.map((s) => [s.employeeId, (s.data ?? {}) as { legalEntityCountry?: unknown; employmentType?: unknown }]));
     // The profile stores the employment type by name; policies point at the Employee Type parameter.
     const typeIds = new Map((await this.prisma.parameter.findMany({ where: { parameterType: { name: 'Employee Type' } }, select: { id: true, text: true } })).map((p) => [p.text, p.id]));
@@ -47,7 +52,7 @@ export class EntitlementService {
       const o = org.get(e.id);
       const c = o?.legalEntityCountry;
       const t = typeof o?.employmentType === 'string' ? typeIds.get(o.employmentType) : undefined;
-      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, siteId: e.siteId, employeeTypeId: e.employeeTypeId ?? t ?? null, countryCode: typeof c === 'string' && c ? c : null, confirmedOn: e.dateOfConfirmation ? iso(e.dateOfConfirmation) : null };
+      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, siteId: e.siteId, employeeTypeId: e.employeeTypeId ?? t ?? null, countryCode: typeof c === 'string' && c ? c : null, confirmedOn: e.dateOfConfirmation ? iso(e.dateOfConfirmation) : null, rejoinDate: typeof employment.get(e.id)?.rejoiningDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(employment.get(e.id)!.rejoiningDate as string) ? (employment.get(e.id)!.rejoiningDate as string) : null };
     });
   }
 
@@ -79,6 +84,7 @@ export class EntitlementService {
         policyName: hit.name,
         layer,
         creditMethod: r.creditMethod,
+        serviceBasis: r.serviceBasis,
         input: {
           annualDays: Number(r.annualDays),
           slabs: (r.slabs as unknown as ServiceSlab[]) ?? [],
@@ -96,13 +102,21 @@ export class EntitlementService {
     return out;
   }
 
+  /** The date service counts from for this rule: the rejoining date when the rule asks for it and the person has one. */
+  serviceFrom(rule: ResolvedRule, who: EmployeeFacts): string {
+    return rule.serviceBasis === 'REJOINING_DATE' && who.rejoinDate ? who.rejoinDate : who.joinDate;
+  }
+
   /**
    * Entitlement for one leave year. When both a statutory and a company policy apply the employee gets the larger,
    * and the credit method of that winning policy is used.
    */
   compute(rules: ResolvedRule[], who: EmployeeFacts, yearStart: string): { winner: ResolvedRule; result: EntitlementResult; others: { rule: ResolvedRule; result: EntitlementResult }[] } | null {
     if (!rules.length) return null;
-    const scored = rules.map((rule) => ({ rule, result: entitlementForYear({ ...rule.input, yearStart, serviceStart: who.joinDate, joinDate: who.joinDate }) }));
+    const scored = rules.map((rule) => {
+      const from = this.serviceFrom(rule, who);
+      return { rule, result: entitlementForYear({ ...rule.input, yearStart, serviceStart: from, joinDate: from }) };
+    });
     scored.sort((a, b) => b.result.quantity - a.result.quantity);
     return { winner: scored[0].rule, result: scored[0].result, others: scored.slice(1) };
   }
@@ -156,8 +170,8 @@ export class EntitlementService {
   async record(employeeId: number, leaveTypeId: number, yearStart: string, rule: ResolvedRule, who: EmployeeFacts, result: EntitlementResult) {
     await this.prisma.leaveEntitlementRun.upsert({
       where: { employeeId_leaveTypeId_yearStart_policyId: { employeeId, leaveTypeId, yearStart: new Date(`${yearStart}T00:00:00Z`), policyId: rule.policyId } },
-      create: { employeeId, leaveTypeId, policyId: rule.policyId, yearStart: new Date(`${yearStart}T00:00:00Z`), input: { ...rule.input, serviceStart: who.joinDate, joinDate: who.joinDate } as unknown as Prisma.InputJsonValue, rawDays: result.raw, quantity: result.quantity, lines: result.lines as unknown as Prisma.InputJsonValue },
-      update: { input: { ...rule.input, serviceStart: who.joinDate, joinDate: who.joinDate } as unknown as Prisma.InputJsonValue, rawDays: result.raw, quantity: result.quantity, lines: result.lines as unknown as Prisma.InputJsonValue },
+      create: { employeeId, leaveTypeId, policyId: rule.policyId, yearStart: new Date(`${yearStart}T00:00:00Z`), input: { ...rule.input, serviceStart: this.serviceFrom(rule, who), joinDate: this.serviceFrom(rule, who) } as unknown as Prisma.InputJsonValue, rawDays: result.raw, quantity: result.quantity, lines: result.lines as unknown as Prisma.InputJsonValue },
+      update: { input: { ...rule.input, serviceStart: this.serviceFrom(rule, who), joinDate: this.serviceFrom(rule, who) } as unknown as Prisma.InputJsonValue, rawDays: result.raw, quantity: result.quantity, lines: result.lines as unknown as Prisma.InputJsonValue },
     });
   }
 }
