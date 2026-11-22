@@ -19,6 +19,8 @@ export interface PolicyRule {
   tieRule: 'UP' | 'DOWN';
   minDays: number | null;
   maxDays: number | null;
+  /** Optional formula, for example "workdays * annualDays / yearDays"; replaces the joining-part-way method. */
+  formula?: string | null;
 }
 export interface LeavePolicy {
   id: number;

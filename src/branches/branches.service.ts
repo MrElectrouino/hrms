@@ -63,7 +63,7 @@ export class BranchesService {
   }
 
   private data(dto: BranchDto, c: { code: string; name: string; countryCode: string | null; timezone: string | null }) {
-    return { code: c.code, name: c.name, countryCode: c.countryCode, timezone: c.timezone, address: blank(dto.address), city: blank(dto.city), phone: blank(dto.phone), email: blank(dto.email), isActive: dto.isActive ?? true, sortOrder: dto.sortOrder ?? 0 };
+    return { code: c.code, name: c.name, countryCode: c.countryCode, timezone: c.timezone, employeeCodePrefix: blank(dto.employeeCodePrefix)?.toUpperCase() ?? null, address: blank(dto.address), city: blank(dto.city), phone: blank(dto.phone), email: blank(dto.email), isActive: dto.isActive ?? true, sortOrder: dto.sortOrder ?? 0 };
   }
 
   async create(dto: BranchDto, user: CurrentUserPayload, ip?: string) {

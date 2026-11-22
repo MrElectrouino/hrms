@@ -40,6 +40,24 @@ export class LeaveConfigService {
     return unique;
   }
 
+  /** Per-category carry forward rules; only kept while the type carries forward. */
+  private async carryRules(dto: LeaveTypeDto) {
+    if (!(dto.resetBalance ?? true) || (dto.carryForwardType ?? 'NONE') !== 'CARRY_FORWARD') return [];
+    const out: { category: string; action: string; targetLeaveTypeId: number | null }[] = [];
+    for (const r of dto.carryForwardRules ?? []) {
+      if (out.some((o) => o.category.trim().toLowerCase() === r.category.trim().toLowerCase())) throw new BadRequestException(`The category "${r.category || 'everyone else'}" is listed twice`);
+      let target: number | null = null;
+      if (r.action === 'UNPAID_LEAVE') {
+        if (!r.targetLeaveTypeId) throw new BadRequestException('Choose the unpaid leave type the carried-forward days become');
+        const t = await this.prisma.leaveType.findUnique({ where: { id: r.targetLeaveTypeId }, select: { id: true, balanceTracking: true, isCompOff: true } });
+        if (!t || !t.balanceTracking || t.isCompOff) throw new BadRequestException('The unpaid leave type must keep a balance');
+        target = t.id;
+      }
+      out.push({ category: r.category.trim(), action: r.action, targetLeaveTypeId: target });
+    }
+    return out;
+  }
+
   private async data(dto: LeaveTypeDto, countryCodes: string[]) {
     if (dto.isCompOff && dto.accrual !== 'NONE') throw new BadRequestException('Comp off is earned through attendance, so it has no accrual');
     if (dto.accrual !== 'NONE' && !dto.balanceTracking) throw new BadRequestException('A leave type with accrual must keep a balance');
@@ -63,6 +81,7 @@ export class LeaveConfigService {
       resetBalance: dto.resetBalance ?? true,
       // Carrying forward only means something while the balance is reset.
       carryForwardType: (dto.resetBalance ?? true) ? dto.carryForwardType ?? 'NONE' : 'NONE',
+      carryForwardRules: (await this.carryRules(dto)) as unknown as Prisma.InputJsonValue,
       calendarStartMonth: dto.calendarStartMonth ?? null,
       isCompOff: dto.isCompOff,
       isActive: dto.isActive ?? true,

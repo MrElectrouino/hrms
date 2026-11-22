@@ -413,6 +413,8 @@ export default function EmployeeProfilePage() {
         dateOfJoining: employment.dateOfJoining || undefined,
         designation: values.organization?.designation || undefined,
         workEmail: personal.officialEmail || undefined,
+        // The branch chosen in Organization: a branch with a code prefix numbers its own employees.
+        branchId: Number(values.organization?.branch) || undefined,
       } as any);
       const id = created.data.id;
       const failed: string[] = [];

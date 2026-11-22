@@ -135,6 +135,8 @@ export interface Employee {
   personIdNumber?: string;
   designation?: string;
   shiftId?: number;
+  /** The branch the employee joins; a branch with a code prefix numbers its own employees. */
+  branchId?: number;
   isActive: boolean;
   /** Country of employment (Organization section). Only present on GET /employees/:id. */
   country?: string;
@@ -1085,6 +1087,8 @@ export interface BranchOption {
 }
 
 export interface BranchRow extends BranchOption {
+  /** Employee codes of this branch start with this (for example EA-). */
+  employeeCodePrefix: string | null;
   address: string | null;
   city: string | null;
   phone: string | null;

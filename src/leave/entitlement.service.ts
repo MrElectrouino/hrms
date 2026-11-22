@@ -89,6 +89,7 @@ export class EntitlementService {
           tie: r.tieRule as TieRule,
           minDays: num(r.minDays),
           maxDays: num(r.maxDays),
+          formula: r.formula,
         },
       });
     }
@@ -110,12 +111,21 @@ export class EntitlementService {
    * Credits due for each month of the year up to `month` (0-based index from the year start). Each month's credit is the
    * change in the rounded running total, so the year always adds up to the rounded entitlement.
    */
-  monthlySchedule(result: EntitlementResult, rounding: RoundingMode, tie: TieRule, upTo: number): number[] {
+  monthlySchedule(result: EntitlementResult, rounding: RoundingMode, tie: TieRule, upTo: number, yearStart?: string): number[] {
     const out: number[] = [];
     let before = 0;
     let running = 0;
-    for (let m = 0; m <= upTo && m < result.lines.length; m += 1) {
-      running += result.lines[m].days;
+    // With day blocks a month can have more than one line (and a late joiner has none for the early months): add them up per month.
+    let perMonth = result.lines.map((l) => l.days);
+    if (yearStart && result.lines.length !== 12) {
+      perMonth = Array(12).fill(0);
+      for (const l of result.lines) {
+        const idx = (Number(l.from.slice(0, 4)) - Number(yearStart.slice(0, 4))) * 12 + Number(l.from.slice(5, 7)) - Number(yearStart.slice(5, 7));
+        if (idx >= 0 && idx < 12) perMonth[idx] += l.days;
+      }
+    }
+    for (let m = 0; m <= upTo && m < perMonth.length; m += 1) {
+      running += perMonth[m];
       const target = m === 11 ? result.quantity : roundDays(running, rounding, tie);
       out.push(Math.round((target - before) * 100) / 100);
       before = target;

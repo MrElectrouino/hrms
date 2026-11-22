@@ -16,6 +16,7 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { ListEmployeesQueryDto } from './dto/list-employees-query.dto';
 import { CreateDependantDto } from './dto/create-dependant.dto';
 import { UpdateDependantDto } from './dto/update-dependant.dto';
+import { formatEmployeeCode, nextCodeNumber } from './employee-code';
 import { COUNTRIES } from '../employee-profile/profile-schema';
 
 /**
@@ -158,9 +159,21 @@ export class EmployeesService {
    * Next code for an employee type: the type's code plus a running number (PRM-0001).
    * The counter row is updated atomically, and numbers already used by a hand-typed code are skipped.
    */
-  private async nextEmployeeCode(tx: Prisma.TransactionClient, employmentType: string) {
+  private async nextEmployeeCode(tx: Prisma.TransactionClient, employmentType: string | undefined, branchId: number | null) {
+    // A branch with its own prefix numbers its employees itself (EA-001, EA-002 ...).
+    const branch = branchId ? await tx.branch.findUnique({ where: { id: branchId }, select: { name: true, employeeCodePrefix: true } }) : null;
+    const branchPrefix = branch?.employeeCodePrefix?.trim().toUpperCase();
+    if (branchPrefix) {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const used = await tx.employee.findMany({ where: { employeeCode: { startsWith: branchPrefix, mode: 'insensitive' } }, select: { employeeCode: true } });
+        const code = formatEmployeeCode(branchPrefix, nextCodeNumber(used.map((u) => u.employeeCode), branchPrefix) + attempt);
+        if (!(await tx.employee.findUnique({ where: { employeeCode: code }, select: { id: true } }))) return { code, parameterId: null as number | null };
+      }
+      throw new ConflictException('Could not allocate a unique employee code, please try again');
+    }
+    if (!employmentType?.trim()) throw new BadRequestException('Choose an employment type, or a branch that has an employee code prefix, so the employee code can be generated');
     const type = await tx.parameter.findFirst({
-      where: { parameterType: { name: 'Employee Type' }, text: { equals: employmentType, mode: 'insensitive' } },
+      where: { parameterType: { name: 'Employee Type' }, text: { equals: employmentType.trim(), mode: 'insensitive' } },
       select: { id: true, text: true, code: true },
     });
     if (!type) throw new BadRequestException(`Unknown employee type "${employmentType}"`);
@@ -175,7 +188,7 @@ export class EmployeesService {
       });
       const code = `${prefix}${String(seq.lastNumber).padStart(4, '0')}`;
       if (!(await tx.employee.findUnique({ where: { employeeCode: code }, select: { id: true } }))) {
-        return { code, parameterId: type.id };
+        return { code, parameterId: type.id as number | null };
       }
     }
     throw new ConflictException('Could not allocate a unique employee code, please try again');
@@ -192,13 +205,19 @@ export class EmployeesService {
     } else if (user?.activeBranchIds?.length === 1) {
       branchId = user.activeBranchIds[0];
     }
+    // The branch chosen on the form (a branch-limited account can only use its own).
+    if (dto.branchId) {
+      if (user?.branchAccess && !user.branchAccess.includes(dto.branchId)) throw new BadRequestException('You do not have access to that branch');
+      if (!(await this.prisma.branch.findFirst({ where: { id: dto.branchId, isActive: true }, select: { id: true } }))) throw new BadRequestException('Choose an active branch');
+      branchId = dto.branchId;
+    }
     const manualCode = dto.employeeCode?.trim() || undefined;
     if (manualCode) {
       const codeExists = await this.prisma.employee.findUnique({ where: { employeeCode: manualCode } });
       if (codeExists) {
         throw new ConflictException('Employee code already exists');
       }
-    } else if (!dto.employmentType?.trim()) {
+    } else if (!dto.employmentType?.trim() && !(branchId && (await this.prisma.branch.findUnique({ where: { id: branchId }, select: { employeeCodePrefix: true } }))?.employeeCodePrefix)) {
       throw new BadRequestException('Choose an employment type so the employee code can be generated');
     }
 
@@ -238,7 +257,9 @@ export class EmployeesService {
 
     const employee = await this.prisma.$transaction(async (tx) => {
       const profile = await tx.profile.create({ data: profileData });
-      const generated = manualCode ? null : await this.nextEmployeeCode(tx, dto.employmentType!.trim());
+      const generated = manualCode ? null : await this.nextEmployeeCode(tx, dto.employmentType, branchId);
+      // The employee type column follows the chosen employment type (also when the code is typed by hand or comes from the branch prefix).
+      const typeRow = dto.employeeTypeId || !dto.employmentType?.trim() ? null : await tx.parameter.findFirst({ where: { parameterType: { name: 'Employee Type' }, text: { equals: dto.employmentType.trim(), mode: 'insensitive' } }, select: { id: true } });
 
       const emp = await tx.employee.create({
         data: {
@@ -249,7 +270,7 @@ export class EmployeesService {
           locationId: dto.locationId ?? null,
           siteId: dto.siteId ?? null,
           employeeStatusId: dto.employeeStatusId ?? null,
-          employeeTypeId: dto.employeeTypeId ?? generated?.parameterId ?? null,
+          employeeTypeId: dto.employeeTypeId ?? generated?.parameterId ?? typeRow?.id ?? null,
           contractTypeId: dto.contractTypeId ?? null,
           workPhone: dto.workPhone ?? null,
           extension: dto.extension ?? null,

@@ -1,7 +1,14 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** What carry forward means for one employee category. */
+export class CarryRuleDto {
+  @IsString() @MaxLength(100) category: string;
+  @IsIn(['KEEP', 'UNPAID_LEAVE', 'LEAVE_SALARY', 'LAPSE']) action: string;
+  @IsOptional() @Type(() => Number) @IsInt() targetLeaveTypeId?: number | null;
+}
 
 export class LeaveTypeDto {
   @IsString() @IsNotEmpty() @MaxLength(10) @Matches(/^[A-Za-z0-9_-]+$/) code: string;
@@ -22,6 +29,7 @@ export class LeaveTypeDto {
   @IsOptional() @IsBoolean() excludeHolidays?: boolean;
   @IsOptional() @IsBoolean() resetBalance?: boolean;
   @IsOptional() @IsIn(['NONE', 'CARRY_FORWARD']) carryForwardType?: string;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CarryRuleDto) carryForwardRules?: CarryRuleDto[];
   /** Month (1-12) this type's calendar starts in; empty = the company leave year. */
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(12) calendarStartMonth?: number | null;
   @IsBoolean() isCompOff: boolean;

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { getParameters } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { UserType } from '../../lib/user-types';
 import { CountryItem, getCountries } from '../../lib/api';
@@ -9,7 +10,7 @@ import LeavePoliciesPanel from '../leave/LeavePoliciesPanel';
 
 const blankType: LeaveTypePayload = {
   code: '', name: '', isPaid: true, balanceTracking: true, accrual: 'NONE', annualDays: 0, allowHalfDay: true, allowNegative: false,
-  requiresDocument: false, documentAfterDays: 0, maxDaysPerRequest: null, isSandwichEligible: false, requiresApproval: true, isEncashable: false, excludeWeeklyOffs: true, excludeHolidays: true, resetBalance: true, carryForwardType: 'NONE', calendarStartMonth: 1, isCompOff: false, isActive: true,
+  requiresDocument: false, documentAfterDays: 0, maxDaysPerRequest: null, isSandwichEligible: false, requiresApproval: true, isEncashable: false, excludeWeeklyOffs: true, excludeHolidays: true, resetBalance: true, carryForwardType: 'NONE', carryForwardRules: [], calendarStartMonth: 1, isCompOff: false, isActive: true,
   countryCodes: [],
 };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -52,6 +53,7 @@ export default function LeaveConfigPanel() {
   const [saving, setSaving] = useState(false);
   const [countries, setCountries] = useState<CountryItem[]>([]);
 
+  const [categories, setCategories] = useState<string[]>([]);
   const load = useCallback(async () => {
     try {
       const r = (await getLeaveConfig()).data;
@@ -64,6 +66,7 @@ export default function LeaveConfigPanel() {
   useEffect(() => {
     if (isAuthenticated && isAdmin) {
       load();
+      getParameters('Employee Category').then((r) => setCategories((r.data as any[]).map((p) => p.text))).catch(() => setCategories([]));
       getCountries().then((r) => setCountries(r.data.filter((c) => c.isActive))).catch(() => setCountries([]));
     }
   }, [isAuthenticated, isAdmin, load]);
@@ -305,6 +308,44 @@ export default function LeaveConfigPanel() {
                     </Select>
                     <span className="mt-1 block text-xs text-gray-500">{editing.form.carryForwardType === 'CARRY_FORWARD' ? 'Unused days move on into the next calendar period instead of being lost. There is no limit on how many.' : 'Unused days are lost when the calendar period ends.'}</span>
                   </label>
+                  {editing.form.carryForwardType === 'CARRY_FORWARD' && (
+                    <div className="space-y-2 rounded-lg border border-gray-200 p-3">
+                      <p className="text-sm font-medium text-gray-700">What happens by employee category</p>
+                      <p className="text-xs text-gray-500">Without a line for someone's category, their days are simply carried forward.</p>
+                      {(editing.form.carryForwardRules ?? []).map((r, i) => {
+                        const setRuleAt = (patch: Partial<LeaveTypePayload['carryForwardRules'][number]>) => setF({ carryForwardRules: editing.form.carryForwardRules.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+                        return (
+                          <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                            <label className="block text-xs text-gray-600">Category
+                              <Select className={fieldClass} value={r.category} onChange={(e) => setRuleAt({ category: e.target.value })}>
+                                <option value="">Everyone else</option>
+                                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                              </Select>
+                            </label>
+                            <label className="block text-xs text-gray-600">Carried-forward days
+                              <Select className={fieldClass} value={r.action} onChange={(e) => setRuleAt({ action: e.target.value as typeof r.action })}>
+                                <option value="KEEP">Stay as this leave</option>
+                                <option value="UNPAID_LEAVE">Become unpaid leave</option>
+                                <option value="LEAVE_SALARY">Paid as leave salary</option>
+                                <option value="LAPSE">Are lost</option>
+                              </Select>
+                            </label>
+                            <button type="button" className="pb-2 text-xs text-red-600" onClick={() => setF({ carryForwardRules: editing.form.carryForwardRules.filter((_, k) => k !== i) })}>Remove</button>
+                            {r.action === 'UNPAID_LEAVE' && (
+                              <label className="col-span-2 block text-xs text-gray-600">Unpaid leave type they become
+                                <Select className={fieldClass} value={r.targetLeaveTypeId ?? ''} onChange={(e) => setRuleAt({ targetLeaveTypeId: e.target.value ? Number(e.target.value) : null })}>
+                                  <option value="">Choose…</option>
+                                  {types.filter((t) => t.balanceTracking && !t.isCompOff && !t.isPaid && t.id !== editing.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </Select>
+                              </label>
+                            )}
+                            {r.action === 'LEAVE_SALARY' && <p className="col-span-3 text-xs text-gray-500">The days leave the balance and are recorded as leave salary due. Payroll will pick them up when it is built.</p>}
+                          </div>
+                        );
+                      })}
+                      <button type="button" className="text-sm text-blue-600" onClick={() => setF({ carryForwardRules: [...(editing.form.carryForwardRules ?? []), { category: '', action: 'KEEP' }] })}>+ Add a category</button>
+                    </div>
+                  )}
                 </>
               )}
             </Group>

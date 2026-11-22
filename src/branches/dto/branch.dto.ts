@@ -6,6 +6,8 @@ export class BranchDto {
   @IsString() @IsNotEmpty() @MaxLength(100) name: string;
   /** Must be an active country in the country list. */
   @IsOptional() @IsString() @MaxLength(10) countryCode?: string | null;
+  /** Employee codes of this branch start with this, for example EA-. Empty = the employee type's code is used. */
+  @IsOptional() @IsString() @MaxLength(10) @Matches(/^[A-Za-z0-9_-]*$/, { message: 'The prefix can use letters, numbers, - and _ only' }) employeeCodePrefix?: string | null;
   /** IANA name such as Asia/Dubai. Empty = use the country's timezone. */
   @IsOptional() @IsString() @MaxLength(60) timezone?: string | null;
   @IsOptional() @IsString() @MaxLength(300) address?: string | null;

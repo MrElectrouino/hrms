@@ -5,6 +5,7 @@ import { AuditService } from '../common/services/audit.service';
 import { CurrentUserPayload } from '../common/decorators/current-user.decorator';
 import { LeavePolicyDto } from './dto/leave-policy.dto';
 import { validateSlabs } from './entitlement-rules';
+import { checkFormula } from './leave-formula';
 import { EntitlementService } from './entitlement.service';
 
 const d = (s: string) => new Date(`${s}T00:00:00Z`);
@@ -26,7 +27,7 @@ export class LeavePolicyService {
       effectiveFrom: iso(p.effectiveFrom), effectiveTo: p.effectiveTo ? iso(p.effectiveTo) : null, priority: p.priority, isActive: p.isActive, note: p.note, used,
       rules: p.rules.map((r) => ({
         id: r.id, leaveTypeId: r.leaveTypeId, leaveType: r.leaveType.name, annualDays: Number(r.annualDays), creditMethod: r.creditMethod, slabs: r.slabs, slabTiming: r.slabTiming,
-        proration: r.proration, cutoffDay: r.cutoffDay, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays === null ? null : Number(r.minDays), maxDays: r.maxDays === null ? null : Number(r.maxDays),
+        proration: r.proration, cutoffDay: r.cutoffDay, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays === null ? null : Number(r.minDays), maxDays: r.maxDays === null ? null : Number(r.maxDays), formula: r.formula,
       })),
     };
   }
@@ -46,6 +47,10 @@ export class LeavePolicyService {
       seen.add(r.leaveTypeId);
       const problems = validateSlabs((r.slabs ?? []).map((s) => ({ fromMonths: s.fromMonths, toMonths: s.toMonths ?? null, annualDays: s.annualDays })));
       if (r.slabs?.length && problems.length) throw new BadRequestException(`Service slabs: ${problems[0]}`);
+      if (r.formula?.trim()) {
+        const bad = checkFormula(r.formula);
+        if (bad) throw new BadRequestException(`Formula: ${bad}`);
+      }
       if (r.proration === 'CUTOFF_DAY' && !r.cutoffDay) throw new BadRequestException('Give the cut-off day for that proration method');
       if (r.minDays != null && r.maxDays != null && r.minDays > r.maxDays) throw new BadRequestException('The minimum cannot be above the maximum');
     }
@@ -81,7 +86,7 @@ export class LeavePolicyService {
     return dto.rules.map((r) => ({
       leaveTypeId: r.leaveTypeId, annualDays: r.annualDays, creditMethod: r.creditMethod,
       slabs: (r.slabs ?? []).map((s) => ({ fromMonths: s.fromMonths, toMonths: s.toMonths ?? null, annualDays: s.annualDays })) as unknown as Prisma.InputJsonValue,
-      slabTiming: r.slabTiming, proration: r.proration, cutoffDay: r.cutoffDay ?? null, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays ?? null, maxDays: r.maxDays ?? null,
+      slabTiming: r.slabTiming, proration: r.proration, cutoffDay: r.cutoffDay ?? null, rounding: r.rounding, tieRule: r.tieRule, minDays: r.minDays ?? null, maxDays: r.maxDays ?? null, formula: r.formula?.trim() || null,
     }));
   }
 

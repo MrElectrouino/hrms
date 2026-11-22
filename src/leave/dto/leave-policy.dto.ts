@@ -21,6 +21,7 @@ export class PolicyRuleDto {
   @IsIn(['UP', 'DOWN']) tieRule: string;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) minDays?: number | null;
   @IsOptional() @Type(() => Number) @IsNumber() @Min(0) maxDays?: number | null;
+  @IsOptional() @IsString() @MaxLength(200) formula?: string | null;
 }
 
 export class LeavePolicyDto {

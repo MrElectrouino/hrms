@@ -4,6 +4,8 @@
  * Dates are ISO strings (YYYY-MM-DD) and are handled in UTC.
  */
 
+import { evalFormula } from './leave-formula';
+
 export type RoundingMode = 'NONE' | 'DOWN' | 'UP' | 'NEAREST' | 'NEAREST_HALF' | 'UP_HALF' | 'DOWN_HALF';
 export type TieRule = 'UP' | 'DOWN';
 export type ProrationMethod = 'NONE' | 'COMPLETED_MONTHS' | 'STARTED_MONTHS' | 'CUTOFF_DAY' | 'EXACT_DAYS';
@@ -37,6 +39,8 @@ export interface EntitlementInput {
   tie?: TieRule;
   minDays?: number | null;
   maxDays?: number | null;
+  /** Editable formula (see leave-formula.ts). When set it replaces the proration method; the days are worked out per block of days. */
+  formula?: string | null;
 }
 
 export interface EntitlementResult {
@@ -150,7 +154,7 @@ export function entitlementForYear(input: EntitlementInput): EntitlementResult {
   const lines: EntitlementResult['lines'] = [];
   let raw = 0;
 
-  if (method === 'EXACT_DAYS') {
+  if (method === 'EXACT_DAYS' || input.formula) {
     const yearDays = daysBetween(yearStart, yearEnd) + 1;
     for (let m = 0; m < 12; m += 1) {
       const ms = addMonthsIso(yearStart, m);
@@ -175,7 +179,9 @@ export function entitlementForYear(input: EntitlementInput): EntitlementResult {
       for (const [bf, bt] of blocks) {
         const days = daysBetween(bf, bt) + 1;
         const annual = annualAt(bf);
-        const part = (annual * days) / yearDays;
+        const part = input.formula
+          ? evalFormula(input.formula, { workdays: days, yearDays, annualDays: annual, serviceMonths: completedMonths(input.serviceStart, bf) })
+          : (annual * days) / yearDays;
         raw += part;
         lines.push({ from: bf, to: bt, annualDays: annual, weight: days / yearDays, days: Math.round(part * 1e4) / 1e4, counted: true });
       }

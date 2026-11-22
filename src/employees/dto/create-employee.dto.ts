@@ -101,6 +101,12 @@ export class CreateEmployeeDto {
   @MaxLength(100)
   employmentType?: string;
 
+  /** The branch the employee joins. A branch with a code prefix numbers its own employees (EA-001, EA-002 ...). */
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  branchId?: number;
+
   @Type(() => Number)
   @IsOptional()
   @IsInt()

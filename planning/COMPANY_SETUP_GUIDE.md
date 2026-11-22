@@ -120,6 +120,7 @@ Open **System Settings → General settings**. The sections are a list down the 
 5. Leave **Attendance configuration** and **Leave configuration** for steps B6 and B7.
 
 ### B2. Branches (Administration, Branches)
+A branch can have an **Employee code prefix** (for example `EA-`). New employees of that branch are numbered `EA-001`, `EA-002` … from the highest number already used; a branch without a prefix takes the code from the employee type.
 
 Add each place the company works from. For each: name, code (short, unique), **country** (from your list), optional timezone (leave empty to use the country's), address, city, phone, email.
 

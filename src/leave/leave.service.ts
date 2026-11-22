@@ -11,6 +11,7 @@ import { AttendanceProcessingService } from '../attendance/attendance-processing
 import { AdjustBalanceDto, AdjustGroupDto, LeaveRequestDto } from './dto/leave.dto';
 import { EntitlementService } from './entitlement.service';
 import { MONTHLY_LUMP, addMonthsIso, lastMonthToCredit } from './entitlement-rules';
+import { CarryRule, pickCarryRule } from './leave-formula';
 import { CalcResult, DayKind, TimelineDay, allocateFefo, compOffExpiry, countLeaveDays, isoAdd, leaveYear, monthlyCredit } from './leave-rules';
 
 const HR_TYPES: number[] = [UserType.SystemAdmin, UserType.HRAdmin];
@@ -447,7 +448,7 @@ export class LeaveService {
           } else if (winner.creditMethod === 'MONTHLY' || winner.creditMethod === MONTHLY_LUMP) {
             // Monthly. With the confirmation rule, the month the person is confirmed in this year brings every remaining month forward.
             const upTo = lastMonthToCredit({ currentMonthIndex: monthIndex, creditMethod: winner.creditMethod, confirmedOn: e.confirmedOn, asOf, yearStart: year.start, yearEnd: year.end });
-            const schedule = this.entitlement.monthlySchedule(result, winner.input.rounding, winner.input.tie ?? 'UP', upTo);
+            const schedule = this.entitlement.monthlySchedule(result, winner.input.rounding, winner.input.tie ?? 'UP', upTo, year.start);
             for (let k = 0; k < schedule.length; k++) {
               if (schedule[k] <= 0) continue;
               const on = addMonthsIso(year.start, k);
@@ -475,11 +476,45 @@ export class LeaveService {
 
   /** Balance that has passed its expiry date is closed, with a record of what expired. */
   async expireCredits(): Promise<number> {
-    const due = await this.prisma.leaveCredit.findMany({ where: { remaining: { gt: 0 }, expiresOn: { lt: parseIsoDate(today())! } }, include: { leaveType: { select: { carryForwardType: true, calendarStartMonth: true } } } });
+    const due = await this.prisma.leaveCredit.findMany({ where: { remaining: { gt: 0 }, expiresOn: { lt: parseIsoDate(today())! } }, include: { leaveType: { select: { carryForwardType: true, carryForwardRules: true, calendarStartMonth: true, name: true } } } });
     const settings = await this.prisma.leaveSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
+    // The employee category decides what carrying forward means (see the leave type's carry forward rules).
+    const categories = await this.employeeCategories([...new Set(due.map((c) => c.employeeId))]);
     for (const c of due) {
+      let carry = c.source === 'ACCRUAL' && c.leaveType.carryForwardType === 'CARRY_FORWARD';
+      if (carry) {
+        const rule = pickCarryRule((c.leaveType.carryForwardRules as unknown as CarryRule[]) ?? [], categories.get(c.employeeId) ?? null);
+        const days = num(c.remaining);
+        if (rule.action === 'LAPSE') carry = false;
+        else if (rule.action === 'UNPAID_LEAVE' && rule.targetLeaveTypeId) {
+          // The days stop being this leave and become days of the unpaid leave type, valid to the end of its current calendar period.
+          const target = await this.prisma.leaveType.findUnique({ where: { id: rule.targetLeaveTypeId } });
+          if (target) {
+            const until = target.resetBalance ? leaveYear(today(), target.calendarStartMonth ?? settings.leaveYearStartMonth).end : null;
+            await this.prisma.$transaction([
+              this.prisma.leaveCredit.update({ where: { id: c.id }, data: { remaining: 0 } }),
+              this.prisma.leaveTransaction.create({ data: { employeeId: c.employeeId, leaveTypeId: c.leaveTypeId, kind: 'CARRY_FORWARD', days: -days, note: `Carried forward ${days} day(s) from ${toIsoDate(c.expiresOn!)} as ${target.name} (unpaid)` } }),
+              this.prisma.leaveCredit.upsert({
+                where: { employeeId_leaveTypeId_source_sourceRef: { employeeId: c.employeeId, leaveTypeId: target.id, source: 'ACCRUAL', sourceRef: `CF:${c.id}` } },
+                create: { employeeId: c.employeeId, leaveTypeId: target.id, quantity: days, remaining: days, creditedOn: parseIsoDate(today())!, expiresOn: until ? parseIsoDate(until)! : null, source: 'ACCRUAL', sourceRef: `CF:${c.id}`, note: `Carried forward from ${c.leaveType.name}` },
+                update: {},
+              }),
+              this.prisma.leaveTransaction.create({ data: { employeeId: c.employeeId, leaveTypeId: target.id, kind: 'CREDIT', days, note: `Carried forward from ${c.leaveType.name}` } }),
+            ]);
+            continue;
+          }
+          carry = false;
+        } else if (rule.action === 'LEAVE_SALARY') {
+          // Paid out instead of kept: the days leave the balance and a LEAVE_SALARY entry is left for payroll to pay.
+          await this.prisma.$transaction([
+            this.prisma.leaveCredit.update({ where: { id: c.id }, data: { remaining: 0 } }),
+            this.prisma.leaveTransaction.create({ data: { employeeId: c.employeeId, leaveTypeId: c.leaveTypeId, kind: 'LEAVE_SALARY', days: -days, note: `${days} day(s) from ${toIsoDate(c.expiresOn!)} to be paid as leave salary` } }),
+          ]);
+          continue;
+        }
+      }
       // A leave type set to carry forward keeps the unused days of its own credits: they move on to the end of the calendar period we are in now.
-      if (c.source === 'ACCRUAL' && c.leaveType.carryForwardType === 'CARRY_FORWARD') {
+      if (carry) {
         const next = leaveYear(today(), c.leaveType.calendarStartMonth ?? settings.leaveYearStartMonth).end;
         await this.prisma.$transaction([
           this.prisma.leaveCredit.update({ where: { id: c.id }, data: { expiresOn: parseIsoDate(next)! } }),
@@ -493,6 +528,17 @@ export class LeaveService {
       ]);
     }
     return due.length;
+  }
+
+  /** The Employee Category (from the employment section of the profile) for each employee. */
+  private async employeeCategories(employeeIds: number[]): Promise<Map<number, string>> {
+    const rows = await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'employment', employeeId: { in: employeeIds } }, select: { employeeId: true, data: true } });
+    const out = new Map<number, string>();
+    for (const r of rows) {
+      const v = (r.data as { employeeCategory?: unknown } | null)?.employeeCategory;
+      if (typeof v === 'string' && v) out.set(r.employeeId, v);
+    }
+    return out;
   }
 
   /** HR adds days (a credit with an optional expiry) or takes days away (earliest-expiring first). */

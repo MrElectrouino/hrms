@@ -1463,6 +1463,8 @@ model LeaveType {
   resetBalance       Boolean  @default(true)
   /// NONE | CARRY_FORWARD: what happens to the unused days when the balance is reset.
   carryForwardType   String   @default("NONE")
+  /// What happens to carried-forward days per employee category: [{ category, action: KEEP|UNPAID_LEAVE|LEAVE_SALARY|LAPSE, targetLeaveTypeId }].
+  carryForwardRules  Json     @default("[]")
   /// Month (1-12) this leave type's calendar starts in; it ends the month before. Empty = the company leave year.
   calendarStartMonth Int?
   /// Earned through comp off credits instead of accrual.
@@ -1544,7 +1546,7 @@ model LeaveTransaction {
   id            Int      @id @default(autoincrement())
   employeeId    Int
   leaveTypeId   Int
-  /// CREDIT | DEBIT | REVERSAL | EXPIRY | ADJUSTMENT
+  /// CREDIT | DEBIT | REVERSAL | EXPIRY | ADJUSTMENT | CARRY_FORWARD | LEAVE_SALARY (days paid out; payroll reads these)
   kind          String
   days          Decimal  @db.Decimal(6, 2)
   applicationId Int?
@@ -1642,6 +1644,8 @@ model LeavePolicyRule {
   tieRule      String   @default("UP")
   minDays      Decimal? @db.Decimal(6, 2)
   maxDays      Decimal? @db.Decimal(6, 2)
+  /// Optional formula for the days (for example "workdays * 30 / 365"); replaces the proration method.
+  formula      String?
 
   policy    LeavePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
   leaveType LeaveType   @relation(fields: [leaveTypeId], references: [id])
@@ -1673,21 +1677,23 @@ model LeaveEntitlementRun {
 /// A place the company works from. Carries its country and, optionally, its own timezone.
 /// (Used to be a parameter of type "Branch"; ids were kept so existing links still point at the same branch.)
 model Branch {
-  id          Int      @id @default(autoincrement())
-  code        String   @unique
-  name        String   @unique
+  id                 Int      @id @default(autoincrement())
+  code               String   @unique
+  name               String   @unique
   /// Country list (countries.isoCode). Decides the profile layout default and the timezone fallback.
-  countryCode String?
+  countryCode        String?
   /// IANA name, e.g. Asia/Dubai. Empty = use the country's timezone.
-  timezone    String?
-  address     String?
-  city        String?
-  phone       String?
-  email       String?
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  timezone           String?
+  /// Employee codes of this branch start with this (for example "EA-"). Empty = the employee type's code is used.
+  employeeCodePrefix String?
+  address            String?
+  city               String?
+  phone              String?
+  email              String?
+  isActive           Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
 
   employees                  Employee[]
   users                      UserBranch[]

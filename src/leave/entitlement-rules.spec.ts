@@ -172,3 +172,21 @@ describe('lastMonthToCredit (monthly until confirmed, then the rest of the year 
     expect(rest).toBe(9);
   });
 });
+
+describe('entitlement by formula', () => {
+  const base = { annualDays: 30, yearStart: '2026-01-01', serviceStart: '2024-01-01', joinDate: '2024-01-01', method: 'NONE' as const, rounding: 'NONE' as const };
+  it('workdays * 30 / 365 gives 30 for a full year', () => {
+    const r = entitlementForYear({ ...base, formula: 'workdays * 30 / 365' });
+    expect(r.quantity).toBeCloseTo(30, 3);
+    expect(r.lines).toHaveLength(12);
+  });
+  it('gives a part-year share to someone who joins part-way', () => {
+    const r = entitlementForYear({ ...base, joinDate: '2026-07-01', serviceStart: '2026-07-01', formula: 'workdays * 30 / 365' });
+    expect(r.quantity).toBeCloseTo((184 * 30) / 365, 1);
+  });
+  it('uses the service slab through annualDays', () => {
+    const slabs = [{ fromMonths: 0, toMonths: 6, annualDays: 0 }, { fromMonths: 6, toMonths: null, annualDays: 30 }];
+    const r = entitlementForYear({ ...base, joinDate: '2026-01-01', serviceStart: '2026-01-01', slabs, formula: 'workdays * annualDays / yearDays' });
+    expect(r.quantity).toBeCloseTo((184 * 30) / 365, 2);
+  });
+});

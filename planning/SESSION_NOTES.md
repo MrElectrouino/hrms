@@ -181,3 +181,26 @@ psql -U postgres -d hrms -f hrms_db_<timestamp>.sql
 - Prisma migrations were generated with `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, then hand-ordered when data had to be copied (see the branches migration).
 - Applied migration files must not be edited. Add a new migration instead.
 - Real-database smoke scripts in this project always create temporary rows and delete them afterwards.
+
+## UAE setup (database `hrms_uae`)
+
+The app was pointed at a new local database, `hrms_uae` (migrations applied, `npm run prisma:seed` run). Data added on top of the seed, all through normal tables (no schema change):
+
+- **Countries:** United Arab Emirates (default), India, Nepal.
+- **Branches:** Dubai Head Office (AE), Abudhabi (AE), India (IN), Nepal (NP). The unrelated starter branches (Pune HQ, Bengaluru, Chennai, London, Manchester, Austin HQ, New York) are switched off, not deleted.
+- **Employee Category (dropdown):** Blue Collar, White Collar.
+- **Department (dropdown):** Sales, Operations, Stores, Finance, Admin, HR, IT, Safety & Procurement.
+- **Document types:** Passport, Work Permit, Emirates Id, Health Insurance, Trade License, Driving License, Visa have an expiry date; NOL, Traffic Fine, Warning Letter, Accident Document do not. UAE-only types are limited to the United Arab Emirates; Passport, Driving License and Warning Letter apply to every country.
+- **Shifts:** India Office, Nepal Office, Abudhabi Operation, Abudhabi Office, Dubai operations, Dubai Office (late 5 minutes, half day 60 minutes), next to the starter shifts.
+- **Holidays 2026:** one holiday calendar per branch (made with the Excel import): Dubai Head Office 10, Abudhabi 10, India 2, Nepal 2.
+
+The first System Admin was created by the seed. Its temporary password is in `handover/uae-seed-output.txt` (git-ignored); it must be changed at first login.
+
+### Employee codes by branch, and importing from the old system
+
+- A branch can have an **Employee code prefix** (Administration → Masters → Branches). New employees of that branch get
+  `PREFIX001`, `PREFIX002` … continuing after the highest number used with that prefix (codes typed by hand count).
+  A branch without a prefix still takes the code from the employee type. Abudhabi uses `EA-`; the other branches have none yet.
+- `tools/legacy-import/import-employees.js` imports employees from the old system's JSON (see its README). First employee
+  imported: EA-315 (Abudhabi, HR Admin login created).
+- The Employment Status dropdown (required on the profile) was added: Active, On Notice.

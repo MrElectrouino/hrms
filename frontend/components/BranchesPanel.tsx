@@ -6,7 +6,7 @@ import Select from './Select';
 
 type Country = { isoCode: string; name: string; defaultTimezone: string };
 
-const blank = (): BranchPayload => ({ code: '', name: '', countryCode: null, timezone: null, address: null, city: null, phone: null, email: null, isActive: true, sortOrder: 0 });
+const blank = (): BranchPayload => ({ code: '', name: '', countryCode: null, timezone: null, employeeCodePrefix: null, address: null, city: null, phone: null, email: null, isActive: true, sortOrder: 0 });
 
 const timeZones: string[] = (() => {
   try {
@@ -108,7 +108,7 @@ export default function BranchesPanel() {
                 <td className="px-4 py-3 text-gray-700">{b.employeeCount}</td>
                 <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${b.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>{b.isActive ? 'Active' : 'Switched off'}</span></td>
                 <td className="whitespace-nowrap px-4 py-3 text-right">
-                  <button type="button" onClick={() => { setEditing({ id: b.id, form: { code: b.code, name: b.name, countryCode: b.countryCode, timezone: b.timezone ?? null, address: b.address, city: b.city, phone: b.phone, email: b.email, isActive: b.isActive, sortOrder: b.sortOrder } }); setError(''); }} className="text-sm font-medium text-blue-600 hover:text-blue-800">Edit</button>
+                  <button type="button" onClick={() => { setEditing({ id: b.id, form: { code: b.code, name: b.name, countryCode: b.countryCode, timezone: b.timezone ?? null, employeeCodePrefix: b.employeeCodePrefix, address: b.address, city: b.city, phone: b.phone, email: b.email, isActive: b.isActive, sortOrder: b.sortOrder } }); setError(''); }} className="text-sm font-medium text-blue-600 hover:text-blue-800">Edit</button>
                   <button type="button" onClick={() => remove(b)} className="ml-3 text-sm text-red-600 hover:text-red-800">Delete</button>
                 </td>
               </tr>
@@ -138,6 +138,10 @@ export default function BranchesPanel() {
           <Label text="Timezone (optional)">
             <input className={fieldClass} list="branch-tz" value={editing.form.timezone ?? ''} placeholder={chosen ? `Uses ${chosen.defaultTimezone}` : 'Uses the country timezone'} onChange={(e) => setForm({ timezone: e.target.value || null })} />
             <datalist id="branch-tz">{timeZones.map((z) => <option key={z} value={z} />)}</datalist>
+          </Label>
+          <Label text="Employee code prefix (optional)">
+            <input className={fieldClass} value={editing.form.employeeCodePrefix ?? ''} maxLength={10} placeholder="EA-" onChange={(e) => setForm({ employeeCodePrefix: e.target.value.toUpperCase() || null })} />
+            <span className="mt-1 block text-xs text-gray-500">New employees of this branch get codes like {(editing.form.employeeCodePrefix || 'EA-')}001, {(editing.form.employeeCodePrefix || 'EA-')}002. Empty: the code comes from the employee type.</span>
           </Label>
           <Label text="Address"><textarea className={fieldClass} rows={2} maxLength={300} value={editing.form.address ?? ''} onChange={(e) => setForm({ address: e.target.value || null })} /></Label>
           <div className="grid gap-3 sm:grid-cols-2">

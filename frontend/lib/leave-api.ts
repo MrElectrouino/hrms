@@ -20,12 +20,20 @@ export interface LeaveType {
   excludeHolidays: boolean;
   resetBalance: boolean;
   carryForwardType: 'NONE' | 'CARRY_FORWARD';
+  /** What carrying forward means per Employee Category. */
+  carryForwardRules: CarryRule[];
   /** Month (1-12) this type's calendar starts in; null = the company leave year. */
   calendarStartMonth: number | null;
   isCompOff: boolean;
   isActive: boolean;
   /** Country.isoCode values this type applies to. Empty = every country. */
   countryCodes: string[];
+}
+export interface CarryRule {
+  /** Employee Category text; empty = everyone else. */
+  category: string;
+  action: 'KEEP' | 'UNPAID_LEAVE' | 'LEAVE_SALARY' | 'LAPSE';
+  targetLeaveTypeId?: number | null;
 }
 export type LeaveTypePayload = Omit<LeaveType, 'id'>;
 
