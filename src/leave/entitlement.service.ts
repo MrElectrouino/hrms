@@ -16,6 +16,7 @@ export interface ResolvedRule {
   creditMethod: string;
   /** JOINING_DATE | REJOINING_DATE (service counts from the rejoining date when there is one). */
   serviceBasis: string;
+  leaveTypeId: number;
   input: Omit<EntitlementInput, 'joinDate' | 'serviceStart' | 'yearStart'>;
 }
 
@@ -30,6 +31,8 @@ export interface EmployeeFacts {
   confirmedOn: string | null;
   /** Date the person came back after leaving (employment section); null when never rejoined. */
   rejoinDate: string | null;
+  /** Leave types they took (approved) before the rejoining date, so service for those counts from the rejoining date. A new joiner counts from the joining date. */
+  usedBeforeRejoin: number[];
 }
 
 /** Works out entitlement from the leave policies. It never decides anything itself: all numbers come from policy rows. */
@@ -45,6 +48,17 @@ export class EntitlementService {
     });
     const sections = await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'organization', employeeId: { in: emps.map((e) => e.id) } }, select: { employeeId: true, data: true } });
     const employment = new Map((await this.prisma.employeeProfileSection.findMany({ where: { sectionKey: 'employment', employeeId: { in: emps.map((e) => e.id) } }, select: { employeeId: true, data: true } })).map((s) => [s.employeeId, (s.data ?? {}) as { rejoiningDate?: unknown }]));
+    const rejoin = (id: number) => {
+      const v = employment.get(id)?.rejoiningDate;
+      return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+    };
+    // Leave already taken before the rejoining date tells us the person is returning, not new.
+    const used = new Map<number, Set<number>>();
+    const withRejoin = emps.filter((e) => rejoin(e.id));
+    if (withRejoin.length) {
+      const taken = await this.prisma.leaveApplication.findMany({ where: { status: 'APPROVED', employeeId: { in: withRejoin.map((e) => e.id) } }, select: { employeeId: true, leaveTypeId: true, fromDate: true } });
+      for (const a of taken) if (iso(a.fromDate) < rejoin(a.employeeId)!) used.set(a.employeeId, (used.get(a.employeeId) ?? new Set()).add(a.leaveTypeId));
+    }
     const org = new Map(sections.map((s) => [s.employeeId, (s.data ?? {}) as { legalEntityCountry?: unknown; employmentType?: unknown }]));
     // The profile stores the employment type by name; policies point at the Employee Type parameter.
     const typeIds = new Map((await this.prisma.parameter.findMany({ where: { parameterType: { name: 'Employee Type' } }, select: { id: true, text: true } })).map((p) => [p.text, p.id]));
@@ -52,7 +66,7 @@ export class EntitlementService {
       const o = org.get(e.id);
       const c = o?.legalEntityCountry;
       const t = typeof o?.employmentType === 'string' ? typeIds.get(o.employmentType) : undefined;
-      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, siteId: e.siteId, employeeTypeId: e.employeeTypeId ?? t ?? null, countryCode: typeof c === 'string' && c ? c : null, confirmedOn: e.dateOfConfirmation ? iso(e.dateOfConfirmation) : null, rejoinDate: typeof employment.get(e.id)?.rejoiningDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(employment.get(e.id)!.rejoiningDate as string) ? (employment.get(e.id)!.rejoiningDate as string) : null };
+      return { id: e.id, joinDate: iso(e.dateOfJoining), branchId: e.branchId, siteId: e.siteId, employeeTypeId: e.employeeTypeId ?? t ?? null, countryCode: typeof c === 'string' && c ? c : null, confirmedOn: e.dateOfConfirmation ? iso(e.dateOfConfirmation) : null, usedBeforeRejoin: [...(used.get(e.id) ?? [])], rejoinDate: rejoin(e.id) };
     });
   }
 
@@ -85,6 +99,7 @@ export class EntitlementService {
         layer,
         creditMethod: r.creditMethod,
         serviceBasis: r.serviceBasis,
+        leaveTypeId: r.leaveTypeId,
         input: {
           annualDays: Number(r.annualDays),
           slabs: (r.slabs as unknown as ServiceSlab[]) ?? [],
@@ -102,9 +117,9 @@ export class EntitlementService {
     return out;
   }
 
-  /** The date service counts from for this rule: the rejoining date when the rule asks for it and the person has one. */
+  /** The date service counts from for this rule: the rejoining date when the rule asks for it, the person has one and the system shows they took this leave before it; otherwise the joining date. */
   serviceFrom(rule: ResolvedRule, who: EmployeeFacts): string {
-    return rule.serviceBasis === 'REJOINING_DATE' && who.rejoinDate ? who.rejoinDate : who.joinDate;
+    return rule.serviceBasis === 'REJOINING_DATE' && who.rejoinDate && who.usedBeforeRejoin.includes(rule.leaveTypeId) ? who.rejoinDate : who.joinDate;
   }
 
   /**
